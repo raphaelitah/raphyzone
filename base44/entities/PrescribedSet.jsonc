@@ -1,0 +1,24 @@
+{
+  "name": "PrescribedSet",
+  "type": "object",
+  "properties": {
+    "set_id": {
+      "type": "string",
+      "description": "Source set code (e.g. SET00001)"
+    },
+    "block_exercise_id": {
+      "type": "string",
+      "description": "Source block exercise code \u2014 links to BlockExercise.block_exercise_id"
+    },
+    "set_number": {
+      "type": "number"
+    },
+    "target_reps": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "set_id",
+    "block_exercise_id"
+  ]
+}

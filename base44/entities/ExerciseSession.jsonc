@@ -1,0 +1,50 @@
+{
+  "name": "ExerciseSession",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "workout_session_id": {
+      "type": "string"
+    },
+    "exercise_id": {
+      "type": "string"
+    },
+    "exercise_name": {
+      "type": "string"
+    },
+    "max_weight": {
+      "type": "number"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "normal",
+        "hard",
+        "failed"
+      ]
+    },
+    "note": {
+      "type": "string"
+    },
+    "sets": {
+      "type": "number"
+    },
+    "reps": {
+      "type": "string"
+    },
+    "target_weight": {
+      "type": "number"
+    },
+    "elapsed_seconds": {
+      "type": "number",
+      "description": "Time spent on this exercise's screen during the workout, in seconds."
+    }
+  },
+  "required": [
+    "user_id",
+    "exercise_id"
+  ]
+}

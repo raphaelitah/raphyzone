@@ -1,0 +1,98 @@
+{
+  "name": "WeeklyPlan",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "week_start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "approved"
+      ],
+      "default": "draft"
+    },
+    "context_answer": {
+      "type": "string"
+    },
+    "context_notes": {
+      "type": "string"
+    },
+    "workouts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "slot_type": {
+            "type": "string",
+            "enum": [
+              "train",
+              "activity",
+              "rest"
+            ],
+            "default": "train"
+          },
+          "modality": {
+            "type": "string",
+            "description": "For train days: the decided training modality sourced from the catalog's modality dimension (e.g. 'Strength / Muscular Endurance', 'Mixed Conditioning', 'Cyclical / Monostructural', 'Mobility / Flexibility', 'Skill / Power')."
+          },
+          "activity": {
+            "type": "string",
+            "description": "For activity days: the user's desired activity name (e.g. Running)."
+          },
+          "focus": {
+            "type": "string",
+            "description": "For strength-modality train days: the assigned training focus (e.g. Lower body strength)."
+          },
+          "workout_id": {
+            "type": "string"
+          },
+          "workout_name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "exercise_weights": {
+            "type": "object",
+            "description": "AI-assigned personalized target weights (kg) keyed by exercise_id for this day's workout.",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "suggested_workout_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For activity days with no matching catalog workout: 2-3 closest conditioning/cardio catalog workout ids offered as optional guidance."
+          },
+          "locked": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "regenerations_used": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "user_id",
+    "week_start_date"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "WorkoutFeedback",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "workout_id": {
+      "type": "string"
+    },
+    "workout_name": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "rejected",
+        "accepted"
+      ]
+    },
+    "replacement_workout_id": {
+      "type": "string"
+    },
+    "day": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "exercise_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Exercise names / movement patterns extracted from the workout, used to infer dislikes by pattern rather than by workout id."
+    }
+  },
+  "required": [
+    "user_id",
+    "workout_id",
+    "action"
+  ],
+  "rls": {
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "WorkoutSession",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "workout_id": {
+      "type": "string"
+    },
+    "workout_name": {
+      "type": "string"
+    },
+    "weekly_plan_id": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "in_progress",
+        "completed",
+        "skipped"
+      ],
+      "default": "completed"
+    },
+    "duration_minutes": {
+      "type": "number"
+    },
+    "overall_difficulty": {
+      "type": "string",
+      "enum": [
+        "easy",
+        "normal",
+        "hard",
+        "failed"
+      ]
+    },
+    "note": {
+      "type": "string"
+    },
+    "start_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp when the workout session was started; used to compute total elapsed time (wall-clock from first start to finish, continuing across breaks)."
+    },
+    "elapsed_seconds": {
+      "type": "number",
+      "description": "Total active+break wall-clock duration of the workout in seconds, saved on finish."
+    }
+  },
+  "required": [
+    "user_id",
+    "workout_id"
+  ]
+}

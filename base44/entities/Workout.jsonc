@@ -1,0 +1,120 @@
+{
+  "name": "Workout",
+  "type": "object",
+  "properties": {
+    "workout_id": {
+      "type": "string",
+      "description": "Source workout code (e.g. W00001)"
+    },
+    "name": {
+      "type": "string"
+    },
+    "workout_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "workout_category": {
+      "type": "string",
+      "description": "Main focus (e.g. Full Body, Core)"
+    },
+    "workout_format": {
+      "type": "string"
+    },
+    "format_label": {
+      "type": "string",
+      "description": "User-friendly display label computed from workout_format and bodyweight status (e.g. 'AMRAP + Bodybuilding', 'Calisthenics')"
+    },
+    "difficulty": {
+      "type": "string"
+    },
+    "est_duration_min": {
+      "type": "number"
+    },
+    "description": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string",
+      "enum": [
+        "strength",
+        "hypertrophy",
+        "mixed"
+      ]
+    },
+    "split": {
+      "type": "string"
+    },
+    "duration_minutes": {
+      "type": "number"
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "modality": {
+      "type": "string",
+      "description": "Training modality sourced from the TaxonomyTerm modality dimension (e.g. strength, conditioning, running, yoga, mobility, mixed). Used by the AI to match desired activities to catalog workouts deterministically."
+    },
+    "notes": {
+      "type": "string"
+    },
+    "ownership_type": {
+      "type": "string",
+      "enum": [
+        "official",
+        "coach",
+        "personal"
+      ],
+      "default": "official"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "pending",
+        "archived"
+      ],
+      "default": "approved"
+    },
+    "movement_focus": {
+      "type": "string"
+    },
+    "exercises": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "exercise_id": {
+            "type": "string"
+          },
+          "exercise_name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "sets": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "string"
+          },
+          "target_weight": {
+            "type": "number"
+          },
+          "rest_seconds": {
+            "type": "number"
+          },
+          "coach_note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

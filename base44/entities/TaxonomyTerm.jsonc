@@ -1,0 +1,59 @@
+{
+  "name": "TaxonomyTerm",
+  "type": "object",
+  "properties": {
+    "dimension": {
+      "type": "string",
+      "enum": [
+        "equipment",
+        "movement_category",
+        "body_region",
+        "movement_pattern",
+        "modality",
+        "laterality",
+        "compound_isolation",
+        "muscle_group",
+        "impact_level",
+        "prescription_unit",
+        "workout_format"
+      ]
+    },
+    "value": {
+      "type": "string"
+    },
+    "label": {
+      "type": "string",
+      "description": "User-friendly display name. Falls back to value if not set."
+    },
+    "group": {
+      "type": "string",
+      "description": "Equipment type group (Free Weights, Machines, Benches & Stations, Accessories, Cardio, Bodyweight). Only used for the equipment dimension."
+    },
+    "sort_order": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "dimension",
+    "value"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

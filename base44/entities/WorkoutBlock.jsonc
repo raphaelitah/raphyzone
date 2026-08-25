@@ -1,0 +1,39 @@
+{
+  "name": "WorkoutBlock",
+  "type": "object",
+  "properties": {
+    "block_id": {
+      "type": "string",
+      "description": "Source block code (e.g. BLK00001)"
+    },
+    "workout_id": {
+      "type": "string",
+      "description": "Source workout code (e.g. W00001) \u2014 links to Workout.workout_id"
+    },
+    "order_index": {
+      "type": "number"
+    },
+    "block_label": {
+      "type": "string"
+    },
+    "block_type": {
+      "type": "string"
+    },
+    "workout_format": {
+      "type": "string"
+    },
+    "rounds": {
+      "type": "number"
+    },
+    "rest_between_rounds_sec": {
+      "type": "number"
+    },
+    "time_cap_sec": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "block_id",
+    "workout_id"
+  ]
+}

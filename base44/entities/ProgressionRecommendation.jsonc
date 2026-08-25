@@ -1,0 +1,78 @@
+{
+  "name": "ProgressionRecommendation",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "exercise_id": {
+      "type": "string"
+    },
+    "exercise_name": {
+      "type": "string"
+    },
+    "current_weight": {
+      "type": "number"
+    },
+    "suggested_weight": {
+      "type": "number"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "adjustment_type": {
+      "type": "string",
+      "enum": [
+        "per_exercise",
+        "pattern_baseline"
+      ],
+      "default": "per_exercise",
+      "description": "per_exercise = adjust this single exercise's learned override; pattern_baseline = adjust the movement pattern's calibration baseline (affects all exercises in that pattern)."
+    },
+    "pattern": {
+      "type": "string",
+      "description": "Movement pattern key (e.g. squat, hinge, horizontal_push) for pattern_baseline recommendations."
+    },
+    "new_weight_kg": {
+      "type": "number",
+      "description": "The proposed new working weight (kg) to apply when approved."
+    },
+    "reps": {
+      "type": "number",
+      "description": "Rep target associated with the proposed weight (for pattern_baseline updates)."
+    }
+  },
+  "required": [
+    "user_id",
+    "exercise_id"
+  ],
+  "rls": {
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": {
+      "data.user_id": "{{user.id}}"
+    },
+    "delete": {
+      "data.user_id": "{{user.id}}"
+    }
+  }
+}

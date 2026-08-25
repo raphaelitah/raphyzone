@@ -1,0 +1,366 @@
+{
+  "name": "AthleteProfile",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string",
+      "enum": [
+        "strength",
+        "hypertrophy",
+        "general_fitness"
+      ]
+    },
+    "secondary_goal": {
+      "type": "string",
+      "enum": [
+        "none",
+        "strength",
+        "hypertrophy",
+        "general_fitness"
+      ],
+      "default": "none"
+    },
+    "body_focus": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "performance_focus": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "experience_level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ]
+    },
+    "training_history": {
+      "type": "string",
+      "enum": [
+        "new",
+        "inconsistent",
+        "under_1_year",
+        "1_3_years",
+        "over_3_years",
+        "returning"
+      ]
+    },
+    "weight_unit": {
+      "type": "string",
+      "enum": [
+        "kg",
+        "lbs"
+      ],
+      "default": "kg"
+    },
+    "available_equipment": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "custom_equipment": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "saved_equipment_profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "available_equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "weight_setup": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "equipment_profile": {
+      "type": "string",
+      "enum": [
+        "full_gym",
+        "custom"
+      ],
+      "default": "custom"
+    },
+    "weight_setup": {
+      "type": "object",
+      "properties": {
+        "dumbbells": {
+          "type": "object",
+          "properties": {
+            "max_kg": {
+              "type": "number"
+            }
+          }
+        },
+        "barbell": {
+          "type": "object",
+          "properties": {
+            "max_kg": {
+              "type": "number"
+            }
+          }
+        },
+        "kettlebells": {
+          "type": "object",
+          "properties": {
+            "max_kg": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "training_focus": {
+      "type": "number"
+    },
+    "resistance_priority": {
+      "type": "number",
+      "default": 70
+    },
+    "conditioning_priority": {
+      "type": "number",
+      "default": 30
+    },
+    "program_difficulty": {
+      "type": "string",
+      "enum": [
+        "recruit",
+        "regular",
+        "challenger",
+        "elite",
+        "beast"
+      ],
+      "default": "challenger"
+    },
+    "available_training_days": {
+      "type": "number"
+    },
+    "training_days": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "duration_mode": {
+      "type": "string",
+      "enum": [
+        "general",
+        "per_day"
+      ],
+      "default": "general"
+    },
+    "duration_min": {
+      "type": "number",
+      "default": 45
+    },
+    "duration_max": {
+      "type": "number",
+      "default": 60
+    },
+    "per_day_durations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "scheduled_activities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "time_of_day": {
+            "type": "string",
+            "enum": [
+              "morning",
+              "afternoon",
+              "evening"
+            ]
+          },
+          "activity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "time_of_day",
+          "activity"
+        ]
+      }
+    },
+    "desired_activities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "activity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "activity"
+        ]
+      }
+    },
+    "current_strength": {
+      "type": "string"
+    },
+    "strength_known": {
+      "type": "boolean",
+      "default": false
+    },
+    "calibrated": {
+      "type": "boolean",
+      "default": false
+    },
+    "calibrated_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "strength_calibration": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "exercise": {
+            "type": "string"
+          },
+          "weight_kg": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "exercise_weight_overrides": {
+      "type": "array",
+      "description": "Per-exercise learned working weights (kg) that override the pattern baseline, updated when the user approves per-exercise progression recommendations.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "exercise_id": {
+            "type": "string"
+          },
+          "exercise_name": {
+            "type": "string"
+          },
+          "weight_kg": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "number"
+          },
+          "updated_date": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "exercise_id"
+        ]
+      }
+    },
+    "dislikes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Exercises or movement patterns the user wants to avoid in generated plans. Also learned automatically from swap feedback."
+    },
+    "onboarded": {
+      "type": "boolean",
+      "default": false
+    },
+    "warmup_duration_minutes": {
+      "type": "number",
+      "default": 10
+    },
+    "warmup_include_mobility": {
+      "type": "boolean",
+      "default": true
+    },
+    "warmup_include_cardio": {
+      "type": "boolean",
+      "default": true
+    },
+    "warmup_include_first_movement": {
+      "type": "boolean",
+      "default": true
+    },
+    "warmup_mobility_exercises": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "exercise_id": {
+            "type": "string"
+          },
+          "exercise_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exercise_id",
+          "exercise_name"
+        ]
+      }
+    },
+    "warmup_cardio_options": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warmup_first_movement_sets": {
+      "type": "number",
+      "default": 2
+    },
+    "warmup_notes": {
+      "type": "string"
+    },
+    "coach_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "goal",
+    "experience_level"
+  ]
+}

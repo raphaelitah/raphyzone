@@ -1,0 +1,52 @@
+{
+  "name": "BlockExercise",
+  "type": "object",
+  "properties": {
+    "block_exercise_id": {
+      "type": "string",
+      "description": "Source block exercise code (e.g. BE00001)"
+    },
+    "block_id": {
+      "type": "string",
+      "description": "Source block code \u2014 links to WorkoutBlock.block_id"
+    },
+    "step_type": {
+      "type": "string"
+    },
+    "exercise_id": {
+      "type": "string",
+      "description": "Source exercise code (e.g. EX01858) \u2014 links to Exercise.exercise_code"
+    },
+    "exercise_title_raw": {
+      "type": "string"
+    },
+    "referenced_workout_id": {
+      "type": "string"
+    },
+    "referenced_block_id": {
+      "type": "string"
+    },
+    "order_in_block": {
+      "type": "number"
+    },
+    "prescription_type": {
+      "type": "string"
+    },
+    "prescription_value": {
+      "type": "string"
+    },
+    "load_type": {
+      "type": "string"
+    },
+    "load_value": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "block_exercise_id",
+    "block_id"
+  ]
+}
