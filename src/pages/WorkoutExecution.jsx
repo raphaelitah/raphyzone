@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -91,22 +92,25 @@ export default function WorkoutExecution() {
     (async () => {
       try {
         const monday = fmtISO(mondayOf(new Date()));
-        const [w, plans, existing] = await Promise.all([
-          base44.entities.Workout.get(workoutId),
-          user ? base44.entities.WeeklyPlan.filter({ user_id: user.id, week_start_date: monday }) : Promise.resolve([]),
-          user ? base44.entities.WorkoutSession.filter({ user_id: user.id, workout_id: workoutId, status: 'in_progress' }, '-created_date', 1) : Promise.resolve([]),
+        const [{ data: w }, { data: plans }, { data: existing }] = await Promise.all([
+          supabase.from('workouts').select('*').eq('id', workoutId).single(),
+          user ? supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', monday) : Promise.resolve({ data: [] }),
+          user
+            ? supabase.from('workout_sessions').select('*').eq('user_id', user.id).eq('workout_id', workoutId).eq('status', 'in_progress').order('created_date', { ascending: false }).limit(1)
+            : Promise.resolve({ data: [] }),
         ]);
         if (!active) return;
         setWorkout(w);
 
         // Resume or create an in-progress session so the timer + logs persist across refresh/navigation
-        let sess = existing[0];
+        let sess = existing?.[0];
         if (!sess && user) {
-          sess = await base44.entities.WorkoutSession.create({
+          const { data: created } = await supabase.from('workout_sessions').insert({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
             date: new Date().toISOString().slice(0, 10), status: 'in_progress',
             start_timestamp: new Date().toISOString(),
-          });
+          }).select().single();
+          sess = created;
         }
         if (!active || !sess) return;
         sessionIdRef.current = sess.id;
@@ -118,31 +122,35 @@ export default function WorkoutExecution() {
 
         // Load any already-saved exercise sessions for hydration
         try {
-          loadedExerciseSessionsRef.current = await base44.entities.ExerciseSession.filter({ workout_session_id: sess.id });
+          const { data } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', sess.id);
+          loadedExerciseSessionsRef.current = data || [];
         } catch { loadedExerciseSessionsRef.current = []; }
         if (!active) return;
 
         setLoading(false);
 
-        const currentPlan = plans.find((p) => p.status === 'approved') || plans[0] || null;
+        const currentPlan = (plans || []).find((p) => p.status === 'approved') || plans?.[0] || null;
         setPlan(currentPlan);
         const planSlot = currentPlan?.workouts?.find((s) => s.workout_id === workoutId);
         const exerciseWeights = planSlot?.exercise_weights || {};
 
-        const blocks = await base44.entities.WorkoutBlock.filter({ workout_id: w.workout_id }, 'order_index', 500);
+        const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', w.workout_id).order('order_index').limit(500);
+        const blocks = blocksData || [];
         if (!active) return;
         const blockIds = blocks.map((b) => b.block_id);
         const blockExs = blockIds.length
-          ? await base44.entities.BlockExercise.filter({ block_id: { $in: blockIds } })
+          ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
           : [];
         if (!active) return;
         const exerciseBlockExs = blockExs.filter((be) => be.step_type === 'exercise');
         const beIds = exerciseBlockExs.map((be) => be.block_exercise_id);
         const exerciseCodes = [...new Set(exerciseBlockExs.map((be) => be.exercise_id).filter(Boolean))];
-        const [sets, referencedExs] = await Promise.all([
-          beIds.length ? base44.entities.PrescribedSet.filter({ block_exercise_id: { $in: beIds } }) : Promise.resolve([]),
-          exerciseCodes.length ? base44.entities.Exercise.filter({ exercise_code: { $in: exerciseCodes } }) : Promise.resolve([]),
+        const [{ data: setsData }, { data: referencedExsData }] = await Promise.all([
+          beIds.length ? supabase.from('prescribed_sets').select('*').in('block_exercise_id', beIds) : Promise.resolve({ data: [] }),
+          exerciseCodes.length ? supabase.from('exercises').select('*').in('exercise_code', exerciseCodes) : Promise.resolve({ data: [] }),
         ]);
+        const sets = setsData || [];
+        const referencedExs = referencedExsData || [];
         if (!active) return;
         const blocksByWorkout = buildBlocksByWorkout(blocks);
         const blockExercisesByBlock = buildBlockExercisesByBlock(blockExs);
@@ -203,7 +211,7 @@ export default function WorkoutExecution() {
     const existingId = exerciseSessionIdsRef.current[key];
     if (log?.skipped) {
       if (existingId) {
-        try { await base44.entities.ExerciseSession.delete(existingId); } catch {}
+        try { await supabase.from('exercise_sessions').delete().eq('id', existingId); } catch {}
         delete exerciseSessionIdsRef.current[key];
       }
       return;
@@ -217,9 +225,9 @@ export default function WorkoutExecution() {
         elapsed_seconds: Math.round(exerciseElapsedRef.current[key] || 0),
       };
       if (existingId) {
-        await base44.entities.ExerciseSession.update(existingId, payload);
+        await supabase.from('exercise_sessions').update(payload).eq('id', existingId);
       } else {
-        const created = await base44.entities.ExerciseSession.create(payload);
+        const { data: created } = await supabase.from('exercise_sessions').insert(payload).select().single();
         exerciseSessionIdsRef.current[key] = created.id;
       }
     } catch { /* silent */ }
@@ -254,8 +262,8 @@ export default function WorkoutExecution() {
     setRestartOpen(false);
     try {
       if (sessionIdRef.current) {
-        await base44.entities.ExerciseSession.deleteMany({ workout_session_id: sessionIdRef.current });
-        await base44.entities.WorkoutSession.delete(sessionIdRef.current);
+        await supabase.from('exercise_sessions').delete().eq('workout_session_id', sessionIdRef.current);
+        await supabase.from('workout_sessions').delete().eq('id', sessionIdRef.current);
       }
     } catch { /* silent */ }
     setLogs({});
@@ -264,10 +272,10 @@ export default function WorkoutExecution() {
     setIndex(0);
     indexRef.current = 0;
     const dateStr = new Date().toISOString().slice(0, 10);
-    const s = await base44.entities.WorkoutSession.create({
+    const { data: s } = await supabase.from('workout_sessions').insert({
       user_id: userRef.current.id, workout_id: workoutId, workout_name: workoutRef.current?.name,
       date: dateStr, status: 'in_progress', start_timestamp: new Date().toISOString(),
-    });
+    }).select().single();
     sessionIdRef.current = s.id;
     setSession(s);
     const startMs = new Date(s.start_timestamp).getTime();
@@ -282,8 +290,8 @@ export default function WorkoutExecution() {
       const ex = current.details;
       if (!ex) { setLoadingSubs(false); return; }
       if (!fullExerciseMapRef.current) {
-        const allExs = await base44.entities.Exercise.list('-created_date', 3000);
-        fullExerciseMapRef.current = buildExerciseMapByCode(allExs);
+        const { data: allExs } = await supabase.from('exercises').select('*').order('created_date', { ascending: false }).limit(3000);
+        fullExerciseMapRef.current = buildExerciseMapByCode(allExs || []);
       }
       const candidates = Object.values(fullExerciseMapRef.current).filter((e) => e.id !== ex.id);
       const ranked = candidates
@@ -339,7 +347,7 @@ For each candidate, explain in one sentence why it's a good substitute (same mus
     const updatedWorkouts = plan.workouts.map((s) => s.workout_id === workoutId ? { ...s, exercise_weights: updatedWeights } : s);
     const updatedPlan = { ...plan, workouts: updatedWorkouts };
     setPlan(updatedPlan);
-    try { await base44.entities.WeeklyPlan.update(plan.id, { workouts: updatedWorkouts }); } catch { /* silent */ }
+    try { await supabase.from('weekly_plans').update({ workouts: updatedWorkouts }).eq('id', plan.id); } catch { /* silent */ }
   };
 
   const calcWeight = async () => {
@@ -347,7 +355,7 @@ For each candidate, explain in one sentence why it's a good substitute (same mus
     setWeightLoading(true);
     try {
       const extraCodes = current.exercise_id ? [current.exercise_id] : [];
-      const res = await base44.functions.invoke('assignWorkoutWeights', { workout_id: workoutId, extra_exercise_codes: extraCodes });
+      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: extraCodes } });
       const ew = res.data?.exercise_weights || {};
       if (ew[current.exercise_id] != null) {
         setExercises((prev) => prev.map((e, i) => i === index ? { ...e, target_weight: ew[current.exercise_id] } : e));
@@ -365,7 +373,7 @@ For each candidate, explain in one sentence why it's a good substitute (same mus
     setLogs((l) => { const c = { ...l }; delete c[current.key]; return c; });
     setSubSheet(false);
     try {
-      const res = await base44.functions.invoke('assignWorkoutWeights', { workout_id: workoutId, extra_exercise_codes: [alt.exercise.exercise_code].filter(Boolean) });
+      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: [alt.exercise.exercise_code].filter(Boolean) } });
       const ew = res.data?.exercise_weights || {};
       if (ew[newId] != null) {
         setExercises((prev) => prev.map((e, i) => i === index ? { ...e, target_weight: ew[newId] } : e));
@@ -383,8 +391,8 @@ For each candidate, explain in one sentence why it's a good substitute (same mus
       const completedExercises = exercises.filter((e) => logs[e.key] && !logs[e.key].skipped);
       const overallDiff = completedExercises.length ? modeDifficulty(completedExercises.map((e) => logs[e.key].difficulty)) : 'normal';
       const total = sessionStartMsRef.current ? (Date.now() - sessionStartMsRef.current) / 1000 : 0;
-      await base44.entities.WorkoutSession.update(sid, { status: 'completed', overall_difficulty: overallDiff, elapsed_seconds: Math.round(total) });
-      try { await base44.functions.invoke('learnFromSessionFeedback', { workout_session_id: sid }); } catch {}
+      await supabase.from('workout_sessions').update({ status: 'completed', overall_difficulty: overallDiff, elapsed_seconds: Math.round(total) }).eq('id', sid);
+      try { await supabase.functions.invoke('learnFromSessionFeedback', { body: { workout_session_id: sid } }); } catch {}
       navigate('/progress');
     } finally { setSaving(false); }
   };

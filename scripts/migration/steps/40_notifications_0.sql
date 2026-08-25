@@ -1,0 +1,3 @@
+insert into public.notifications (user_id,type,title,body,related_entity_id,read,created_date,updated_date) values
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','exercise_approved','Exercise approved','Your exercise "TRX Hamstring Curl" has been approved and is now in the library.','6a8c2f234605d986ec1d2541',false,'2026-08-24T11:46:55.164000','2026-08-24T11:46:55.164000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','exercise_submitted','Exercise submitted for review','Your exercise "TRX Hamstring Curl" has been submitted and is awaiting admin review.','6a8c2f234605d986ec1d2541',false,'2026-08-24T11:46:44.176000','2026-08-24T11:46:44.176000');

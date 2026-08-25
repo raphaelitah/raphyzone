@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
@@ -25,23 +25,23 @@ export default function Progress() {
     let active = true;
     (async () => {
       if (!user) return;
-      const [ws, es, rs] = await Promise.all([
-        base44.entities.WorkoutSession.filter({ user_id: user.id }, '-created_date', 100),
-        base44.entities.ExerciseSession.filter({ user_id: user.id }, '-created_date', 200),
-        base44.entities.ProgressionRecommendation.filter({ user_id: user.id, status: 'pending' }),
+      const [{ data: ws }, { data: es }, { data: rs }] = await Promise.all([
+        supabase.from('workout_sessions').select('*').eq('user_id', user.id).order('created_date', { ascending: false }).limit(100),
+        supabase.from('exercise_sessions').select('*').eq('user_id', user.id).order('created_date', { ascending: false }).limit(200),
+        supabase.from('progression_recommendations').select('*').eq('user_id', user.id).eq('status', 'pending'),
       ]);
       if (!active) return;
-      setSessions(ws);
-      setExerciseSessions(es);
-      setRecs(rs);
+      setSessions(ws || []);
+      setExerciseSessions(es || []);
+      setRecs(rs || []);
       setLoading(false);
 
       // Background: learn from session feedback, then refresh recommendations
       setAnalyzing(true);
       try {
-        await base44.functions.invoke('learnFromSessionFeedback', {});
-        const fresh = await base44.entities.ProgressionRecommendation.filter({ user_id: user.id, status: 'pending' });
-        if (active) setRecs(fresh);
+        await supabase.functions.invoke('learnFromSessionFeedback', { body: {} });
+        const { data: fresh } = await supabase.from('progression_recommendations').select('*').eq('user_id', user.id).eq('status', 'pending');
+        if (active) setRecs(fresh || []);
       } catch { /* ignore */ }
       if (active) setAnalyzing(false);
     })();
@@ -49,7 +49,7 @@ export default function Progress() {
   }, [user]);
 
   const resolveRec = async (rec, approved) => {
-    await base44.entities.ProgressionRecommendation.update(rec.id, { status: approved ? 'approved' : 'rejected' });
+    await supabase.from('progression_recommendations').update({ status: approved ? 'approved' : 'rejected' }).eq('id', rec.id);
     if (approved && profile) {
       try {
         if (rec.adjustment_type === 'pattern_baseline' && rec.pattern) {
@@ -62,7 +62,7 @@ export default function Progress() {
             reps: rec.reps ?? (idx >= 0 ? cal[idx].reps : 8),
           };
           if (idx >= 0) cal[idx] = entry; else cal.push(entry);
-          await base44.entities.AthleteProfile.update(profile.id, { strength_calibration: cal });
+          await supabase.from('athlete_profiles').update({ strength_calibration: cal }).eq('id', profile.id);
         } else if (rec.adjustment_type !== 'pattern_baseline') {
           const overrides = [...(profile.exercise_weight_overrides || [])];
           const idx = overrides.findIndex((o) => o.exercise_id === rec.exercise_id);
@@ -74,7 +74,7 @@ export default function Progress() {
             updated_date: new Date().toISOString().slice(0, 10),
           };
           if (idx >= 0) overrides[idx] = entry; else overrides.push(entry);
-          await base44.entities.AthleteProfile.update(profile.id, { exercise_weight_overrides: overrides });
+          await supabase.from('athlete_profiles').update({ exercise_weight_overrides: overrides }).eq('id', profile.id);
         }
         await reload();
         recalcPlanWeights(user.id); // background: recalculate plan weights with updated calibration

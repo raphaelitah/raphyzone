@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { mondayOf, fmtISO } from '@/lib/fitness';
 
 /**
@@ -13,6 +14,6 @@ export async function recalcPlanWeights(userId) {
     const plans = await base44.entities.WeeklyPlan.filter({ user_id: userId, week_start_date: monday });
     const plan = plans.find((p) => p.status === 'approved') || plans[0];
     if (!plan) return;
-    await base44.functions.invoke('assignWorkoutWeights', { weekly_plan_id: plan.id });
+    await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: plan.id } });
   } catch { /* silent — background recalc */ }
 }

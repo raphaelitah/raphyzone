@@ -1,0 +1,14 @@
+insert into public.exercise_sessions (user_id,workout_session_id,exercise_id,exercise_name,max_weight,difficulty,note,sets,reps,target_weight,elapsed_seconds,created_date,updated_date) values
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0895af1b-30f4-46b5-9ffc-21d34ffe824e','EX01077','Goblet Lunge',0,'normal',NULL,9,'20',NULL,240,'2026-08-24T18:34:21.458000','2026-08-24T19:01:02.672000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0895af1b-30f4-46b5-9ffc-21d34ffe824e','EX02146','Single Arm Dumbbell Romanian Deadlift',20,'easy',NULL,3,'10 reps',20,480,'2026-08-24T18:34:18.979000','2026-08-24T19:01:03.328000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0895af1b-30f4-46b5-9ffc-21d34ffe824e','EX00781','Dumbbell Hip Thrust',30,'easy',NULL,3,'12 reps',22,420,'2026-08-24T18:34:13.604000','2026-08-24T19:01:03.674000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0895af1b-30f4-46b5-9ffc-21d34ffe824e','EX01906','Romanian Deadlift',70,'normal',NULL,4,'10 reps',67,900,'2026-08-24T18:33:58.134000','2026-08-24T19:01:04.190000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','aa37a53a-ab74-49b2-aeaf-0cf4af0205c5','EX02146','Single Arm Dumbbell Romanian Deadlift',20,'easy',NULL,3,'10 reps',20,NULL,'2026-08-24T18:30:39.164000','2026-08-24T18:30:40.230000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','aa37a53a-ab74-49b2-aeaf-0cf4af0205c5','EX00781','Dumbbell Hip Thrust',30,'easy',NULL,3,'12 reps',22,NULL,'2026-08-24T18:30:31.791000','2026-08-24T18:30:35.640000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','aa37a53a-ab74-49b2-aeaf-0cf4af0205c5','EX01906','Romanian Deadlift',70,'normal',NULL,4,'10 reps',67,NULL,'2026-08-24T18:30:28.312000','2026-08-24T18:30:28.835000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0567868f-4c48-4bde-bc42-bbcfdeef37a4','EX01077','Goblet Lunge',NULL,'easy',NULL,9,'20',NULL,NULL,'2026-08-24T18:29:57.624000','2026-08-24T18:30:05.108000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0567868f-4c48-4bde-bc42-bbcfdeef37a4','EX02146','Single Arm Dumbbell Romanian Deadlift',20,'easy',NULL,3,'10 reps',20,NULL,'2026-08-24T18:29:48.660000','2026-08-24T18:29:49.773000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0567868f-4c48-4bde-bc42-bbcfdeef37a4','EX00781','Dumbbell Hip Thrust',30,'easy',NULL,3,'12 reps',22,NULL,'2026-08-24T18:29:19.791000','2026-08-24T18:29:28.133000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','0567868f-4c48-4bde-bc42-bbcfdeef37a4','EX01906','Romanian Deadlift',70,'normal',NULL,4,'10 reps',67,NULL,'2026-08-24T18:29:06.857000','2026-08-24T18:29:10.507000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','ca8d09ef-1c4b-4c3f-b3aa-29d6a7fc2c59','EX01906','Romanian Deadlift',70,'normal',NULL,4,'10 reps',67,NULL,'2026-08-24T18:27:55.503000','2026-08-24T18:27:55.503000'),
+('1d6d9f29-6c41-4786-81f3-7dccc01f973e','ca8d09ef-1c4b-4c3f-b3aa-29d6a7fc2c59','EX01906','Romanian Deadlift',70,'normal',NULL,4,'10 reps',67,NULL,'2026-08-24T18:27:55.490000','2026-08-24T18:27:55.490000');

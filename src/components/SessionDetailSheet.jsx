@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -51,19 +51,24 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     setChartKeys([]);
     (async () => {
       try {
-        const thisEs = await base44.entities.ExerciseSession.filter({ workout_session_id: session.id });
+        const { data: thisEsData } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', session.id);
+        const thisEs = thisEsData || [];
         if (!active) return;
         setExerciseSessions(thisEs);
 
-        const allSessions = await base44.entities.WorkoutSession.filter(
-          { user_id: session.user_id, workout_id: session.workout_id, status: 'completed' },
-          'date',
-          200
-        );
+        const { data: allSessionsData } = await supabase
+          .from('workout_sessions')
+          .select('*')
+          .eq('user_id', session.user_id)
+          .eq('workout_id', session.workout_id)
+          .eq('status', 'completed')
+          .order('date')
+          .limit(200);
+        const allSessions = allSessionsData || [];
         if (!active) return;
         const sessionIds = allSessions.map((s) => s.id);
         const allEs = sessionIds.length
-          ? await base44.entities.ExerciseSession.filter({ workout_session_id: { $in: sessionIds } })
+          ? (await supabase.from('exercise_sessions').select('*').in('workout_session_id', sessionIds)).data || []
           : [];
         if (!active) return;
 
@@ -129,13 +134,13 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
           note: dr.note || '',
           elapsed_seconds: Math.round(dr.elapsed_seconds || 0),
         };
-        await base44.entities.ExerciseSession.update(es.id, payload);
+        await supabase.from('exercise_sessions').update(payload).eq('id', es.id);
         updated.push({ ...es, ...payload });
       }
       setExerciseSessions(updated);
       const diffs = updated.map((e) => e.difficulty).filter(Boolean);
       const overall = modeDifficulty(diffs);
-      await base44.entities.WorkoutSession.update(session.id, { overall_difficulty: overall });
+      await supabase.from('workout_sessions').update({ overall_difficulty: overall }).eq('id', session.id);
       setEditing(false);
       onSaved?.({ ...session, overall_difficulty: overall });
     } finally { setSaving(false); }

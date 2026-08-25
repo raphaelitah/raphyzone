@@ -1,0 +1,5 @@
+insert into public.workout_sessions (id,user_id,workout_id,workout_name,weekly_plan_id,date,status,duration_minutes,overall_difficulty,note,start_timestamp,elapsed_seconds,created_date,updated_date) values
+('0895af1b-30f4-46b5-9ffc-21d34ffe824e','1d6d9f29-6c41-4786-81f3-7dccc01f973e','6a8b5ff82f65fc56923ecc88','Posterior Chain',NULL,'2026-08-24','completed',31,'normal',NULL,NULL,NULL,'2026-08-24T18:33:57.818000','2026-08-24T19:01:04.805000'),
+('aa37a53a-ab74-49b2-aeaf-0cf4af0205c5','1d6d9f29-6c41-4786-81f3-7dccc01f973e','6a8b5ff82f65fc56923ecc88','Posterior Chain',NULL,'2026-08-24','in_progress',31,NULL,NULL,NULL,NULL,'2026-08-24T18:30:27.938000','2026-08-24T18:30:27.938000'),
+('0567868f-4c48-4bde-bc42-bbcfdeef37a4','1d6d9f29-6c41-4786-81f3-7dccc01f973e','6a8b5ff82f65fc56923ecc88','Posterior Chain',NULL,'2026-08-24','in_progress',31,NULL,NULL,NULL,NULL,'2026-08-24T18:29:06.608000','2026-08-24T18:29:06.608000'),
+('ca8d09ef-1c4b-4c3f-b3aa-29d6a7fc2c59','1d6d9f29-6c41-4786-81f3-7dccc01f973e','6a8b5ff82f65fc56923ecc88','Posterior Chain',NULL,'2026-08-24','in_progress',31,NULL,NULL,NULL,NULL,'2026-08-24T18:27:55.226000','2026-08-24T18:27:55.226000');

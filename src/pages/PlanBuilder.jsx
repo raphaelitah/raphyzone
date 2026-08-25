@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
@@ -79,11 +80,10 @@ export default function PlanBuilder() {
   const generate = async () => {
     setPhase('building'); setError('');
     try {
-      const res = await base44.functions.invoke('generateWeeklyPlan', {
-        week_start_date: weekStart,
-        context_answer: context,
-        context_notes: followup,
+      const res = await supabase.functions.invoke('generateWeeklyPlan', {
+        body: { week_start_date: weekStart, context_answer: context, context_notes: followup },
       });
+      if (res.error) throw res.error;
       setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
       setPlanId(res.data.plan.id);
       setSummary(res.data.summary || '');
@@ -93,7 +93,7 @@ export default function PlanBuilder() {
         setWorkouts(Object.fromEntries(ws.filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
       }
       try {
-        const wres = await base44.functions.invoke('assignWorkoutWeights', { weekly_plan_id: res.data.plan.id });
+        const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || res.data.plan.regenerations_used || 0 });
       } catch {}
       setPhase('review');
@@ -106,12 +106,10 @@ export default function PlanBuilder() {
     if ((plan?.regenerations_used || 0) >= 3) return;
     setRegenerating(true); setError('');
     try {
-      const res = await base44.functions.invoke('generateWeeklyPlan', {
-        week_start_date: weekStart,
-        context_answer: context,
-        context_notes: followup,
-        regenerate: true,
+      const res = await supabase.functions.invoke('generateWeeklyPlan', {
+        body: { week_start_date: weekStart, context_answer: context, context_notes: followup, regenerate: true },
       });
+      if (res.error) throw res.error;
       setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
       setSummary(res.data.summary || '');
       const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
@@ -120,7 +118,7 @@ export default function PlanBuilder() {
         setWorkouts(Object.fromEntries(ws.filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
       }
       try {
-        const wres = await base44.functions.invoke('assignWorkoutWeights', { weekly_plan_id: res.data.plan.id });
+        const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
       } catch {}
     } catch {
@@ -136,15 +134,18 @@ export default function PlanBuilder() {
     setSwapLoading(true); setAlternatives([]);
     try {
       const otherDays = plan.workouts.filter((_, i) => i !== idx).filter((w) => w.workout_id).map((w) => `${w.day}: ${w.workout_name}`).join('; ');
-      const res = await base44.functions.invoke('swapWorkout', {
-        current_workout_id: slot.workout_id,
-        day: slot.day,
-        focus: slot.focus,
-        slot_type: slot.slot_type,
-        activity: slot.activity,
-        modality: slot.modality,
-        other_days: otherDays,
+      const res = await supabase.functions.invoke('swapWorkout', {
+        body: {
+          current_workout_id: slot.workout_id,
+          day: slot.day,
+          focus: slot.focus,
+          slot_type: slot.slot_type,
+          activity: slot.activity,
+          modality: slot.modality,
+          other_days: otherDays,
+        },
       });
+      if (res.error) throw res.error;
       setAlternatives(res.data.alternatives || []);
     } catch {
       setError('Could not find alternatives.');
@@ -157,13 +158,16 @@ export default function PlanBuilder() {
     const slot = plan.workouts[idx];
     setSwapLoading(true);
     try {
-      const res = await base44.functions.invoke('applySwap', {
-        weekly_plan_id: planId,
-        day: slot.day,
-        old_workout_id: slot.workout_id,
-        new_workout_id: alt.workout_id,
-        reason: alt.reason,
+      const res = await supabase.functions.invoke('applySwap', {
+        body: {
+          weekly_plan_id: planId,
+          day: slot.day,
+          old_workout_id: slot.workout_id,
+          new_workout_id: alt.workout_id,
+          reason: alt.reason,
+        },
       });
+      if (res.error) throw res.error;
       setPlan({ ...plan, workouts: res.data.plan.workouts });
       setSwapFor(null); setAlternatives([]);
     } catch {
@@ -242,7 +246,7 @@ export default function PlanBuilder() {
           <p className="text-sm text-muted-foreground mb-4">We'll only ask what's changed.</p>
           <div className="space-y-2.5 mb-6">
             {CONTEXT_OPTIONS.map((o) => (
-              <button key={o.value} onClick={() => { setContext(o.value); setFollowup(''); setPhase(o.value === 'normal' ? 'ready' : 'followup'); }} className={cn('w-full rounded-xl border px-4 py-3.5 text-left transition-all', context === o.value ? 'border-brand bg-brand/5' : 'border-border')}>
+              <button key={o.value} onClick={() => { setContext(o.value); setFollowup(''); setPhase('followup'); }} className={cn('w-full rounded-xl border px-4 py-3.5 text-left transition-all', context === o.value ? 'border-brand bg-brand/5' : 'border-border')}>
                 <div className="flex items-center justify-between"><div><p className="font-medium">{o.label}</p><p className="text-xs text-muted-foreground mt-0.5">{o.desc}</p></div>{context === o.value && <Check className="h-5 w-5 text-brand" />}</div>
               </button>
             ))}

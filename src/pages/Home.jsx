@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
@@ -54,17 +54,17 @@ export default function Home() {
       if (!user) return;
       const monday = fmtISO(mondayOf(new Date()));
       // Phase 1: fetch plan, sessions, and recommendations in parallel
-      const [plans, allSessions, recs] = await Promise.all([
-        base44.entities.WeeklyPlan.filter({ user_id: user.id, week_start_date: monday }),
-        base44.entities.WorkoutSession.filter({ user_id: user.id }, '-created_date', 100),
-        base44.entities.ProgressionRecommendation.filter({ user_id: user.id, status: 'pending' }),
+      const [{ data: plans }, { data: allSessions }, { data: recs }] = await Promise.all([
+        supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', monday),
+        supabase.from('workout_sessions').select('*').eq('user_id', user.id).order('created_date', { ascending: false }).limit(100),
+        supabase.from('progression_recommendations').select('*').eq('user_id', user.id).eq('status', 'pending'),
       ]);
       if (!active) return;
-      const currentPlan = plans.find((p) => p.status === 'approved') || plans[0] || null;
+      const currentPlan = (plans || []).find((p) => p.status === 'approved') || plans?.[0] || null;
       setPlan(currentPlan);
-      setSessions(allSessions);
-      setPendingRec(recs[0] || null);
-      if (allSessions.length) {
+      setSessions(allSessions || []);
+      setPendingRec(recs?.[0] || null);
+      if (allSessions?.length) {
         const best = allSessions.reduce((acc, s) => (s.max_weight && (!acc || s.max_weight > acc.max_weight) ? s : acc), null);
         if (best) setPrExercise(best);
       }
@@ -78,16 +78,18 @@ export default function Home() {
         const allIds = [...new Set([...assignedIds, ...suggestIds])];
         let ws = [];
         if (allIds.length) {
-          ws = await base44.entities.Workout.filter({ id: { $in: allIds } });
+          const { data } = await supabase.from('workouts').select('*').in('id', allIds);
+          ws = data || [];
           if (active) setWorkouts(Object.fromEntries(ws.map((w) => [w.id, w])));
         }
         // Phase 3: fetch blocks + block exercises using workout SOURCE CODES (e.g. W00001), not entity UUIDs
         const planWorkoutCodes = [...new Set(ws.map((w) => w.workout_id).filter(Boolean))];
         if (planWorkoutCodes.length) {
-          const blocks = await base44.entities.WorkoutBlock.filter({ workout_id: { $in: planWorkoutCodes } });
+          const { data: blocksData } = await supabase.from('workout_blocks').select('*').in('workout_id', planWorkoutCodes);
+          const blocks = blocksData || [];
           const blockIds = blocks.map((b) => b.block_id);
           const blockExs = blockIds.length
-            ? await base44.entities.BlockExercise.filter({ block_id: { $in: blockIds } })
+            ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
             : [];
           if (active) {
             setBlocksByWorkout(buildBlocksByWorkout(blocks));
@@ -140,20 +142,23 @@ export default function Home() {
     if (!plan) return;
     setRegenerating(true);
     try {
-      const res = await base44.functions.invoke('generateWeeklyPlan', {
-        week_start_date: plan.week_start_date,
-        context_answer: plan.context_answer || '',
-        context_notes: plan.context_notes || '',
-        regenerate: true,
+      const res = await supabase.functions.invoke('generateWeeklyPlan', {
+        body: {
+          week_start_date: plan.week_start_date,
+          context_answer: plan.context_answer || '',
+          context_notes: plan.context_notes || '',
+          regenerate: true,
+        },
       });
+      if (res.error) throw res.error;
       setPlan(res.data.plan);
       const ids = [...new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean))];
       if (ids.length) {
-        const ws = await base44.entities.Workout.filter({ id: { $in: ids } });
-        setWorkouts(Object.fromEntries(ws.map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*').in('id', ids);
+        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
       }
       try {
-        const wres = await base44.functions.invoke('assignWorkoutWeights', { weekly_plan_id: res.data.plan.id });
+        const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan) setPlan(wres.data.plan);
       } catch {}
     } catch { /* ignore */ }
@@ -165,14 +170,17 @@ export default function Home() {
     setSwapLoading(true); setSwapAlternatives([]);
     try {
       const otherDays = (plan.workouts || []).filter((w) => w.workout_id && w.day !== slot.day).map((w) => `${w.day}: ${w.workout_name}`).join('; ');
-      const res = await base44.functions.invoke('swapWorkout', {
-        current_workout_id: slot.workout_id,
-        day: slot.day,
-        focus: slot.focus,
-        slot_type: slot.slot_type,
-        activity: slot.activity,
-        other_days: otherDays,
+      const res = await supabase.functions.invoke('swapWorkout', {
+        body: {
+          current_workout_id: slot.workout_id,
+          day: slot.day,
+          focus: slot.focus,
+          slot_type: slot.slot_type,
+          activity: slot.activity,
+          other_days: otherDays,
+        },
       });
+      if (res.error) throw res.error;
       setSwapAlternatives(res.data.alternatives || []);
     } catch { /* ignore */ }
     setSwapLoading(false);
@@ -182,18 +190,21 @@ export default function Home() {
     if (!slot) return;
     setSwapLoading(true);
     try {
-      const res = await base44.functions.invoke('applySwap', {
-        weekly_plan_id: plan.id,
-        day: slot.day,
-        old_workout_id: slot.workout_id,
-        new_workout_id: alt.workout_id,
-        reason: alt.reason,
+      const res = await supabase.functions.invoke('applySwap', {
+        body: {
+          weekly_plan_id: plan.id,
+          day: slot.day,
+          old_workout_id: slot.workout_id,
+          new_workout_id: alt.workout_id,
+          reason: alt.reason,
+        },
       });
+      if (res.error) throw res.error;
       setPlan(res.data.plan);
       const ids = [...new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean))];
       if (ids.length) {
-        const ws = await base44.entities.Workout.filter({ id: { $in: ids } });
-        setWorkouts(Object.fromEntries(ws.map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*').in('id', ids);
+        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
       }
     } catch { /* ignore */ }
     setSwapLoading(false);
@@ -209,13 +220,13 @@ export default function Home() {
       : w);
     setPlan({ ...plan, workouts: updated });
     try {
-      await base44.entities.WeeklyPlan.update(plan.id, { workouts: updated });
+      await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
     } catch { /* ignore */ }
   };
 
   const persistPlan = async (updated) => {
     setPlan({ ...plan, workouts: updated });
-    try { await base44.entities.WeeklyPlan.update(plan.id, { workouts: updated }); } catch { /* ignore */ }
+    try { await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id); } catch { /* ignore */ }
   };
 
   const moveSlot = async (index, dir) => {
@@ -254,9 +265,10 @@ export default function Home() {
     setWorkouts((prev) => ({ ...prev, [wo.id]: wo }));
     if (wo.workout_id) {
       try {
-        const blocks = await base44.entities.WorkoutBlock.filter({ workout_id: wo.workout_id });
+        const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', wo.workout_id);
+        const blocks = blocksData || [];
         const blockIds = blocks.map((b) => b.block_id);
-        const blockExs = blockIds.length ? await base44.entities.BlockExercise.filter({ block_id: { $in: blockIds } }) : [];
+        const blockExs = blockIds.length ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || [] : [];
         setBlocksByWorkout((prev) => ({ ...prev, ...buildBlocksByWorkout(blocks) }));
         setBlockExercisesByBlock((prev) => ({ ...prev, ...buildBlockExercisesByBlock(blockExs) }));
       } catch { /* ignore */ }
@@ -284,7 +296,8 @@ export default function Home() {
     setRestAiAlternatives([]);
     try {
       const otherDays = (plan.workouts || []).filter((w) => w.workout_id && w.day !== slot.day).map((w) => `${w.day}: ${w.workout_name}`).join('; ');
-      const res = await base44.functions.invoke('swapWorkout', { day: slot.day, slot_type: 'train', other_days: otherDays });
+      const res = await supabase.functions.invoke('swapWorkout', { body: { day: slot.day, slot_type: 'train', other_days: otherDays } });
+      if (res.error) throw res.error;
       setRestAiAlternatives(res.data.alternatives || []);
     } catch { /* ignore */ }
     setRestAiLoading(false);
@@ -296,7 +309,7 @@ export default function Home() {
     setRestAiAlternatives([]);
     await assignWorkoutToRestDay(alt.workout_id, alt.workout_name, alt.reason, slot);
     try {
-      const wo = workouts[alt.workout_id] || await base44.entities.Workout.get(alt.workout_id);
+      const wo = workouts[alt.workout_id] || (await supabase.from('workouts').select('*').eq('id', alt.workout_id).single()).data;
       await ensureWorkoutLoaded(wo);
     } catch { /* ignore */ }
   };
@@ -325,7 +338,8 @@ export default function Home() {
     setSwapFor(null); setSwapAlternatives([]);
     setDetailAlt(alt);
     try {
-      const wo = await base44.entities.Workout.get(alt.workout_id);
+      const { data: wo, error } = await supabase.from('workouts').select('*').eq('id', alt.workout_id).single();
+      if (error) throw error;
       setSelectedWorkout(wo);
       setSelectedSlot(slot);
       setSelectMode(true);

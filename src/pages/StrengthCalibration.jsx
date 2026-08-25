@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Button } from '@/components/ui/button';
@@ -57,14 +57,14 @@ export default function StrengthCalibration() {
         };
       }).filter(Boolean);
 
-      const existing = await base44.entities.AthleteProfile.filter({ user_id: user.id });
-      if (existing[0]) {
-        await base44.entities.AthleteProfile.update(existing[0].id, {
+      const { data: existing } = await supabase.from('athlete_profiles').select('id').eq('user_id', user.id);
+      if (existing?.[0]) {
+        await supabase.from('athlete_profiles').update({
           strength_calibration: calibration,
           calibrated: true,
           calibrated_date: fmtISO(new Date()),
           strength_known: calibration.length > 0,
-        });
+        }).eq('id', existing[0].id);
       }
       await reload();
       recalcPlanWeights(user.id); // background: recalculate plan weights with new calibration
