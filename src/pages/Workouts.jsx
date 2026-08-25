@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { WORKOUT_DIFFICULTY_META } from '@/lib/fitness';
+import { WORKOUT_DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
   buildBlocksByWorkout,
@@ -40,6 +41,7 @@ export default function Workouts() {
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All');
+  const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -176,7 +178,11 @@ export default function Workouts() {
     }
   }, [selected, structureLoading, loadedSetsFor, blocksByWorkout]);
 
-  const filtered = useMemo(() => workouts.filter((w) => filter === 'All' || w.difficulty === filter.toLowerCase()), [workouts, filter]);
+  const filtered = useMemo(() => workouts.filter((w) => {
+    const matchesFilter = filter === 'All' || w.difficulty === filter.toLowerCase();
+    const matchesQuery = !query || (w.name || '').toLowerCase().includes(query.toLowerCase());
+    return matchesFilter && matchesQuery;
+  }), [workouts, filter, query]);
 
   const getExerciseCount = (w) => countWorkoutExercises(w, blocksByWorkout, blockExercisesByBlock);
   const getDuration = (w) => roundToFive(w.est_duration_min);
@@ -322,6 +328,11 @@ export default function Workouts() {
         <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
       </header>
 
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 rounded-xl h-11" />
+      </div>
+
       <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar -mx-5 px-5">
         {FILTERS.map((f) => (
           <button
@@ -369,6 +380,12 @@ export default function Workouts() {
                     <Dumbbell className="h-3.5 w-3.5" />
                     {blocksByWorkout[w.workout_id] ? `${getExerciseCount(w)} ${getExerciseCount(w) === 1 ? 'Exercise' : 'Exercises'}` : '—'}
                   </span>
+                  {isRunningWorkout(w) && (
+                    <span className="flex items-center gap-1 text-brand">
+                      <Footprints className="h-3.5 w-3.5" />
+                      Running
+                    </span>
+                  )}
                   <span className="capitalize">{w.workout_category}</span>
                 </div>
               </Card>
@@ -405,6 +422,9 @@ export default function Workouts() {
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Tag>{WORKOUT_DIFFICULTY_META[selected.difficulty]?.label}</Tag>
                   <Tag>{getDuration(selected)} min</Tag>
+                  {isRunningWorkout(selected) && (
+                    <Tag className="flex items-center gap-1 bg-brand/10 text-brand"><Footprints className="h-3 w-3" /> Running</Tag>
+                  )}
                   <Tag className="capitalize">{selected.workout_category}</Tag>
                 </div>
 

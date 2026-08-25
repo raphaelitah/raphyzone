@@ -1,5 +1,12 @@
 import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendarDays } from 'date-fns';
 
+// Workouts/exercises don't have a dedicated "running" taxonomy value — the catalog
+// (and the AI plan generator) key running/cycling/rowing off these shared values.
+export const RUNNING_MODALITY = 'Cyclical / Monostructural';
+export const RUNNING_MOVEMENT_PATTERN = 'Locomotion / Cardio';
+export const isRunningWorkout = (workout) => workout?.modality === RUNNING_MODALITY;
+export const isRunningExercise = (exercise) => exercise?.movement_pattern === RUNNING_MOVEMENT_PATTERN;
+
 export const EQUIPMENT_GROUPS = [
   { label: 'Free Weights', items: ['Barbell', 'EZ Bar', 'Dumbbells', 'Adjustable Dumbbells', 'Kettlebell', 'Weight Plates'] },
   { label: 'Machines', items: ['Smith Machine', 'Leg Press', 'Hack Squat Machine', 'Cable Crossover', 'Lat Pulldown', 'Seated Cable Row', 'Chest Press Machine', 'Shoulder Press Machine', 'Leg Extension', 'Leg Curl', 'Pec Deck', 'Calf Raise', 'Hip Thrust', 'Back Extension', 'Assisted Pull-up'] },
