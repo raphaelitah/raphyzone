@@ -55,6 +55,8 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         training_days: f.training_days,
         scheduled_activities: f.scheduled_activities,
         desired_activities: f.desired_activities,
+        scheduled_activities_reviewed: f.scheduled_activities_reviewed,
+        desired_activities_reviewed: f.desired_activities_reviewed,
         available_training_days: f.training_days.length,
         strength_known: f.strength_known,
         duration_mode: f.duration_mode,
@@ -111,7 +113,9 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         saved_equipment_profiles: profile.saved_equipment_profiles || [],
         training_days: profile.training_days || [],
         scheduled_activities: profile.scheduled_activities || [],
+        scheduled_activities_reviewed: !!profile.scheduled_activities_reviewed,
         desired_activities: (profile.desired_activities || []).filter((a) => a && typeof a === 'object' && a.day && a.activity),
+        desired_activities_reviewed: !!profile.desired_activities_reviewed,
         strength_known: !!profile.strength_known,
         resistance_priority: profile.resistance_priority ?? 70,
         conditioning_priority: profile.conditioning_priority ?? 30,
@@ -529,6 +533,18 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
                 <Button variant="outline" size="sm" onClick={() => setShowActivityForm(true)} className="w-full">
                   <Plus className="h-4 w-4" /> Add a scheduled activity
                 </Button>
+              )}
+
+              {form.scheduled_activities.length === 0 && !showActivityForm && (
+                <label className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!form.scheduled_activities_reviewed}
+                    onChange={(e) => setForm((f) => ({ ...f, scheduled_activities_reviewed: e.target.checked }))}
+                    className="h-3.5 w-3.5 rounded border-border accent-brand"
+                  />
+                  None — I have no already-scheduled activities
+                </label>
               )}
             </div>
           </TabsContent>

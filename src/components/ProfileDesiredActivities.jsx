@@ -90,6 +90,18 @@ export default function ProfileDesiredActivities({ form, setForm }) {
           <Plus className="h-4 w-4" /> Add a desired activity
         </Button>
       )}
+
+      {activities.length === 0 && !showForm && (
+        <label className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!form.desired_activities_reviewed}
+            onChange={(e) => setForm((f) => ({ ...f, desired_activities_reviewed: e.target.checked }))}
+            className="h-3.5 w-3.5 rounded border-border accent-brand"
+          />
+          None — I don't want any recurring activities
+        </label>
+      )}
     </div>
   );
 }

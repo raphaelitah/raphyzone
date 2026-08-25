@@ -105,8 +105,8 @@ const COMPLETENESS_EXTRA_FIELDS = [
   { key: 'body_focus', isMissing: (p) => !(p?.body_focus?.length) },
   { key: 'performance_focus', isMissing: (p) => !(p?.performance_focus?.length) },
   { key: 'training_days', isMissing: (p) => !(p?.training_days?.length) },
-  { key: 'scheduled_activities', isMissing: (p) => !(p?.scheduled_activities?.length) },
-  { key: 'desired_activities', isMissing: (p) => !(p?.desired_activities?.length) },
+  { key: 'scheduled_activities', isMissing: (p) => !(p?.scheduled_activities?.length) && !p?.scheduled_activities_reviewed },
+  { key: 'desired_activities', isMissing: (p) => !(p?.desired_activities?.length) && !p?.desired_activities_reviewed },
   {
     key: 'weight_setup',
     isMissing: (p) => !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg),
