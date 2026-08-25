@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
+import { getProfileCompleteness } from '@/lib/profileGaps';
 import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send } from 'lucide-react';
 
 export default function Profile() {
@@ -20,6 +21,8 @@ export default function Profile() {
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
 
   const isAdmin = user?.role === 'admin';
+  const { done: completeDone, total: completeTotal } = getProfileCompleteness(profile);
+  const completePct = Math.round((completeDone / completeTotal) * 100);
 
   return (
     <div className="px-5 pt-10 pb-0">
@@ -40,6 +43,14 @@ export default function Profile() {
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Training profile</h2>
         <button onClick={() => setEditing(true)} className="flex items-center gap-1 text-xs font-medium text-brand"><Pencil className="h-3.5 w-3.5" /> Edit</button>
       </div>
+      {completePct < 100 && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${completePct}%` }} />
+          </div>
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">{completeDone}/{completeTotal} complete</span>
+        </div>
+      )}
       <Card className="rounded-2xl border-border p-4 mb-5 space-y-3">
         <Row icon={Target} label="Goal" value={label(profile?.goal)} />
         <Row icon={Dumbbell} label="Experience" value={label(profile?.experience_level)} />

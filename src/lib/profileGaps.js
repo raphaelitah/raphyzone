@@ -92,3 +92,42 @@ export const PROFILE_GAPS = [
     buildPatch: (value, p, ctx) => (value ? { desired_activities: [...(p?.desired_activities || []), { day: ctx.day, activity: ctx.activity }] } : null),
   },
 ];
+
+// Gaps usable outside their triggering location (no ctx required).
+const COMPLETENESS_GAPS = PROFILE_GAPS.filter((g) => g.key !== 'desired_activity');
+
+// Optional profile fields with no nudge prompt of their own but still worth counting toward completeness.
+// resistance_priority/conditioning_priority/duration_min/duration_max/warmup_duration_minutes no longer carry
+// DB defaults (see migration drop_stale_defaults_completeness_fields), so null here means genuinely untouched.
+// warmup_include_* still carry DB defaults for plan-generation reasons (see planContext.ts), so warmup
+// completion is inferred from notes/mobility picks instead of those flags.
+const COMPLETENESS_EXTRA_FIELDS = [
+  { key: 'body_focus', isMissing: (p) => !(p?.body_focus?.length) },
+  { key: 'performance_focus', isMissing: (p) => !(p?.performance_focus?.length) },
+  { key: 'training_days', isMissing: (p) => !(p?.training_days?.length) },
+  { key: 'scheduled_activities', isMissing: (p) => !(p?.scheduled_activities?.length) },
+  { key: 'desired_activities', isMissing: (p) => !(p?.desired_activities?.length) },
+  {
+    key: 'weight_setup',
+    isMissing: (p) => !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg),
+  },
+  {
+    key: 'training_mix',
+    isMissing: (p) => p?.resistance_priority == null && p?.conditioning_priority == null,
+  },
+  {
+    key: 'duration_range',
+    isMissing: (p) => p?.duration_min == null && p?.duration_max == null,
+  },
+  {
+    key: 'warmup_preferences',
+    isMissing: (p) => p?.warmup_duration_minutes == null && !p?.warmup_notes && !(p?.warmup_mobility_exercises?.length),
+  },
+];
+
+export function getProfileCompleteness(profile) {
+  const total = COMPLETENESS_GAPS.length + COMPLETENESS_EXTRA_FIELDS.length;
+  const missing = COMPLETENESS_GAPS.filter((g) => g.isMissing(profile)).length
+    + COMPLETENESS_EXTRA_FIELDS.filter((g) => g.isMissing(profile)).length;
+  return { done: total - missing, total };
+}

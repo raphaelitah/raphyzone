@@ -14,6 +14,7 @@ import {
 } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
+import { getProfileCompleteness } from '@/lib/profileGaps';
 import ProfileEquipmentTab from '@/components/ProfileEquipmentTab';
 import ProfileDesiredActivities from '@/components/ProfileDesiredActivities';
 import ProfileWarmup, { CARDIO_OPTIONS } from '@/components/ProfileWarmup';
@@ -187,6 +188,9 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
     schedule: `${form.training_days.length} days · ${form.duration_mode === 'general' ? `${form.duration_min}–${form.duration_max}m` : 'per day'}`,
   };
 
+  const { done: completeDone, total: completeTotal } = getProfileCompleteness(form);
+  const completePct = Math.round((completeDone / completeTotal) * 100);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl h-[90vh] flex flex-col p-0">
@@ -207,6 +211,14 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
               ))}
             </TabsList>
           </Tabs>
+          {completePct < 100 && (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${completePct}%` }} />
+              </div>
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">{completeDone}/{completeTotal} complete</span>
+            </div>
+          )}
         </div>
 
         <Tabs value={tab} onValueChange={setTab} className="flex-1 overflow-y-auto px-5 pb-8 pt-5">
