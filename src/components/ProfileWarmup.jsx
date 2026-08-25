@@ -30,29 +30,48 @@ export default function ProfileWarmup({ form, setForm }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      try {
+        const { data } = await supabase
+          .from('exercises')
+          .select('id, name')
+          .or(DEFAULT_SEARCH_NAMES.map((name) => `name.ilike.%${name}%`).join(','))
+          .limit(50);
+        if (cancelled || (form.warmup_mobility_exercises || []).length > 0) return;
+        const exercises = data || [];
+        const defaults = DEFAULT_SEARCH_NAMES.map((name) => {
+          const match = exercises.find((e) => e.name?.toLowerCase().includes(name));
+          return match ? { exercise_id: match.id, exercise_name: match.name } : null;
+        }).filter(Boolean);
+        if (defaults.length) {
+          setForm((f) => (((f.warmup_mobility_exercises || []).length > 0) ? f : { ...f, warmup_mobility_exercises: defaults }));
+        }
+      } catch {
+        // best-effort default seeding; ignore failures
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Lazily load the exercise library only once the user opens the picker,
+  // and only fetch the columns the picker actually renders/filters on.
+  useEffect(() => {
+    if (!showAdd || allExercises !== null) return;
+    let cancelled = false;
+    (async () => {
       setLoading(true);
       try {
-        const { data } = await supabase.from('exercises').select('*').order('name', { ascending: false }).limit(3000);
-        let exercises = [...(data || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        if (cancelled) return;
-        setAllExercises(exercises);
-
-        if ((form.warmup_mobility_exercises || []).length === 0) {
-          const defaults = DEFAULT_SEARCH_NAMES.map((name) => {
-            const match = exercises.find((e) => e.name?.toLowerCase().includes(name));
-            return match ? { exercise_id: match.id, exercise_name: match.name } : null;
-          }).filter(Boolean);
-          if (defaults.length) {
-            setForm((f) => ({ ...f, warmup_mobility_exercises: defaults }));
-          }
-        }
+        const { data } = await supabase
+          .from('exercises')
+          .select('id, name, movement_pattern')
+          .order('name')
+          .limit(1000);
+        if (!cancelled) setAllExercises(data || []);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [showAdd, allExercises]);
 
   const filteredResults = useMemo(() => {
     if (!allExercises) return [];

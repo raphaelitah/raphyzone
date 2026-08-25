@@ -1,4 +1,4 @@
-import { SlidersHorizontal, Plus } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -20,37 +20,37 @@ export function matchesPattern(exercise, patternKey) {
   return PATTERN_GROUPS[patternKey]?.includes(exercise.movement_pattern);
 }
 
-export default function LibraryFilters({ category, setCategory, region, setRegion, pattern, setPattern, onAdd, expanded, setExpanded }) {
-  const activeCount = (category !== 'All' ? 1 : 0) + (region !== 'All' ? 1 : 0) + (pattern !== 'All' ? 1 : 0);
+export default function LibraryFilters({ category, setCategory, region, setRegion, pattern, setPattern, expanded, setExpanded }) {
+  const moreCount = (category !== 'All' ? 1 : 0) + (pattern !== 'All' ? 1 : 0);
 
   const chipClass = (on) => cn('px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors',
     on ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground');
 
-  const clearAll = () => { setCategory('All'); setRegion('All'); setPattern('All'); };
+  const clearMore = () => { setCategory('All'); setPattern('All'); };
 
   return (
-    <div>
-      <div className="flex items-center gap-2 py-1">
-        <Button variant="outline" size="sm" onClick={() => setExpanded(!expanded)} className="gap-1.5 h-8 flex-1">
+    <div className="space-y-2">
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        <button onClick={() => setRegion('All')} className={chipClass(region === 'All')}>All regions</button>
+        {REGIONS.map((r) => (
+          <button key={r} onClick={() => setRegion(r)} className={chipClass(region === r)}>{r}</button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setExpanded(!expanded)} className="gap-1.5 h-8">
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters
-          {activeCount > 0 && <span className="ml-0.5 bg-brand text-brand-foreground text-[10px] rounded-full px-1.5 py-0.5 leading-none">{activeCount}</span>}
+          {expanded ? 'Less filters' : 'More filters'}
+          {moreCount > 0 && <span className="ml-0.5 bg-brand text-brand-foreground text-[10px] rounded-full px-1.5 py-0.5 leading-none">{moreCount}</span>}
         </Button>
-        {onAdd && (
-          <Button size="sm" onClick={onAdd} className="gap-1.5 h-8 flex-1 bg-brand hover:bg-brand/90 text-brand-foreground">
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </Button>
-        )}
-        {activeCount > 0 && (
-          <button onClick={clearAll} className="text-xs text-muted-foreground hover:text-foreground">Clear all</button>
+        {moreCount > 0 && (
+          <button onClick={clearMore} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>
         )}
       </div>
 
       {expanded && (
         <div className="pb-2 space-y-2.5">
           <FilterRow label="Category" value={category} options={CATEGORIES} onChange={setCategory} chipClass={chipClass} />
-          <FilterRow label="Region" value={region} options={REGIONS} onChange={setRegion} chipClass={chipClass} />
           <FilterRow label="Pattern" value={pattern} options={PATTERN_KEYS} onChange={setPattern} chipClass={chipClass} />
         </div>
       )}

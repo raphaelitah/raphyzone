@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Loader2, Clock } from 'lucide-react';
+import { fetchTaxonomyTerms } from '@/lib/taxonomy';
+import { Search, Loader2, Clock, X } from 'lucide-react';
+
+const PICK_COLUMNS = 'id, name, movement_pattern, equipment';
 
 export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
   const [results, setResults] = useState([]);
@@ -15,6 +18,9 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
   const [saving, setSaving] = useState(false);
   const [restMode, setRestMode] = useState(false);
   const [restDuration, setRestDuration] = useState('60');
+  const [patternOptions, setPatternOptions] = useState([]);
+  const [activePattern, setActivePattern] = useState(null);
+  const cacheRef = useRef(new Map());
 
   useEffect(() => {
     if (!open) {
@@ -25,35 +31,51 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
       setSets('3');
       setRestMode(false);
       setRestDuration('60');
+      setActivePattern(null);
+      return;
     }
-  }, [open]);
+    if (patternOptions.length === 0) {
+      fetchTaxonomyTerms('movement_pattern').then((terms) => {
+        setPatternOptions(terms.map((t) => t.value).filter(Boolean));
+      });
+    }
+  }, [open, patternOptions.length]);
 
   useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (!q) {
+    if (!q && !activePattern) {
       setResults([]);
+      return;
+    }
+    const cacheKey = `${q}|${activePattern || ''}`;
+    const cached = cacheRef.current.get(cacheKey);
+    if (cached) {
+      setResults(cached);
       return;
     }
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const { data } = await supabase
+        let request = supabase
           .from('exercises')
-          .select('*')
+          .select(PICK_COLUMNS)
           .not('submission_status', 'in', '(pending,rejected)')
-          .ilike('name', `%${q}%`)
           .order('name')
           .limit(50);
+        if (q) request = request.ilike('name', `%${q}%`);
+        if (activePattern) request = request.eq('movement_pattern', activePattern);
+        const { data } = await request;
+        cacheRef.current.set(cacheKey, data || []);
         setResults(data || []);
       } catch {
         setResults([]);
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, q ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [query, open]);
+  }, [query, activePattern, open]);
 
   const handleConfirmRest = async () => {
     setSaving(true);
@@ -119,6 +141,27 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
               <button onClick={() => setRestMode(true)} className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground hover:border-foreground/20 hover:text-foreground flex items-center justify-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" /> Add rest
               </button>
+              {patternOptions.length > 0 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-5 px-5">
+                  {activePattern && (
+                    <button
+                      onClick={() => setActivePattern(null)}
+                      className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-brand text-brand-foreground"
+                    >
+                      {activePattern.replace(/_/g, ' ')} <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  {patternOptions.filter((p) => p !== activePattern).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setActivePattern(p)}
+                      className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground capitalize"
+                    >
+                      {p.replace(/_/g, ' ')}
+                    </button>
+                  ))}
+                </div>
+              )}
               {loading ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="h-6 w-6 text-brand animate-spin" />
@@ -138,11 +181,11 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
                       </p>
                     </button>
                   ))}
-                  {query.trim() && !loading && results.length === 0 && (
+                  {(query.trim() || activePattern) && !loading && results.length === 0 && (
                     <p className="text-center text-sm text-muted-foreground py-8">No exercises found.</p>
                   )}
-                  {!query.trim() && (
-                    <p className="text-center text-sm text-muted-foreground py-8">Start typing to search the exercise library…</p>
+                  {!query.trim() && !activePattern && (
+                    <p className="text-center text-sm text-muted-foreground py-8">Start typing or pick a movement pattern to browse the exercise library…</p>
                   )}
                 </div>
               )}

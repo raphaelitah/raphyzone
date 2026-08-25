@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Search, Dumbbell, Loader2, Pencil, Trash2, Footprints } from 'lucide-react';
+import { Search, Dumbbell, Loader2, Pencil, Trash2, Footprints, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
@@ -125,9 +125,15 @@ export default function Library() {
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)]">
       <div className="shrink-0 px-5 pt-10 pb-3 border-b border-border bg-background">
-        <header className="mb-4">
-          <h1 className="text-2xl font-semibold tracking-tight">Exercises Library</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Form, muscles and alternatives</p>
+        <header className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Exercises Library</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Form, muscles and alternatives</p>
+          </div>
+          <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5 h-8 shrink-0 bg-brand hover:bg-brand/90 text-brand-foreground">
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </Button>
         </header>
 
         <div className="relative mb-3">
@@ -135,7 +141,7 @@ export default function Library() {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search exercises…" className="pl-9 rounded-xl h-11" />
         </div>
 
-        <LibraryFilters category={category} setCategory={setCategory} region={region} setRegion={setRegion} pattern={pattern} setPattern={setPattern} onAdd={() => setShowAdd(true)} expanded={filtersExpanded} setExpanded={setFiltersExpanded} />
+        <LibraryFilters category={category} setCategory={setCategory} region={region} setRegion={setRegion} pattern={pattern} setPattern={setPattern} expanded={filtersExpanded} setExpanded={setFiltersExpanded} />
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pt-3 pb-4" onScroll={handleListScroll}>

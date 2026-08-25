@@ -154,6 +154,26 @@ export const WORKOUT_DIFFICULTY_META = {
 
 export const WORKOUT_CATEGORIES = ['Full Body', 'Upper Body', 'Lower Body', 'Conditioning', 'Core'];
 
+export const WORKOUT_FORMATS = [
+  { value: 'for_time', label: 'For Time' },
+  { value: 'amrap', label: 'AMRAP' },
+  { value: 'emom', label: 'EMOM' },
+  { value: 'circuit', label: 'Circuit' },
+  { value: 'strength_sets', label: 'Bodybuilding' },
+  { value: 'superset', label: 'Bodybuilding' },
+];
+
+// Matches a workout's raw workout_format against a target format value,
+// treating mixed(a+b+...) formats as matching if any component matches.
+export function workoutFormatMatches(workoutFormat, targetValue) {
+  if (!workoutFormat) return false;
+  const mixedMatch = workoutFormat.match(/^mixed\s*\((.+)\)$/);
+  if (mixedMatch) {
+    return mixedMatch[1].split('+').map((s) => s.trim()).includes(targetValue);
+  }
+  return workoutFormat === targetValue;
+}
+
 export function mondayOf(date = new Date()) {
   return startOfWeek(date, { weekStartsOn: 1 });
 }

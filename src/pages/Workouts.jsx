@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { WORKOUT_DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
+import { WORKOUT_DIFFICULTY_META, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
   buildBlocksByWorkout,
@@ -30,8 +30,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
 import WorkoutEditorSheet from '@/components/WorkoutEditorSheet';
+import WorkoutFilters from '@/components/WorkoutFilters';
 
-const FILTERS = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 const BATCH_SIZE = 20;
 
 export default function Workouts() {
@@ -40,7 +40,11 @@ export default function Workouts() {
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('All');
+  const [region, setRegion] = useState('All');
+  const [running, setRunning] = useState(false);
+  const [difficulty, setDifficulty] = useState('All');
+  const [workoutType, setWorkoutType] = useState('All');
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const { user } = useAuth();
@@ -53,6 +57,8 @@ export default function Workouts() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const sentinelRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const lastScrollTopRef = useRef(0);
 
   const loadWorkouts = async () => {
     try {
@@ -166,7 +172,7 @@ export default function Workouts() {
       (entries) => {
         if (entries[0].isIntersecting) loadMore();
       },
-      { rootMargin: '700px' }
+      { root: scrollContainerRef.current, rootMargin: '700px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -179,10 +185,22 @@ export default function Workouts() {
   }, [selected, structureLoading, loadedSetsFor, blocksByWorkout]);
 
   const filtered = useMemo(() => workouts.filter((w) => {
-    const matchesFilter = filter === 'All' || w.difficulty === filter.toLowerCase();
+    const matchesRegion = running ? isRunningWorkout(w) : (region === 'All' || w.workout_category === region);
+    const matchesDifficulty = difficulty === 'All' || w.difficulty === difficulty.toLowerCase();
+    const matchesType = workoutType === 'All' || WORKOUT_FORMATS
+      .filter((f) => f.label === workoutType)
+      .some((f) => workoutFormatMatches(w.workout_format, f.value));
     const matchesQuery = !query || (w.name || '').toLowerCase().includes(query.toLowerCase());
-    return matchesFilter && matchesQuery;
-  }), [workouts, filter, query]);
+    return matchesRegion && matchesDifficulty && matchesType && matchesQuery;
+  }), [workouts, region, running, difficulty, workoutType, query]);
+
+  const handleListScroll = (e) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    if (filtersExpanded && scrollTop > lastScrollTopRef.current && scrollTop > 8) {
+      setFiltersExpanded(false);
+    }
+    lastScrollTopRef.current = scrollTop;
+  };
 
   const getExerciseCount = (w) => countWorkoutExercises(w, blocksByWorkout, blockExercisesByBlock);
   const getDuration = (w) => roundToFive(w.est_duration_min);
@@ -322,32 +340,33 @@ export default function Workouts() {
   };
 
   return (
-    <div className="px-5 pt-10">
-      <header className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Workout Library</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
-      </header>
+    <div className="flex flex-col h-[calc(100dvh-4rem)]">
+      <div className="shrink-0 px-5 pt-10 pb-3 border-b border-border bg-background">
+        <header className="mb-5">
+          <h1 className="text-2xl font-semibold tracking-tight">Workout Library</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
+        </header>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 rounded-xl h-11" />
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 rounded-xl h-11" />
+        </div>
+
+        <WorkoutFilters
+          region={region}
+          setRegion={setRegion}
+          running={running}
+          setRunning={setRunning}
+          difficulty={difficulty}
+          setDifficulty={setDifficulty}
+          workoutType={workoutType}
+          setWorkoutType={setWorkoutType}
+          expanded={filtersExpanded}
+          setExpanded={setFiltersExpanded}
+        />
       </div>
 
-      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar -mx-5 px-5">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors',
-              filter === f ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground'
-            )}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-3 pb-4" onScroll={handleListScroll}>
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="w-7 h-7 border-4 border-muted border-t-brand rounded-full animate-spin" />
@@ -403,6 +422,7 @@ export default function Workouts() {
           </div>
         </div>
       )}
+      </div>
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
