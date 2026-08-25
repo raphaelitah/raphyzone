@@ -5,11 +5,12 @@ import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Search, Dumbbell, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Search, Dumbbell, Loader2, Pencil, Trash2, Footprints } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import LibraryFilters, { matchesPattern } from '@/components/LibraryFilters';
+import { isRunningExercise } from '@/lib/fitness';
 import AddExerciseSheet from '@/components/AddExerciseSheet';
 import EditExerciseSheet from '@/components/EditExerciseSheet';
 
@@ -145,7 +146,9 @@ export default function Library() {
             {filtered.map((e) => (
               <button key={e.id} onClick={() => setSelected(e)} className="w-full text-left">
                 <Card className="rounded-2xl border-border p-4 flex items-center gap-3 hover:border-foreground/20 transition-colors">
-                  <div className="h-11 w-11 rounded-xl bg-brand/10 flex items-center justify-center shrink-0"><Dumbbell className="h-5 w-5 text-brand" /></div>
+                  <div className="h-11 w-11 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+                    {isRunningExercise(e) ? <Footprints className="h-5 w-5 text-brand" /> : <Dumbbell className="h-5 w-5 text-brand" />}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{e.name}</p>
                     <p className="text-xs text-muted-foreground capitalize">{e.movement_pattern} · {e.equipment}</p>
@@ -183,6 +186,9 @@ export default function Library() {
                   )}
                   <div className="flex-1 space-y-4">
                     <div className="flex flex-wrap gap-2 text-xs">
+                      {isRunningExercise(selected) && (
+                        <Tag className="flex items-center gap-1"><Footprints className="h-3 w-3" /> Running</Tag>
+                      )}
                       {selected.movement_pattern && <Tag className="capitalize">{selected.movement_pattern}</Tag>}
                       {selected.body_region && <Tag>{selected.body_region}</Tag>}
                       {selected.equipment && <Tag>{selected.equipment}</Tag>}

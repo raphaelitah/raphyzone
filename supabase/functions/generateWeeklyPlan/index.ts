@@ -3,7 +3,7 @@ import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { buildProfileContext, buildWorkoutCatalog, computeBaseSlots, WEEK_DAYS } from '../_shared/planContext.ts';
+import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, WEEK_DAYS } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
 
 // Ported from base44/functions/generateWeeklyPlan. Behavior is unchanged from the
@@ -37,7 +37,6 @@ Deno.serve(async (req: Request) => {
     if (!profile) return Response.json({ error: 'Profile not found' }, { status: 404, headers: corsHeaders });
 
     const profileContext = buildProfileContext(profile, feedback || []);
-    const catalog = buildWorkoutCatalog(workouts || []);
     const baseSlots = computeBaseSlots(profile);
 
     const trainDayCount = baseSlots.filter((s) => s.slot_type === 'train').length;
@@ -108,6 +107,9 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
 
     const trainDays = finalSlots.filter((s) => s.slot_type === 'train');
     const activityDays = finalSlots.filter((s) => s.slot_type === 'activity');
+    const neededModalities = [...new Set(trainDays.map((s) => s.modality).filter(Boolean))];
+    const filteredWorkouts = filterCatalogForSelection(workouts || [], profile, neededModalities, activityDays.length > 0);
+    const catalog = buildWorkoutCatalog(filteredWorkouts);
 
     // Phase 2 — selection: pick catalog workouts matching each day's decided modality.
     const selectionPrompt = `You are an expert training coach selecting workouts from a catalog.
@@ -132,6 +134,7 @@ RULES:
 - Match each day's modality/focus/activity, the athlete's desired duration, and goal.
 - EQUIPMENT MATCHING IS MANDATORY: Only assign a workout if ALL its required equipment is in the athlete's "Available equipment" list. If the equipment profile is CUSTOM, the athlete does NOT have a full gym — never assign a workout requiring equipment they don't have, even if it fits the modality/focus/goal perfectly.
 - Strongly avoid any exercise/pattern in dislikes or frequently-rejected.
+- VARY movement_focus across the week: when multiple train days share the same modality, do NOT repeat the same "movement_focus" value on consecutive or multiple days if the catalog offers a different one that still fits — spread the training stimulus out instead of picking the same focus every time.
 
 Return JSON with "selections" (array of { day, workout_id, reason }) and "suggestions" (array of { day, workout_ids }).`;
 

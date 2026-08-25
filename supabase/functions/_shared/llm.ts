@@ -16,6 +16,14 @@ export interface LLMSchema {
 
 const GROQ_MODEL = 'openai/gpt-oss-120b';
 
+// This account's Groq org caps every available model — 120b, 20b, qwen3.6-27b —
+// at the same 8,000 tokens/minute (TPM) on the free "on_demand" tier (confirmed
+// empirically: identical "Limit 8000" in the 413 body regardless of model). So a
+// smaller/faster model buys nothing here; the fix for oversized prompts (e.g.
+// generateWeeklyPlan's catalog-heavy selection call) is cutting the prompt
+// itself — see filterCatalogForSelection and the trimmed buildWorkoutCatalog in
+// planContext.ts.
+
 // Groq's tool-call validator rejects `null` for a property whose declared type is
 // a plain string like "string" — even when that property isn't in `required`, and
 // even though models routinely emit null for "not applicable here". Every schema
@@ -44,7 +52,7 @@ function allowNullOnOptionalFields(node: any, required: string[] = []): any {
   return out;
 }
 
-export async function callLLM({ prompt, schema }: { prompt: string; schema: LLMSchema }): Promise<any> {
+async function callLLMOnce({ prompt, schema, model }: { prompt: string; schema: LLMSchema; model?: string }): Promise<any> {
   const apiKey = Deno.env.get('GROQ_API_KEY');
   if (!apiKey) {
     throw new Error('GROQ_API_KEY is not set. Run `supabase secrets set GROQ_API_KEY=...` before deploying AI-driven functions.');
@@ -57,7 +65,7 @@ export async function callLLM({ prompt, schema }: { prompt: string; schema: LLMS
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model: model || GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       tools: [{
         type: 'function',
@@ -74,8 +82,31 @@ export async function callLLM({ prompt, schema }: { prompt: string; schema: LLMS
 
   const data = await res.json();
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-  if (!toolCall?.function?.arguments) {
-    throw new Error('Groq response had no structured tool call.');
+  if (!toolCall?.function?.arguments || toolCall.function.name !== 'respond') {
+    throw new Error(`Groq response had no valid 'respond' tool call (got ${toolCall?.function?.name ?? 'none'}).`);
   }
   return JSON.parse(toolCall.function.arguments);
+}
+
+// Groq occasionally hallucinates a different tool name (seen: 'json' instead of
+// the forced 'respond'), which the API rejects with a 400 tool_use_failed, or
+// returns rate-limit 429s under load — both transient, not systemic, so retry a
+// couple of times with a short backoff before giving up. Auth/config errors
+// (missing key, 401/403) are not retried — those won't fix themselves.
+const RETRYABLE_STATUS = /Groq API error (400|429|5\d\d)/;
+export async function callLLM(args: { prompt: string; schema: LLMSchema; model?: string }): Promise<any> {
+  const maxAttempts = 3;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await callLLMOnce(args);
+    } catch (err) {
+      lastError = err;
+      const message = (err as Error).message || '';
+      const retryable = RETRYABLE_STATUS.test(message) || message.includes("no valid 'respond' tool call");
+      if (!retryable || attempt === maxAttempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    }
+  }
+  throw lastError;
 }

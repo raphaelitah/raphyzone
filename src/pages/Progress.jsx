@@ -5,8 +5,8 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { Dumbbell, Flame, CheckCircle2, X, TrendingUp, Sparkles, Trophy, Loader2 } from 'lucide-react';
-import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META } from '@/lib/fitness';
+import { Dumbbell, Flame, CheckCircle2, X, TrendingUp, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
+import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
 import SessionDetailSheet from '@/components/SessionDetailSheet';
@@ -20,6 +20,7 @@ export default function Progress() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [detailSession, setDetailSession] = useState(null);
+  const [runningWorkoutIds, setRunningWorkoutIds] = useState(new Set());
 
   useEffect(() => {
     let active = true;
@@ -35,6 +36,12 @@ export default function Progress() {
       setExerciseSessions(es || []);
       setRecs(rs || []);
       setLoading(false);
+
+      const workoutIds = [...new Set((ws || []).map((s) => s.workout_id).filter(Boolean))];
+      if (workoutIds.length) {
+        const { data: workoutsData } = await supabase.from('workouts').select('workout_id, modality').in('workout_id', workoutIds);
+        if (active) setRunningWorkoutIds(new Set((workoutsData || []).filter(isRunningWorkout).map((w) => w.workout_id)));
+      }
 
       // Background: learn from session feedback, then refresh recommendations
       setAnalyzing(true);
@@ -183,9 +190,12 @@ export default function Progress() {
         {completed.slice(0, 10).map((s) => (
           <button key={s.id} onClick={() => setDetailSession(s)} className="w-full text-left">
             <Card className="rounded-xl border-border p-3 flex items-center justify-between hover:border-foreground/20 transition-colors">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{s.workout_name}</p>
-                <p className="text-xs text-muted-foreground">{s.date ? fmtDate(parseDate(s.date), 'd MMM') : ''}</p>
+              <div className="min-w-0 flex items-center gap-1.5">
+                {runningWorkoutIds.has(s.workout_id) && <Footprints className="h-3.5 w-3.5 text-brand shrink-0" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{s.workout_name}</p>
+                  <p className="text-xs text-muted-foreground">{s.date ? fmtDate(parseDate(s.date), 'd MMM') : ''}</p>
+                </div>
               </div>
               {s.overall_difficulty && <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[s.overall_difficulty]?.color)}>{DIFFICULTY_META[s.overall_difficulty]?.label}</span>}
             </Card>

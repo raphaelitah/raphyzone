@@ -1,17 +1,18 @@
 # AI-driven Edge Functions — porting status
 
-These five functions are ported from `base44/functions/` (Base44 Cloud Functions) to
-Supabase Edge Functions. They are **not yet deployed or wired up to the frontend** —
-see "What's left" below.
+These six functions are ported from `base44/functions/` (Base44 Cloud Functions) to
+Supabase Edge Functions, deployed, and fully wired up to the frontend — no page still
+calls `base44.functions.invoke` or `base44.entities.*`. See "What's left" below for
+the remaining housekeeping (secrets, quality testing).
 
 | Function | Calls an LLM? | Status |
 |---|---|---|
-| `generateWeeklyPlan` | yes (2 calls + verify), via Groq | code ported, `_shared/llm.ts` implemented |
-| `swapWorkout` | yes (1 call + verify), via Groq | code ported, `_shared/llm.ts` implemented |
-| `assignWorkoutWeights` | **no** — rewritten as a deterministic formula | code ported, ready to deploy/test now |
-| `learnFromSessionFeedback` | **no** — rewritten as a deterministic threshold rule | code ported, ready to deploy/test now |
-| `applySwap` | no | code ported, ready to deploy/test now |
-| `suggestExerciseSubstitutes` | yes (1 call), via Groq | code ported, frontend repointed, ready to deploy/test |
+| `generateWeeklyPlan` | yes (2 calls + verify), via Groq | deployed, frontend repointed |
+| `swapWorkout` | yes (1 call + verify), via Groq | deployed, frontend repointed |
+| `assignWorkoutWeights` | **no** — rewritten as a deterministic formula | deployed, frontend repointed |
+| `learnFromSessionFeedback` | **no** — rewritten as a deterministic threshold rule | deployed, frontend repointed |
+| `applySwap` | no | deployed, frontend repointed |
+| `suggestExerciseSubstitutes` | yes (1 call), via Groq | deployed, frontend repointed |
 
 `assignWorkoutWeights` and `learnFromSessionFeedback` originally called an LLM, but
 their prompts were really spelling out a fixed formula/threshold (baseline × factors,
@@ -32,27 +33,40 @@ the others.
 
 ## What's left
 
-1. **Set the Groq API key as a secret** (free tier — [console.groq.com](https://console.groq.com)):
+1. **Confirm the Groq API key secret is set** (free tier — [console.groq.com](https://console.groq.com)):
    ```bash
    supabase secrets set GROQ_API_KEY=gsk_... --project-ref tdxcdvalriekeddahkev
    ```
-2. **Deploy the functions** (via `supabase functions deploy <name>` or the
-   `deploy_edge_function` MCP tool), each with `verify_jwt: true`.
-3. **Repoint the frontend** — `src/pages/PlanBuilder.jsx`, `src/lib/weightRecalc.js`,
-   `src/pages/Home.jsx`, and `src/pages/Progress.jsx` still call
-   `base44.functions.invoke('generateWeeklyPlan', ...)` etc.
-   (`src/pages/WorkoutExecution.jsx` is already repointed to Supabase.) Swap those for
-   `supabase.functions.invoke('generateWeeklyPlan', { body: {...} })` (same idea, same
-   response shape — `res.data.plan` etc. — since the ported functions return
-   identical JSON to the originals).
-4. **Test each function** against real data before removing the Base44 fallback —
-   `generateWeeklyPlan` and `swapWorkout` are LLM-driven and worth checking output
-   quality, not just that they don't error; the other three are deterministic and
-   just need normal correctness testing.
-5. **Watch Groq's free-tier rate limits** if daily active users grow — currently
-   only `generateWeeklyPlan` (weekly, 2 calls) and `swapWorkout` (occasional, 1 call)
-   hit the LLM at all, so headroom is generous, but check
-   [console.groq.com](https://console.groq.com) limits if usage climbs.
+   (Already required for `generateWeeklyPlan`/`swapWorkout`, which are live — if
+   those work, `suggestExerciseSubstitutes` will too.)
+2. **Test each function** against real data — `generateWeeklyPlan`, `swapWorkout`,
+   and `suggestExerciseSubstitutes` are LLM-driven and worth checking output quality,
+   not just that they don't error; the other three are deterministic and just need
+   normal correctness testing.
+3. **Watch Groq's free-tier rate limits** if daily active users grow — this
+   account's org caps every available model (120b, 20b, qwen3.6-27b — confirmed
+   empirically) at a shared 8,000 tokens/minute on the "on_demand" tier, so a
+   bigger catalog or more concurrent users can still hit it even after the cuts
+   below. Check [console.groq.com](https://console.groq.com) if usage climbs.
+   `generateWeeklyPlan`'s selection prompt (by far the largest — it embeds the
+   workout catalog) is kept under budget by `_shared/planContext.ts`:
+   `buildWorkoutCatalog` sends only the fields the RULES actually use (no
+   `goal`/`split`/`difficulty`/`format` — `movement_focus` stays in, since the
+   selection prompt has a rule telling the model to vary it across the week
+   instead of repeating the same focus on every strength day), and
+   `filterCatalogForSelection` drops equipment-incompatible workouts plus caps
+   each modality at 20 candidates (a week only ever needs 7 unique picks, so
+   this doesn't affect selection quality). If it still gets tight, cut
+   `MAX_PER_MODALITY` in that file, or trim the boilerplate RULES text.
+   `_shared/llm.ts`'s `callLLM` also retries up to 3 times with backoff on
+   transient Groq failures (429 rate limits, 5xx, and the occasional
+   400 where the model calls a hallucinated tool name instead of the forced
+   `respond` tool) — auth/config errors (missing key, 401/403) are not retried.
+4. **Decide on the three unported admin scripts** (`backfillExerciseStatus`,
+   `classifyWorkoutCatalog`, `reverifyPlanReasons`) — still nothing in the frontend
+   references them, so they can stay unported until actually needed.
+5. Once everything above checks out, `src/api/base44Client.js` and the `base44/`
+   directory are no longer imported anywhere in `src/` and can be removed.
 
 ## Auth model
 

@@ -80,20 +80,67 @@ export function buildProfileContext(profile: any, feedback: any[]) {
 - Workouts previously rejected: ${digest.rejectedWorkouts.join('; ') || 'none'}`;
 }
 
+// Compact (no pretty-print indentation) and pared down to only the fields the
+// selection prompt's RULES section actually reads (modality, duration,
+// equipment, exercises for dislike/pattern matching, name/id for the pick,
+// movement_focus for the week-level variety rule). `goal`, `split`, and
+// `difficulty` are still never referenced — including them was pure token
+// overhead with no effect on which workout gets picked, and the full row (with
+// every field) is re-fetched from the DB later by verifyWorkoutReasons anyway.
 export function buildWorkoutCatalog(workouts: any[]) {
   return JSON.stringify((workouts || []).map((w) => ({
     id: w.id,
     name: w.name,
-    goal: w.goal,
-    split: w.split,
-    difficulty: w.difficulty,
-    workout_format: w.workout_format,
-    format_label: w.format_label,
-    movement_focus: w.movement_focus,
     modality: w.modality || null,
-    est_duration_min: w.est_duration_min,
-    duration_minutes: w.duration_minutes,
+    movement_focus: w.movement_focus || null,
+    duration_min: w.est_duration_min || w.duration_minutes || null,
     required_equipment: w.equipment || [],
     exercises: (w.exercises || []).map((e: any) => e.exercise_name),
-  })), null, 2);
+  })));
+}
+
+// Pre-filters the catalog to workouts the athlete could actually be assigned,
+// before it's ever serialized into a prompt. Both cuts are things the LLM would
+// have discarded anyway per its own mandatory rules, so this only removes dead
+// weight — it never changes which workout gets picked.
+//   - Equipment: a CUSTOM equipment profile can only ever use workouts whose
+//     required equipment is fully covered (this is already a MANDATORY rule in
+//     the selection prompt). full_gym profiles skip this filter — everything's
+//     assumed available.
+//   - Modality: a workout can only be selected for a train day if its modality
+//     matches that day's decided modality. When there are no activity days (the
+//     common case), the day's needed modality set is known ahead of time, so
+//     anything else can be safely dropped. Activity days can match against any
+//     modality (the mapping is decided by the LLM, not precomputed here), so the
+//     modality filter is skipped whenever any activity day is present.
+// Cap on how many candidates per modality get sent to the LLM. A week needs at
+// most 7 unique picks total, so this is generous headroom for variety/quality —
+// it exists only because some modalities (e.g. "Mixed Conditioning") can have
+// 70+ approved workouts in the catalog, which alone can blow the prompt budget
+// regardless of how tightly the other fields are trimmed.
+const MAX_PER_MODALITY = 20;
+
+export function filterCatalogForSelection(workouts: any[], profile: any, neededModalities: string[], hasActivityDays: boolean) {
+  let list = workouts || [];
+
+  if (profile?.equipment_profile !== 'full_gym') {
+    const available = new Set(
+      [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])].map((e: string) => e.toLowerCase().trim())
+    );
+    list = list.filter((w) => (w.equipment || []).every((eq: string) => available.has((eq || '').toLowerCase().trim())));
+  }
+
+  if (!hasActivityDays && neededModalities.length) {
+    const modalitySet = new Set(neededModalities);
+    list = list.filter((w) => w.modality && modalitySet.has(w.modality));
+  }
+
+  const countByModality: Record<string, number> = {};
+  list = list.filter((w) => {
+    const key = w.modality || '__none__';
+    countByModality[key] = (countByModality[key] || 0) + 1;
+    return countByModality[key] <= MAX_PER_MODALITY;
+  });
+
+  return list;
 }

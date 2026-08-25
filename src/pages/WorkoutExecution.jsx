@@ -16,7 +16,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock } from 'lucide-react';
-import { DIFFICULTY_META, mondayOf, fmtISO } from '@/lib/fitness';
+import { DIFFICULTY_META, mondayOf, fmtISO, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import { cn } from '@/lib/utils';
 import {
@@ -170,6 +170,8 @@ export default function WorkoutExecution() {
             hydrated[ex.key] = {
               max_weight: es.max_weight || null,
               bodyweight: es.max_weight === 0,
+              distance_km: es.distance_km ?? null,
+              duration_seconds: es.duration_seconds ?? null,
               difficulty: es.difficulty,
               note: es.note,
             };
@@ -215,12 +217,13 @@ export default function WorkoutExecution() {
       }
       return;
     }
-    if (!log || (log.max_weight == null && !log.bodyweight && !log.difficulty && !log.note)) return;
+    if (!log || (log.max_weight == null && !log.bodyweight && log.distance_km == null && log.duration_seconds == null && !log.difficulty && !log.note)) return;
     try {
       const payload = {
         user_id: userRef.current.id, workout_session_id: sessionIdRef.current, exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
         max_weight: log.bodyweight ? 0 : (log.max_weight ?? null), difficulty: log.difficulty || 'normal', note: log.note || '',
         sets: ex.effective_sets || ex.sets, reps: ex.reps, target_weight: ex.target_weight,
+        distance_km: log.distance_km ?? null, duration_seconds: log.duration_seconds ?? null,
         elapsed_seconds: Math.round(exerciseElapsedRef.current[key] || 0),
       };
       if (existingId) {
@@ -401,16 +404,19 @@ export default function WorkoutExecution() {
           <h1 className="font-semibold truncate">{workout?.name}</h1>
         </div>
       </div>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center">
+        <p className="text-sm text-muted-foreground">This workout doesn't have any exercises set up yet.</p>
+        <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="mt-2 text-sm font-medium text-brand underline">Go back</button>
       </div>
     </div>
   );
 
   const log = getLog(current.key);
   const isLast = index === exercises.length - 1;
-  const requiresWeight = current.details?.requires_load !== false;
-  const done = !requiresWeight || log.max_weight != null || log.bodyweight || log.skipped;
+  const isRunning = isRunningExercise(current.details);
+  const requiresWeight = !isRunning && current.details?.requires_load !== false;
+  const done = log.skipped
+    || (isRunning ? (log.distance_km != null && log.duration_seconds != null) : (!requiresWeight || log.max_weight != null || log.bodyweight));
   const setsValue = current.rounds > 1 ? current.effective_sets : current.sets;
   const setsSubtext = current.rounds > 1 ? `${current.rounds} rounds` : null;
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
@@ -451,7 +457,11 @@ export default function WorkoutExecution() {
         <div className="grid grid-cols-4 gap-2 mb-4">
           <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
           <Spec label="Reps" value={current.reps} />
-          <Spec label="Weight" value={current.target_weight ? current.target_weight + 'kg' : '—'} loading={weightLoading} onClick={requiresWeight && !current.target_weight ? calcWeight : null} />
+          {isRunning ? (
+            <Spec label="Pace" value={log.distance_km && log.duration_seconds ? `${(log.duration_seconds / 60 / log.distance_km).toFixed(1)}/km` : '—'} />
+          ) : (
+            <Spec label="Weight" value={current.target_weight ? current.target_weight + 'kg' : '—'} loading={weightLoading} onClick={requiresWeight && !current.target_weight ? calcWeight : null} />
+          )}
           <Spec label="Rest" value={current.rest_seconds ? current.rest_seconds + 's' : '—'} />
         </div>
 
@@ -462,6 +472,18 @@ export default function WorkoutExecution() {
           <Card className="rounded-2xl border-border p-4 text-center text-sm text-muted-foreground">Exercise skipped</Card>
         ) : (
           <div className="space-y-4">
+            {isRunning && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
+                  <input type="number" inputMode="decimal" value={log.distance_km ?? ''} onChange={(e) => updateLog(current.key, { distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
+                  <input type="number" inputMode="decimal" value={log.duration_seconds != null ? log.duration_seconds / 60 : ''} onChange={(e) => updateLog(current.key, { duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                </div>
+              </div>
+            )}
             {requiresWeight && (
               <div>
                 <div className="flex items-center justify-between">

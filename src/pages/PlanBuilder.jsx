@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
@@ -59,8 +58,8 @@ export default function PlanBuilder() {
 
   useEffect(() => {
     (async () => {
-      const existing = await base44.entities.WeeklyPlan.filter({ user_id: user.id, week_start_date: weekStart });
-      if (existing[0]) {
+      const { data: existing } = await supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStart);
+      if (existing?.[0]) {
         setPlanId(existing[0].id);
         setContext(existing[0].context_answer || '');
         setFollowup(existing[0].context_notes || '');
@@ -69,8 +68,8 @@ export default function PlanBuilder() {
           setPhase('review');
           const ids = new Set(existing[0].workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
           if (ids.size) {
-            const ws = await base44.entities.Workout.list();
-            setWorkouts(Object.fromEntries(ws.filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+            const { data: ws } = await supabase.from('workouts').select('*');
+            setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
           }
         }
       }
@@ -89,8 +88,8 @@ export default function PlanBuilder() {
       setSummary(res.data.summary || '');
       const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
       if (ids.size) {
-        const ws = await base44.entities.Workout.list();
-        setWorkouts(Object.fromEntries(ws.filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*');
+        setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
       }
       try {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
@@ -114,8 +113,8 @@ export default function PlanBuilder() {
       setSummary(res.data.summary || '');
       const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
       if (ids.size) {
-        const ws = await base44.entities.Workout.list();
-        setWorkouts(Object.fromEntries(ws.filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*');
+        setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
       }
       try {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
@@ -184,7 +183,7 @@ export default function PlanBuilder() {
       : w);
     setPlan({ ...plan, workouts: updated });
     try {
-      await base44.entities.WeeklyPlan.update(planId, { workouts: updated });
+      await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', planId);
     } catch {
       setError('Could not save that change.');
     }

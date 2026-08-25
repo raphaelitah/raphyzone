@@ -110,6 +110,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
       d[es.id] = {
         max_weight: es.max_weight ?? null,
         bodyweight: es.max_weight === 0,
+        distance_km: es.distance_km ?? null,
+        duration_seconds: es.duration_seconds ?? null,
         difficulty: es.difficulty || 'normal',
         note: es.note || '',
         elapsed_seconds: es.elapsed_seconds ?? 0,
@@ -130,6 +132,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         if (!dr) { updated.push(es); continue; }
         const payload = {
           max_weight: dr.bodyweight ? 0 : (dr.max_weight === '' ? null : dr.max_weight),
+          distance_km: dr.distance_km === '' ? null : dr.distance_km,
+          duration_seconds: dr.duration_seconds === '' ? null : dr.duration_seconds,
           difficulty: dr.difficulty || 'normal',
           note: dr.note || '',
           elapsed_seconds: Math.round(dr.elapsed_seconds || 0),
@@ -197,12 +201,16 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium truncate">{es.exercise_name}</p>
                         <div className="flex items-center gap-2 shrink-0">
-                          {es.max_weight > 0 ? (
+                          {es.distance_km != null ? (
+                            <span className="text-sm font-semibold">{es.distance_km}km</span>
+                          ) : es.max_weight > 0 ? (
                             <span className="text-sm font-semibold">{es.max_weight}kg</span>
-                          ) : (
+                          ) : es.max_weight === 0 ? (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
-                          )}
-                          {es.elapsed_seconds != null && (
+                          ) : null}
+                          {es.duration_seconds != null ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.duration_seconds)}</span>
+                          ) : es.elapsed_seconds != null && (
                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.elapsed_seconds)}</span>
                           )}
                         </div>
@@ -262,17 +270,30 @@ function EditableExerciseRow({ es, draft, onChange }) {
   return (
     <Card className="rounded-xl border-border p-3 space-y-2.5">
       <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-[11px] text-muted-foreground">Weight (kg)</label>
-          <button type="button" onClick={() => onChange(draft.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border', draft.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
+      {es.distance_km != null || es.duration_seconds != null ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] text-muted-foreground">Distance (km)</label>
+            <input type="number" inputMode="decimal" value={draft.distance_km ?? ''} onChange={(e) => onChange({ distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground">Time (min)</label>
+            <input type="number" inputMode="decimal" value={draft.duration_seconds != null ? draft.duration_seconds / 60 : ''} onChange={(e) => onChange({ duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+          </div>
         </div>
-        {draft.bodyweight ? (
-          <div className="w-full rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-semibold text-brand text-center">Bodyweight</div>
-        ) : (
-          <input type="number" inputMode="decimal" value={draft.max_weight ?? ''} onChange={(e) => onChange({ max_weight: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
-        )}
-      </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] text-muted-foreground">Weight (kg)</label>
+            <button type="button" onClick={() => onChange(draft.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border', draft.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
+          </div>
+          {draft.bodyweight ? (
+            <div className="w-full rounded-lg border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-semibold text-brand text-center">Bodyweight</div>
+          ) : (
+            <input type="number" inputMode="decimal" value={draft.max_weight ?? ''} onChange={(e) => onChange({ max_weight: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+          )}
+        </div>
+      )}
       <div>
         <label className="text-[11px] text-muted-foreground">Difficulty</label>
         <div className="grid grid-cols-4 gap-1.5 mt-1">

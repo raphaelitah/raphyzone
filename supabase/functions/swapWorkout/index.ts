@@ -3,7 +3,7 @@ import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { buildProfileContext, buildWorkoutCatalog } from '../_shared/planContext.ts';
+import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
 
 // Ported from base44/functions/swapWorkout — unchanged behavior, Supabase data/LLM layer.
@@ -28,7 +28,8 @@ Deno.serve(async (req: Request) => {
 
     const current = current_workout_id ? (workouts || []).find((w: any) => w.id === current_workout_id) : null;
     const profileContext = buildProfileContext(profile, feedback || []);
-    const catalog = buildWorkoutCatalog(workouts || []);
+    const filteredWorkouts = filterCatalogForSelection(workouts || [], profile, modality ? [modality] : [], slot_type === 'activity');
+    const catalog = buildWorkoutCatalog(filteredWorkouts);
 
     const dayContext = slot_type === 'activity'
       ? `activity day (${activity || 'activity'}) — the replacement should match this activity's modality (catalog values: "Cyclical / Monostructural" = running/cycling/rowing, "Mixed Conditioning" = metcons/circuits, "Strength / Muscular Endurance" = resistance, "Mobility / Flexibility" = yoga/mobility, "Skill / Power" = powerlifting)`
