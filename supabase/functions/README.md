@@ -11,6 +11,7 @@ see "What's left" below.
 | `assignWorkoutWeights` | **no** — rewritten as a deterministic formula | code ported, ready to deploy/test now |
 | `learnFromSessionFeedback` | **no** — rewritten as a deterministic threshold rule | code ported, ready to deploy/test now |
 | `applySwap` | no | code ported, ready to deploy/test now |
+| `suggestExerciseSubstitutes` | yes (1 call), via Groq | code ported, frontend repointed, ready to deploy/test |
 
 `assignWorkoutWeights` and `learnFromSessionFeedback` originally called an LLM, but
 their prompts were really spelling out a fixed formula/threshold (baseline × factors,
@@ -38,8 +39,9 @@ the others.
 2. **Deploy the functions** (via `supabase functions deploy <name>` or the
    `deploy_edge_function` MCP tool), each with `verify_jwt: true`.
 3. **Repoint the frontend** — `src/pages/PlanBuilder.jsx`, `src/lib/weightRecalc.js`,
-   `src/pages/Home.jsx`, `src/pages/Progress.jsx`, and `src/pages/WorkoutExecution.jsx`
-   still call `base44.functions.invoke('generateWeeklyPlan', ...)` etc. Swap those for
+   `src/pages/Home.jsx`, and `src/pages/Progress.jsx` still call
+   `base44.functions.invoke('generateWeeklyPlan', ...)` etc.
+   (`src/pages/WorkoutExecution.jsx` is already repointed to Supabase.) Swap those for
    `supabase.functions.invoke('generateWeeklyPlan', { body: {...} })` (same idea, same
    response shape — `res.data.plan` etc. — since the ported functions return
    identical JSON to the originals).
@@ -47,10 +49,7 @@ the others.
    `generateWeeklyPlan` and `swapWorkout` are LLM-driven and worth checking output
    quality, not just that they don't error; the other three are deterministic and
    just need normal correctness testing.
-5. `WorkoutExecution.jsx` also has one `base44.integrations.Core.InvokeLLM` call
-   (exercise substitution) that isn't in this directory yet — same pattern, would
-   become its own tiny Edge Function once you're ready.
-6. **Watch Groq's free-tier rate limits** if daily active users grow — currently
+5. **Watch Groq's free-tier rate limits** if daily active users grow — currently
    only `generateWeeklyPlan` (weekly, 2 calls) and `swapWorkout` (occasional, 1 call)
    hit the LLM at all, so headroom is generous, but check
    [console.groq.com](https://console.groq.com) limits if usage climbs.

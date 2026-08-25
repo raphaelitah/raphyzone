@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -307,28 +306,23 @@ export default function WorkoutExecution() {
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
 
-      const res = await base44.integrations.Core.InvokeLLM({
-        prompt: `An athlete wants to substitute the exercise "${ex.name}" (movement: ${ex.movement_pattern}, primary muscle: ${ex.primary_muscle_group || 'n/a'}, equipment: ${ex.equipment}).
-Here are candidate alternatives with their details:
-${ranked.map((x) => `- ${x.c.name} (muscle: ${x.c.primary_muscle_group || 'n/a'}, movement: ${x.c.movement_pattern}, equipment: ${x.c.equipment})`).join('\n')}
-
-For each candidate, explain in one sentence why it's a good substitute (same muscles/movement/intent) and give a confidence 0-100. Return JSON.`,
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            alternatives: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: { name: { type: 'string' }, reason: { type: 'string' }, confidence: { type: 'number' } },
-                required: ['name', 'reason', 'confidence'],
-              },
-            },
+      const { data: res } = await supabase.functions.invoke('suggestExerciseSubstitutes', {
+        body: {
+          exercise: {
+            name: ex.name,
+            movement_pattern: ex.movement_pattern,
+            primary_muscle_group: ex.primary_muscle_group,
+            equipment: ex.equipment,
           },
-          required: ['alternatives'],
+          candidates: ranked.map((x) => ({
+            name: x.c.name,
+            primary_muscle_group: x.c.primary_muscle_group,
+            movement_pattern: x.c.movement_pattern,
+            equipment: x.c.equipment,
+          })),
         },
       });
-      const withIds = (res.alternatives || []).map((a) => {
+      const withIds = (res?.alternatives || []).map((a) => {
         const match = ranked.find((x) => x.c.name === a.name);
         return { ...a, exercise: match?.c };
       }).filter((a) => a.exercise);
