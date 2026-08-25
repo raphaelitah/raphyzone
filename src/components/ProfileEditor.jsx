@@ -133,6 +133,7 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         warmup_first_movement_sets: profile.warmup_first_movement_sets ?? 2,
         warmup_notes: profile.warmup_notes || '',
         dislikes: profile.dislikes || [],
+        calibrated: !!profile.calibrated,
         weight_setup: {
           dumbbells: { max_kg: ws.dumbbells?.max_kg ?? null },
           barbell: { max_kg: ws.barbell?.max_kg ?? null },
