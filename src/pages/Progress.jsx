@@ -10,6 +10,8 @@ import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
 import SessionDetailSheet from '@/components/SessionDetailSheet';
+import ProfileGapPrompt from '@/components/ProfileGapPrompt';
+import { useProfileGaps } from '@/hooks/useProfileGaps';
 
 export default function Progress() {
   const { user } = useAuth();
@@ -21,6 +23,7 @@ export default function Progress() {
   const [analyzing, setAnalyzing] = useState(false);
   const [detailSession, setDetailSession] = useState(null);
   const [runningWorkoutIds, setRunningWorkoutIds] = useState(new Set());
+  const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('progress');
 
   useEffect(() => {
     let active = true;
@@ -126,6 +129,10 @@ export default function Progress() {
         <Stat icon={Flame} value={streak} label="Day streak" accent />
         <Stat icon={CheckCircle2} value={thisWeek} label="This week" />
       </div>
+
+      {profileGap && (
+        <ProfileGapPrompt gap={profileGap} profile={gapProfile} onAnswer={answerGap} onDismiss={dismissGap} className="mb-5" />
+      )}
 
       {analyzing && (
         <div className="mb-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">

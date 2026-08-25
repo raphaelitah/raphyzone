@@ -6,9 +6,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, Loader2, Clock } from 'lucide-react';
 import { roundToFive } from '@/lib/workoutStructure';
-import { isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
+import { isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches, DESIRED_ACTIVITY_OPTIONS, SPORT_ACTIVITIES } from '@/lib/fitness';
 import WorkoutFilters from '@/components/WorkoutFilters';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import ProfileGapPrompt from '@/components/ProfileGapPrompt';
+import { useProfileGaps } from '@/hooks/useProfileGaps';
+
+const KNOWN_ACTIVITIES = [...new Set([...DESIRED_ACTIVITY_OPTIONS, ...SPORT_ACTIVITIES])];
+
+function matchActivity(query) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 3) return null;
+  return KNOWN_ACTIVITIES.find((a) => a.toLowerCase() === q) || KNOWN_ACTIVITIES.find((a) => a.toLowerCase().startsWith(q)) || null;
+}
 
 const BATCH_SIZE = 30;
 
@@ -26,6 +36,8 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
   const [detailWorkout, setDetailWorkout] = useState(null);
   const debounceRef = useRef(null);
   const sentinelRef = useRef(null);
+  const matchedActivity = useMemo(() => matchActivity(query), [query]);
+  const { gap: profileGap, profile: gapProfile, context: gapContext, answer: answerGap, dismiss: dismissGap } = useProfileGaps('workout-search', { activity: matchedActivity });
 
   const runSearch = useCallback(async (q) => {
     setLoading(true);
@@ -137,6 +149,9 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
             workoutType={workoutType} setWorkoutType={setWorkoutType}
             expanded={filtersExpanded} setExpanded={setFiltersExpanded}
           />
+          {profileGap && (
+            <ProfileGapPrompt gap={profileGap} profile={gapProfile} context={gapContext} onAnswer={answerGap} onDismiss={dismissGap} />
+          )}
         </div>
         <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-2.5">
           {loading ? (

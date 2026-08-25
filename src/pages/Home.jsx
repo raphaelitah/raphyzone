@@ -17,6 +17,8 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import ReorderArrows from '@/components/ReorderArrows';
 import RestToWorkoutChoiceSheet from '@/components/RestToWorkoutChoiceSheet';
 import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
+import ProfileGapPrompt from '@/components/ProfileGapPrompt';
+import { useProfileGaps } from '@/hooks/useProfileGaps';
 
 export default function Home() {
   const { user } = useAuth();
@@ -47,6 +49,7 @@ export default function Home() {
   const [restAiLoading, setRestAiLoading] = useState(false);
   const [restAiAlternatives, setRestAiAlternatives] = useState([]);
   const [searchFor, setSearchFor] = useState(null);
+  const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('home');
 
   useEffect(() => {
     let active = true;
@@ -362,6 +365,10 @@ export default function Home() {
         <p className="text-sm text-muted-foreground">{fmtDate(today, 'EEEE, d MMMM')}</p>
         <h1 className="text-2xl font-semibold tracking-tight mt-0.5">Let's train, {user?.full_name?.split(' ')[0] || 'athlete'}.</h1>
       </header>
+
+      {profileGap && (
+        <ProfileGapPrompt gap={profileGap} profile={gapProfile} onAnswer={answerGap} onDismiss={dismissGap} className="mb-5" />
+      )}
 
       {!plan && (
         <Card className="rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/5 to-transparent p-5 mb-5">

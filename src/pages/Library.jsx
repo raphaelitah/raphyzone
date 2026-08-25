@@ -13,6 +13,8 @@ import LibraryFilters, { matchesPattern } from '@/components/LibraryFilters';
 import { isRunningExercise } from '@/lib/fitness';
 import AddExerciseSheet from '@/components/AddExerciseSheet';
 import EditExerciseSheet from '@/components/EditExerciseSheet';
+import ProfileGapPrompt from '@/components/ProfileGapPrompt';
+import { useProfileGaps } from '@/hooks/useProfileGaps';
 
 const BATCH_SIZE = 50;
 
@@ -35,6 +37,7 @@ export default function Library() {
   const sentinelRef = useRef(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const lastScrollTopRef = useRef(0);
+  const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('library');
 
   useEffect(() => {
     (async () => {
@@ -149,6 +152,9 @@ export default function Library() {
           <div className="flex justify-center py-20"><div className="w-7 h-7 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>
         ) : (
           <div className="space-y-2.5">
+            {profileGap && (
+              <ProfileGapPrompt gap={profileGap} profile={gapProfile} onAnswer={answerGap} onDismiss={dismissGap} />
+            )}
             {filtered.map((e) => (
               <button key={e.id} onClick={() => setSelected(e)} className="w-full text-left">
                 <Card className="rounded-2xl border-border p-4 flex items-center gap-3 hover:border-foreground/20 transition-colors">
