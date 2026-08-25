@@ -29,19 +29,21 @@ export function useProfileGaps(location, context = {}) {
   const { profile, reload } = useAthleteProfile();
   const userId = profile?.user_id;
   const activityKey = context.activity;
+  const dayKey = context.day;
+
+  const idFor = (g) => (g.key === 'desired_activity' && activityKey ? `${g.key}:${activityKey.toLowerCase()}:${dayKey || ''}` : g.key);
 
   const gap = useMemo(() => {
     if (!profile) return null;
     const dismissed = userId ? readDismissed(userId) : new Set();
     return PROFILE_GAPS.find((g) => {
       if (!g.locations.includes(location)) return false;
-      const id = g.key === 'desired_activity' && activityKey ? `${g.key}:${activityKey.toLowerCase()}` : g.key;
-      if (dismissed.has(id)) return false;
+      if (dismissed.has(idFor(g))) return false;
       return g.isMissing(profile, context);
     }) || null;
-  }, [profile, userId, location, activityKey]);
+  }, [profile, userId, location, activityKey, dayKey]);
 
-  const gapId = gap ? (gap.key === 'desired_activity' && activityKey ? `${gap.key}:${activityKey.toLowerCase()}` : gap.key) : null;
+  const gapId = gap ? idFor(gap) : null;
 
   const answer = useCallback(async (value) => {
     if (!gap || !profile) return;

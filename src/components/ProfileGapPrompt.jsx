@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sparkles, X, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { cn } from '@/lib/utils';
 export default function ProfileGapPrompt({ gap, profile, context, onAnswer, onDismiss, className }) {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
 
   if (!gap) return null;
 
@@ -52,6 +54,14 @@ export default function ProfileGapPrompt({ gap, profile, context, onAnswer, onDi
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Yes, add it'}
             </Button>
             <Button size="sm" variant="outline" disabled={saving} onClick={() => submit(false)} className="rounded-lg h-8">No thanks</Button>
+          </div>
+        )}
+        {gap.type === 'link' && (
+          <div className="flex gap-2">
+            <Button size="sm" className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90 h-8" onClick={() => navigate(gap.href)}>
+              {gap.linkLabel || 'Go'}
+            </Button>
+            <Button size="sm" variant="outline" className="rounded-lg h-8" onClick={onDismiss}>Not now</Button>
           </div>
         )}
         {gap.type === 'text' && (

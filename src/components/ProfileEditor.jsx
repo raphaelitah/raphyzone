@@ -110,7 +110,7 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         saved_equipment_profiles: profile.saved_equipment_profiles || [],
         training_days: profile.training_days || [],
         scheduled_activities: profile.scheduled_activities || [],
-        desired_activities: profile.desired_activities || [],
+        desired_activities: (profile.desired_activities || []).filter((a) => a && typeof a === 'object' && a.day && a.activity),
         strength_known: !!profile.strength_known,
         resistance_priority: profile.resistance_priority ?? 70,
         conditioning_priority: profile.conditioning_priority ?? 30,

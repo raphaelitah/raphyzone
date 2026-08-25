@@ -6,23 +6,18 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Search, Loader2, Clock } from 'lucide-react';
 import { roundToFive } from '@/lib/workoutStructure';
-import { isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches, DESIRED_ACTIVITY_OPTIONS, SPORT_ACTIVITIES } from '@/lib/fitness';
+import { isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
 import WorkoutFilters from '@/components/WorkoutFilters';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
-
-const KNOWN_ACTIVITIES = [...new Set([...DESIRED_ACTIVITY_OPTIONS, ...SPORT_ACTIVITIES])];
-
-function matchActivity(query) {
-  const q = query.trim().toLowerCase();
-  if (q.length < 3) return null;
-  return KNOWN_ACTIVITIES.find((a) => a.toLowerCase() === q) || KNOWN_ACTIVITIES.find((a) => a.toLowerCase().startsWith(q)) || null;
-}
+import { useAuth } from '@/lib/AuthContext';
+import { matchActivityFromText, categoryFromWorkout, recordPickAndDetectRepeat, repeatedActivityInterest } from '@/lib/activityInterest';
 
 const BATCH_SIZE = 30;
 
 export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabel }) {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,8 +31,13 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
   const [detailWorkout, setDetailWorkout] = useState(null);
   const debounceRef = useRef(null);
   const sentinelRef = useRef(null);
-  const matchedActivity = useMemo(() => matchActivity(query), [query]);
-  const { gap: profileGap, profile: gapProfile, context: gapContext, answer: answerGap, dismiss: dismissGap } = useProfileGaps('workout-search', { activity: matchedActivity });
+  // Same detection whether the user typed the activity name or has simply kept picking
+  // the same category of workout (e.g. several Bodybuilding-format sessions in a row).
+  const matchedActivity = useMemo(
+    () => matchActivityFromText(query) || (open ? repeatedActivityInterest(user?.id) : null),
+    [query, open, user?.id]
+  );
+  const { gap: profileGap, profile: gapProfile, context: gapContext, answer: answerGap, dismiss: dismissGap } = useProfileGaps('workout-search', { activity: matchedActivity, day: dayLabel });
 
   const runSearch = useCallback(async (q) => {
     setLoading(true);
@@ -126,6 +126,7 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
 
   const pickAndClose = (w) => {
     setDetailWorkout(null);
+    recordPickAndDetectRepeat(user?.id, categoryFromWorkout(w));
     onPick(w);
   };
 

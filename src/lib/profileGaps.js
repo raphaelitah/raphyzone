@@ -6,6 +6,17 @@ function goalLabel(value) {
 
 export const PROFILE_GAPS = [
   {
+    key: 'strength_calibration',
+    locations: ['home', 'library', 'progress', 'workout-search'],
+    type: 'link',
+    href: '/calibration',
+    question: () => 'Calibrate your strength for accurate weights?',
+    hint: () => "Takes a minute and dials in every plan's starting loads.",
+    linkLabel: 'Calibrate now',
+    isMissing: (p) => !p?.calibrated,
+    buildPatch: () => null,
+  },
+  {
     key: 'session_duration',
     locations: ['library'],
     type: 'choice',
@@ -74,9 +85,10 @@ export const PROFILE_GAPS = [
     key: 'desired_activity',
     locations: ['workout-search'],
     type: 'yesno',
-    question: (p, ctx) => `Want ${ctx?.activity} scheduled regularly in your plan?`,
+    question: (p, ctx) => `Want ${ctx?.activity} scheduled regularly on ${ctx?.day}s?`,
     hint: () => "We'll add it to your weekly rotation automatically.",
-    isMissing: (p, ctx) => !!ctx?.activity && !(p?.desired_activities || []).some((a) => a.toLowerCase() === ctx.activity.toLowerCase()),
-    buildPatch: (value, p, ctx) => (value ? { desired_activities: [...(p?.desired_activities || []), ctx.activity] } : null),
+    isMissing: (p, ctx) => !!ctx?.activity && !!ctx?.day
+      && !(p?.desired_activities || []).some((a) => a.day === ctx.day && (a.activity || '').toLowerCase() === ctx.activity.toLowerCase()),
+    buildPatch: (value, p, ctx) => (value ? { desired_activities: [...(p?.desired_activities || []), { day: ctx.day, activity: ctx.activity }] } : null),
   },
 ];
