@@ -4,7 +4,7 @@ import { Plus, Trash2, Save, X } from 'lucide-react';
 import {
   EQUIPMENT_GROUPS, ALL_EQUIPMENT, WEIGHT_CATEGORY_EQUIPMENT, WEIGHT_CATEGORY_LABELS,
 } from '@/lib/fitness';
-import { kgToInput, inputToKg, kgToLbs } from '@/lib/units';
+import { kgToInput, inputToKg } from '@/lib/units';
 import { cn } from '@/lib/utils';
 
 export default function ProfileEquipmentTab({ form, setForm }) {
@@ -18,8 +18,6 @@ export default function ProfileEquipmentTab({ form, setForm }) {
     cn('px-3 py-2 rounded-full text-xs font-medium border transition-colors',
       on ? 'bg-brand text-brand-foreground border-transparent' : 'border-border text-muted-foreground',
       disabled && 'opacity-60 cursor-not-allowed');
-  const weightLabel = (kg) => (unit === 'lbs' ? `${Math.round(kgToLbs(kg))}lbs` : `${kg}kg`);
-
   const setProfile = (mode) => setForm((f) => ({ ...f, equipment_profile: mode }));
 
   const toggleEquipment = (e) => setForm((f) => {

@@ -5,7 +5,7 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { Dumbbell, Flame, CheckCircle2, X, TrendingUp, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
+import { Dumbbell, Flame, CheckCircle2, TrendingUp, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
 import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';

@@ -150,7 +150,6 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
     if (!loadedRef.current) { loadedRef.current = true; return; }
     debounceRef.current = setTimeout(() => performSave(form), 700);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form]);
 
   useEffect(() => {
@@ -159,7 +158,6 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
       const f = formRef.current;
       if (f) performSave(f, { final: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!form) return null;

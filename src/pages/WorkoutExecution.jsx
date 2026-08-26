@@ -51,7 +51,7 @@ export default function WorkoutExecution() {
   const [alternatives, setAlternatives] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [plan, setPlan] = useState(null);
-  const [session, setSession] = useState(null);
+  const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [, setTick] = useState(0);
@@ -250,7 +250,6 @@ export default function WorkoutExecution() {
     await flushSave(current.key);
     setIndex((i) => Math.min(i + 1, exercises.length - 1));
   };
-  const goPrev = () => { flushCurrentTime(); setIndex((i) => Math.max(i - 1, 0)); };
 
   // Best-effort flush of any pending edits when leaving the screen.
   useEffect(() => {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Play, Clock, Dumbbell, Loader2 } from 'lucide-react';
+import { Play, Loader2 } from 'lucide-react';
 import { WORKOUT_DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
@@ -13,7 +13,6 @@ import {
   roundToFive,
   isEMOMBlock,
   getWorkoutMetaLine,
-  countWorkoutExercises,
 } from '@/lib/workoutStructure';
 
 export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine, reason, selectMode, onSelect }) {
@@ -53,7 +52,6 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
 
   const blocks = blocksByWorkout[workout.workout_id] || [];
   const duration = roundToFive(workout.est_duration_min);
-  const exerciseCount = countWorkoutExercises(workout, blocksByWorkout, blockExercisesByBlock);
   const emomBlock = blocks.find((b) => isEMOMBlock(b));
 
   return (

@@ -38,7 +38,7 @@ const FOLLOWUP_PLACEHOLDER = {
 export default function PlanBuilder() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { profile } = useAthleteProfile();
+  useAthleteProfile();
   const [phase, setPhase] = useState('context');
   const [context, setContext] = useState('');
   const [followup, setFollowup] = useState('');
@@ -96,7 +96,7 @@ export default function PlanBuilder() {
         if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || res.data.plan.regenerations_used || 0 });
       } catch {}
       setPhase('review');
-    } catch (e) {
+    } catch {
       setError('Could not generate the plan. Please try again.'); setPhase('context');
     }
   };
@@ -177,7 +177,6 @@ export default function PlanBuilder() {
 
   const useSuggestion = async (alt) => {
     const idx = suggestFor;
-    const slot = plan.workouts[idx];
     const updated = plan.workouts.map((w, i) => i === idx
       ? { ...w, slot_type: 'train', workout_id: alt.workout_id, workout_name: alt.workout_name, reason: alt.reason || 'Guided session', locked: false }
       : w);
@@ -275,7 +274,6 @@ export default function PlanBuilder() {
           {summary && <p className="text-sm text-muted-foreground bg-muted/50 rounded-xl p-3 mb-4 leading-relaxed">{summary}</p>}
           <div className="space-y-3 mb-4">
             {plan.workouts.map((w, i) => {
-              const isTrain = w.slot_type === 'train';
               const isActivity = w.slot_type === 'activity';
               if (isActivity && !w.workout_id) {
                 return (
