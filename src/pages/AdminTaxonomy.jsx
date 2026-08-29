@@ -9,11 +9,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X, Loader2, AlertTriangle } from 'lucide-react';
 import { EQUIPMENT_GROUPS } from '@/lib/fitness';
 import { DIMENSIONS, fetchTaxonomyTerms, checkUsage, transferExercises } from '@/lib/taxonomy';
+import { findDuplicateTaxonomyTerm, UNIQUE_VIOLATION } from '@/lib/duplicates';
+import { useToast } from '@/components/ui/use-toast';
 
 const GROUP_OPTIONS = [...EQUIPMENT_GROUPS.map(g => g.label), 'Bodyweight'];
 
 export default function AdminTaxonomy() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [dimension, setDimension] = useState('equipment');
   const [terms, setTerms] = useState([]);
@@ -50,6 +53,11 @@ export default function AdminTaxonomy() {
     if (isEquipment && !newGroup) return;
     setProcessing(true);
     try {
+      const duplicate = await findDuplicateTaxonomyTerm(dimension, newTerm);
+      if (duplicate) {
+        toast({ title: 'Term already exists', description: `"${duplicate.value}" is already in this list.`, variant: 'destructive' });
+        return;
+      }
       const { error } = await supabase.from('taxonomy_terms').insert({
         dimension,
         value: newTerm.trim(),
@@ -57,7 +65,13 @@ export default function AdminTaxonomy() {
         group: isEquipment ? newGroup : undefined,
         sort_order: terms.length,
       });
-      if (error) throw error;
+      if (error) {
+        if (error.code === UNIQUE_VIOLATION) {
+          toast({ title: 'Term already exists', description: `"${newTerm.trim()}" is already in this list.`, variant: 'destructive' });
+          return;
+        }
+        throw error;
+      }
       setNewTerm('');
       setNewLabel('');
       setNewGroup('');
@@ -71,13 +85,24 @@ export default function AdminTaxonomy() {
     setProcessing(true);
     try {
       if (editValue.trim() !== editing.value) {
+        const duplicate = await findDuplicateTaxonomyTerm(dimension, editValue, editing.id);
+        if (duplicate) {
+          toast({ title: 'Term already exists', description: `"${duplicate.value}" is already in this list.`, variant: 'destructive' });
+          return;
+        }
         await transferExercises(dimension, editing.value, editValue.trim());
       }
       const update = { value: editValue.trim() };
       if (editLabel.trim()) update.label = editLabel.trim();
       if (isEquipment) update.group = editGroup;
       const { error } = await supabase.from('taxonomy_terms').update(update).eq('id', editing.id);
-      if (error) throw error;
+      if (error) {
+        if (error.code === UNIQUE_VIOLATION) {
+          toast({ title: 'Term already exists', description: `"${editValue.trim()}" is already in this list.`, variant: 'destructive' });
+          return;
+        }
+        throw error;
+      }
       setEditing(null);
       setEditValue('');
       setEditLabel('');

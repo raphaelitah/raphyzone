@@ -9,6 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { createNotification } from '@/lib/notifications';
 import { fetchAllTaxonomy } from '@/lib/taxonomy';
+import { findDuplicateExercise, UNIQUE_VIOLATION } from '@/lib/duplicates';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -101,6 +102,11 @@ export default function AddExerciseSheet({ open, onOpenChange, onSubmitted }) {
   const submit = async () => {
     setSubmitting(true);
     try {
+      const duplicate = await findDuplicateExercise(form.name);
+      if (duplicate) {
+        toast({ title: 'Exercise already exists', description: `"${duplicate.name}" is already in the library.`, variant: 'destructive' });
+        return;
+      }
       const { data: exercise, error } = await supabase.from('exercises').insert({
         ...form,
         equipment: form.equipment.join(', '),
@@ -109,7 +115,13 @@ export default function AddExerciseSheet({ open, onOpenChange, onSubmitted }) {
         author_name: user.full_name || user.email,
         submission_status: 'pending',
       }).select().single();
-      if (error) throw error;
+      if (error) {
+        if (error.code === UNIQUE_VIOLATION) {
+          toast({ title: 'Exercise already exists', description: `An exercise named "${form.name}" is already in the library.`, variant: 'destructive' });
+          return;
+        }
+        throw error;
+      }
       await createNotification({
         userId: user.id,
         type: 'exercise_submitted',
