@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Play, Calendar, Flame, Trophy, Sparkles, ChevronRight, CheckCircle2, Dumbbell, Clock, Route, Moon, RefreshCw, ArrowLeftRight, Loader2, Plus } from 'lucide-react';
+import { Play, Calendar, CalendarClock, Flame, Trophy, Sparkles, ChevronRight, CheckCircle2, Dumbbell, Clock, Route, Moon, RefreshCw, ArrowLeftRight, Loader2, Plus } from 'lucide-react';
 import { mondayOf, fmtISO, fmtDate, parseDate, sameDay } from '@/lib/fitness';
 import { formatWeight } from '@/lib/units';
 import { buildBlocksByWorkout, buildBlockExercisesByBlock, countWorkoutExercises, roundToFive } from '@/lib/workoutStructure';
@@ -501,10 +501,37 @@ export default function Home() {
             {plan.workouts?.map((slot, i) => {
               const isToday = slot.date === todayISO;
               const done = !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
+              const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
+              const hasScheduled = scheduledForDay.length > 0;
+
+              const scheduledCards = scheduledForDay.map((sa, j) => (
+                <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
+                        {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 shrink-0">Scheduled</span>
+                  </div>
+                </Card>
+              ));
+
+              const wrap = (card) => hasScheduled ? (
+                <div key={i} className="rounded-2xl ring-1 ring-violet-200/70 bg-violet-50/10 p-1.5 space-y-2">
+                  <p className="text-[10px] font-medium text-violet-700 px-1.5 flex items-center gap-1">
+                    <CalendarClock className="h-3 w-3" /> {slot.day} · {1 + scheduledForDay.length} activities
+                  </p>
+                  {card}
+                  {scheduledCards}
+                </div>
+              ) : card;
 
               if (slot.slot_type === 'activity' && !slot.workout_id) {
-                return (
-                  <Card key={i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
+                return wrap(
+                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold truncate capitalize flex items-center gap-1.5">
@@ -533,8 +560,8 @@ export default function Home() {
               }
 
               if (slot.slot_type === 'rest') {
-                return (
-                  <Card key={i} className={cn('rounded-2xl border p-4 bg-muted/30', isToday ? 'border-border' : 'border-border/60')}>
+                return wrap(
+                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4 bg-muted/30', isToday ? 'border-border' : 'border-border/60')}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <Moon className="h-4 w-4" />
@@ -556,8 +583,8 @@ export default function Home() {
               const exCount = wo ? countWorkoutExercises(wo, blocksByWorkout, blockExercisesByBlock) : 0;
               const isGuidedActivity = slot.slot_type === 'activity';
               const doneSession = done ? weekSessions.find((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date))) : null;
-              return (
-                <button key={i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
+              return wrap(
+                <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
                   <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -597,6 +624,27 @@ export default function Home() {
                 </button>
               );
             })}
+            {(() => {
+              const scheduledDays = new Set((plan.workouts || []).map((s) => s.day));
+              const orphanScheduled = (profile?.scheduled_activities || []).filter((a) => !scheduledDays.has(a.day));
+              return orphanScheduled.map((sa, j) => (
+                <Card key={`sched-orphan-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
+                        {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-medium text-muted-foreground">{sa.day?.slice(0, 3)}</span>
+                      <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">Scheduled</span>
+                    </div>
+                  </div>
+                </Card>
+              ));
+            })()}
           </div>
         </div>
       )}

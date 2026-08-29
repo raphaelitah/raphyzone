@@ -6,7 +6,25 @@ import { Button } from '@/components/ui/button';
 import { fetchTaxonomyTerms } from '@/lib/taxonomy';
 import { Search, Loader2, Clock, X } from 'lucide-react';
 
-const PICK_COLUMNS = 'id, name, movement_pattern, equipment';
+const PICK_COLUMNS = 'id, exercise_code, name, movement_pattern, equipment';
+
+const QUICK_ADD_EXERCISES = [
+  { label: 'Burpee', name: 'Burpee' },
+  { label: 'Push-Up', name: 'Push-Up' },
+  { label: 'Air Squat', name: 'Air Squat' },
+  { label: 'Lunge', name: 'Reverse Lunge' },
+  { label: 'Sit-Up', name: 'Butterfly Sit-Up' },
+  { label: 'Plank', name: 'Forearm Plank' },
+  { label: 'Jumping Jack', name: 'Jumping Jack' },
+  { label: 'Mountain Climber', name: 'Mountain Climber' },
+  { label: 'DB Snatch', name: 'Dumbbell Power Snatch' },
+  { label: 'Thruster', name: 'Dumbbell Thruster' },
+  { label: 'Kettlebell Swing', name: 'American Kettlebell Swing' },
+  { label: 'Box Jump', name: 'Box Jump Over' },
+  { label: 'Pull-Up', name: 'Chest to Bar Pull-Up' },
+  { label: 'Deadlift', name: 'Deadlift' },
+  { label: 'Wall Ball', name: 'Wall Ball' },
+];
 
 export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
   const [results, setResults] = useState([]);
@@ -20,6 +38,7 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
   const [restDuration, setRestDuration] = useState('60');
   const [patternOptions, setPatternOptions] = useState([]);
   const [activePattern, setActivePattern] = useState(null);
+  const [quickAdd, setQuickAdd] = useState([]);
   const cacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -39,7 +58,25 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
         setPatternOptions(terms.map((t) => t.value).filter(Boolean));
       });
     }
-  }, [open, patternOptions.length]);
+    if (quickAdd.length === 0) {
+      const orFilter = QUICK_ADD_EXERCISES.map((q) => `name.ilike.${q.name}`).join(',');
+      supabase
+        .from('exercises')
+        .select(PICK_COLUMNS)
+        .not('submission_status', 'in', '(pending,rejected)')
+        .or(orFilter)
+        .then(({ data }) => {
+          if (!data) return;
+          const ordered = QUICK_ADD_EXERCISES
+            .map((q) => {
+              const match = data.find((ex) => ex.name.toLowerCase() === q.name.toLowerCase());
+              return match ? { ...match, quickLabel: q.label } : null;
+            })
+            .filter(Boolean);
+          setQuickAdd(ordered);
+        });
+    }
+  }, [open, patternOptions.length, quickAdd.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -109,6 +146,22 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
           <SheetTitle className="text-left">Add exercise</SheetTitle>
         </SheetHeader>
         <div className="px-5 pb-8 space-y-4">
+          {!restMode && !picked && quickAdd.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Quick add</p>
+              <div className="flex flex-wrap gap-1.5">
+                {quickAdd.map((ex) => (
+                  <button
+                    key={ex.id}
+                    onClick={() => setPicked(ex)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium border border-border text-foreground hover:border-brand hover:text-brand bg-muted/40"
+                  >
+                    {ex.quickLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {restMode ? (
             <>
               <div className="rounded-xl border border-border p-3">

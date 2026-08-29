@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search } from 'lucide-react';
+import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { WORKOUT_DIFFICULTY_META, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
 import WorkoutEditorSheet from '@/components/WorkoutEditorSheet';
+import CreateWorkoutSheet from '@/components/CreateWorkoutSheet';
 import WorkoutFilters from '@/components/WorkoutFilters';
 
 const BATCH_SIZE = 20;
@@ -52,6 +53,7 @@ export default function Workouts() {
   const [editingBe, setEditingBe] = useState(null);
   const [deletingBe, setDeletingBe] = useState(null);
   const [editingWorkout, setEditingWorkout] = useState(null);
+  const [creatingWorkout, setCreatingWorkout] = useState(false);
   const [structureLoading, setStructureLoading] = useState(false);
   const [loadedSetsFor, setLoadedSetsFor] = useState(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
@@ -342,9 +344,14 @@ export default function Workouts() {
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)]">
       <div className="shrink-0 px-5 pt-10 pb-3 border-b border-border bg-background">
-        <header className="mb-5">
-          <h1 className="text-2xl font-semibold tracking-tight">Workout Library</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
+        <header className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Workout Library</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setCreatingWorkout(true)} className="rounded-xl shrink-0">
+            <Plus className="h-4 w-4 mr-1" /> New
+          </Button>
         </header>
 
         <div className="relative mb-4">
@@ -630,6 +637,12 @@ export default function Workouts() {
         open={!!editingWorkout}
         onOpenChange={(o) => !o && setEditingWorkout(null)}
         onChanged={refreshData}
+      />
+
+      <CreateWorkoutSheet
+        open={creatingWorkout}
+        onOpenChange={setCreatingWorkout}
+        onSubmitted={refreshData}
       />
     </div>
   );
