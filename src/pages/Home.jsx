@@ -208,6 +208,17 @@ export default function Home() {
       if (ids.length) {
         const { data: ws } = await supabase.from('workouts').select('*').in('id', ids);
         setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
+        const codes = [...new Set((ws || []).map((w) => w.workout_id).filter(Boolean))];
+        if (codes.length) {
+          const { data: blocksData } = await supabase.from('workout_blocks').select('*').in('workout_id', codes);
+          const blocks = blocksData || [];
+          const blockIds = blocks.map((b) => b.block_id);
+          const blockExs = blockIds.length
+            ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
+            : [];
+          setBlocksByWorkout((prev) => ({ ...prev, ...buildBlocksByWorkout(blocks) }));
+          setBlockExercisesByBlock((prev) => ({ ...prev, ...buildBlockExercisesByBlock(blockExs) }));
+        }
       }
     } catch { /* ignore */ }
     setSwapLoading(false);
@@ -225,6 +236,12 @@ export default function Home() {
     try {
       await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
     } catch { /* ignore */ }
+    if (!workouts[workoutId]) {
+      try {
+        const { data: wo } = await supabase.from('workouts').select('*').eq('id', workoutId).single();
+        if (wo) await ensureWorkoutLoaded(wo);
+      } catch { /* ignore */ }
+    }
   };
 
   const persistPlan = async (updated) => {
@@ -289,6 +306,12 @@ export default function Home() {
       locked: false,
     } : w);
     await persistPlan(updated);
+    if (!workouts[workoutId]) {
+      try {
+        const { data: wo } = await supabase.from('workouts').select('*').eq('id', workoutId).single();
+        if (wo) await ensureWorkoutLoaded(wo);
+      } catch { /* ignore */ }
+    }
   };
 
   const aiSuggestForRest = async (slot) => {
