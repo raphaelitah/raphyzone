@@ -74,6 +74,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    setUser(await enrichUser(data?.user ?? null));
+  };
+
   const logout = async (shouldRedirect = true) => {
     await supabase.auth.signOut();
     setUser(null);
@@ -97,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       authError,
       appPublicSettings,
       authChecked,
+      refreshUser,
       logout,
       navigateToLogin,
       checkUserAuth,

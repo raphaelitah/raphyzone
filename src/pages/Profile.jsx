@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
@@ -13,14 +15,33 @@ import { getProfileCompleteness } from '@/lib/profileGaps';
 import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity } from 'lucide-react';
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { profile, loading, reload } = useAthleteProfile();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const toggleAutoApprove = async (checked) => {
     await supabase.from('athlete_profiles').update({ auto_approve_plans: checked }).eq('id', profile.id);
     reload();
+  };
+
+  const openNameEditor = () => {
+    setNameInput(user?.full_name || '');
+    setEditingName(true);
+  };
+
+  const saveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === user?.full_name) { setEditingName(false); return; }
+    setSavingName(true);
+    const { error } = await supabase.auth.updateUser({ data: { full_name: trimmed } });
+    setSavingName(false);
+    if (error) return;
+    await refreshUser();
+    setEditingName(false);
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
@@ -36,13 +57,35 @@ export default function Profile() {
           <div className="flex items-center gap-3">
             <div className="h-14 w-14 rounded-full bg-brand flex items-center justify-center text-brand-foreground font-semibold text-lg">{(user?.full_name || 'A')[0].toUpperCase()}</div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">{user?.full_name || 'Athlete'}</h1>
+              <button onClick={openNameEditor} className="flex items-center gap-1.5 text-xl font-semibold tracking-tight">
+                {user?.full_name || 'Athlete'}
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
           </div>
           <ExerciseNotifications />
         </div>
       </header>
+
+      <Dialog open={editingName} onOpenChange={setEditingName}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit name</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder="Your name"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingName(false)}>Cancel</Button>
+            <Button onClick={saveName} disabled={savingName || !nameInput.trim()}>{savingName ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Training profile</h2>
