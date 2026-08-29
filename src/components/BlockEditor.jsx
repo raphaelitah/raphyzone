@@ -25,6 +25,8 @@ export default function BlockEditor({
     rounds: '',
     rest_between_rounds_sec: '',
     time_cap_sec: '',
+    work_seconds: '',
+    rest_seconds: '',
   });
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export default function BlockEditor({
       rounds: block.rounds?.toString() || '',
       rest_between_rounds_sec: block.rest_between_rounds_sec?.toString() || '',
       time_cap_sec: block.time_cap_sec?.toString() || '',
+      work_seconds: block.work_seconds?.toString() || '',
+      rest_seconds: block.rest_seconds?.toString() || '',
     });
   }, [block]);
 
@@ -46,6 +50,8 @@ export default function BlockEditor({
       rounds: form.rounds ? parseInt(form.rounds, 10) : null,
       rest_between_rounds_sec: form.rest_between_rounds_sec ? parseInt(form.rest_between_rounds_sec, 10) : null,
       time_cap_sec: form.time_cap_sec ? parseInt(form.time_cap_sec, 10) : null,
+      work_seconds: form.work_seconds ? parseInt(form.work_seconds, 10) : null,
+      rest_seconds: form.rest_seconds ? parseInt(form.rest_seconds, 10) : null,
     });
     setEditing(false);
   };
@@ -101,6 +107,16 @@ export default function BlockEditor({
             <div>
               <label className="text-xs text-muted-foreground">Cap (s)</label>
               <Input type="number" value={form.time_cap_sec} onChange={(e) => setForm({ ...form, time_cap_sec: e.target.value })} className="mt-0.5" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Work (s)</label>
+              <Input type="number" value={form.work_seconds} onChange={(e) => setForm({ ...form, work_seconds: e.target.value })} placeholder="Tabata work" className="mt-0.5" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Rest (s)</label>
+              <Input type="number" value={form.rest_seconds} onChange={(e) => setForm({ ...form, rest_seconds: e.target.value })} placeholder="Tabata rest" className="mt-0.5" />
             </div>
           </div>
           <Button onClick={handleSave} size="sm" className="w-full rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">Save block</Button>

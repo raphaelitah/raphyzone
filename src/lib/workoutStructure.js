@@ -89,6 +89,13 @@ export function buildFlatExerciseList(
         order: order++,
         details,
         key: be.block_exercise_id,
+        block_id: block.block_id,
+        block_type: block.block_type || null,
+        workout_format: block.workout_format || null,
+        block_rounds: block.rounds || null,
+        time_cap_sec: block.time_cap_sec || null,
+        work_seconds: block.work_seconds || null,
+        block_rest_seconds: block.rest_seconds || null,
       });
     });
   });
@@ -108,6 +115,12 @@ export function isEMOMBlock(block) {
 
 export function getEMOMMinutes(block) {
   return block.time_cap_sec ? Math.round(block.time_cap_sec / 60) : 0;
+}
+
+export function isTabataBlock(block) {
+  const type = (block.block_type || '').toLowerCase();
+  const format = (block.workout_format || '').toLowerCase();
+  return type === 'tabata' || format === 'tabata';
 }
 
 export function countWorkoutRests(workout, blocksByWorkout, blockExercisesByBlock) {

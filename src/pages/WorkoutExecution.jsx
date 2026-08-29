@@ -15,9 +15,10 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock, Timer as TimerIcon } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
+import WorkoutTimerSheet from '@/components/WorkoutTimerSheet';
 import { cn } from '@/lib/utils';
 import {
   buildBlocksByWorkout,
@@ -25,6 +26,8 @@ import {
   buildSetsByBlockExercise,
   buildExerciseMapByCode,
   buildFlatExerciseList,
+  isEMOMBlock,
+  isTabataBlock,
 } from '@/lib/workoutStructure';
 
 function formatDuration(sec) {
@@ -54,6 +57,7 @@ export default function WorkoutExecution() {
   const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
   const [, setTick] = useState(0);
 
   const fullExerciseMapRef = useRef(null);
@@ -189,6 +193,39 @@ export default function WorkoutExecution() {
 
   const current = exercises[index];
   const totalElapsed = sessionStartMs ? (Date.now() - sessionStartMs) / 1000 : 0;
+
+  const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
+  let timerInitialConfig = null;
+  if (current?.block_type != null || current?.workout_format != null) {
+    const blockMeta = { block_type: current.block_type, workout_format: current.workout_format };
+    if (isTabataBlock(blockMeta)) {
+      timerInitialConfig = {
+        workSec: current.work_seconds || 20,
+        restSec: current.block_rest_seconds || 10,
+        rounds: current.block_rounds || 1,
+        exerciseCount: currentBlockExercises.length,
+        exerciseNames: currentBlockExercises.map((e) => e.exercise_name),
+      };
+    } else if (isEMOMBlock(blockMeta)) {
+      timerInitialConfig = {
+        workSec: 60,
+        restSec: 0,
+        rounds: current.rounds || 1,
+        exerciseCount: currentBlockExercises.length,
+        exerciseNames: currentBlockExercises.map((e) => e.exercise_name),
+      };
+    }
+  }
+
+  const syncExerciseFromTimer = (exerciseIndexInBlock) => {
+    const target = currentBlockExercises[exerciseIndexInBlock];
+    if (!target) return;
+    const targetGlobalIndex = exercises.findIndex((e) => e.key === target.key);
+    if (targetGlobalIndex !== -1 && targetGlobalIndex !== indexRef.current) {
+      flushCurrentTime();
+      setIndex(targetGlobalIndex);
+    }
+  };
 
   const updateLog = (key, patch) => {
     setLogs((l) => ({ ...l, [key]: { ...(l[key] || {}), ...patch } }));
@@ -433,6 +470,7 @@ export default function WorkoutExecution() {
             <Clock className="h-3.5 w-3.5" />
             {formatDuration(totalElapsed)}
           </div>
+          <button onClick={() => setTimerOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><TimerIcon className="h-4 w-4" /></button>
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
         </div>
         <div className="flex gap-1 mt-2">
@@ -540,6 +578,13 @@ export default function WorkoutExecution() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <WorkoutTimerSheet
+        open={timerOpen}
+        onOpenChange={setTimerOpen}
+        initialConfig={timerInitialConfig}
+        onExerciseSync={syncExerciseFromTimer}
+      />
 
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent>

@@ -158,6 +158,7 @@ export const WORKOUT_FORMATS = [
   { value: 'for_time', label: 'For Time' },
   { value: 'amrap', label: 'AMRAP' },
   { value: 'emom', label: 'EMOM' },
+  { value: 'tabata', label: 'Tabata' },
   { value: 'circuit', label: 'Circuit' },
   { value: 'strength_sets', label: 'Bodybuilding' },
   { value: 'superset', label: 'Bodybuilding' },
