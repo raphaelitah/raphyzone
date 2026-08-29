@@ -48,7 +48,13 @@ export default function YouTubeVideo({ url, title, className = '' }) {
         className="w-full h-full object-cover"
         loading="lazy"
       />
-      <span className="absolute bottom-2 left-3 text-xs text-white/90">Tap to play</span>
+      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="flex items-center justify-center w-14 h-14 rounded-full bg-black/60">
+          <svg viewBox="0 0 24 24" className="w-6 h-6 ml-0.5 fill-white">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </span>
+      </span>
     </button>
   );
 }
