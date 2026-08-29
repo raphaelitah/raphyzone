@@ -54,6 +54,7 @@ Return JSON with a "verified" array of { workout_id, reason }. Every input worko
 
   try {
     const res = await callLLM({
+      functionName: 'verifyWorkoutReasons',
       prompt,
       schema: {
         type: 'object',

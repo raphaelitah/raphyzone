@@ -68,6 +68,7 @@ ${excludeRule}
 Return JSON with an "alternatives" array of { workout_id, reason }.`;
 
     const res = await callLLM({
+      functionName: 'swapWorkout',
       prompt,
       schema: {
         type: 'object',

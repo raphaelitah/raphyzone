@@ -9,7 +9,7 @@ import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
 import { getProfileCompleteness } from '@/lib/profileGaps';
-import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send } from 'lucide-react';
+import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity } from 'lucide-react';
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -103,6 +103,12 @@ export default function Profile() {
         {isAdmin && (
           <Button onClick={() => navigate('/admin-taxonomy')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
             <span className="flex items-center gap-2"><Tags className="h-4 w-4 text-brand" /> Taxonomy Management</span>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+        {isAdmin && (
+          <Button onClick={() => navigate('/admin-alerts')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
+            <span className="flex items-center gap-2"><Activity className="h-4 w-4 text-brand" /> LLM Health</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         )}

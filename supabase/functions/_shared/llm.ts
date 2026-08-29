@@ -8,6 +8,8 @@
 // tool-use for structured JSON output. Requires the GROQ_API_KEY secret:
 //   supabase secrets set GROQ_API_KEY=gsk_... --project-ref <ref>
 
+import { getServiceClient } from './supabaseAdmin.ts';
+
 export interface LLMSchema {
   type: 'object';
   properties: Record<string, unknown>;
@@ -52,12 +54,54 @@ function allowNullOnOptionalFields(node: any, required: string[] = []): any {
   return out;
 }
 
-async function callLLMOnce({ prompt, schema, model }: { prompt: string; schema: LLMSchema; model?: string }): Promise<any> {
+// Fire-and-forget insert into llm_call_logs (public.llm_call_logs, admin-only
+// read via is_admin() RLS) so the AdminAlerts page can surface provider errors
+// and Groq's rate-limit headroom without adding latency to the caller's request.
+function logLLMCall(row: {
+  functionName: string;
+  model: string;
+  status: 'ok' | 'error';
+  attempt: number;
+  latencyMs: number;
+  errorMessage?: string;
+  rateLimitHeaders?: Headers;
+}) {
+  try {
+    const h = row.rateLimitHeaders;
+    const client = getServiceClient();
+    client.from('llm_call_logs').insert({
+      function_name: row.functionName,
+      model: row.model,
+      status: row.status,
+      attempt: row.attempt,
+      latency_ms: row.latencyMs,
+      error_message: row.errorMessage ?? null,
+      rate_limit_remaining_tokens: h ? numOrNull(h.get('x-ratelimit-remaining-tokens')) : null,
+      rate_limit_remaining_requests: h ? numOrNull(h.get('x-ratelimit-remaining-requests')) : null,
+      rate_limit_reset_tokens_seconds: h ? numOrNull(h.get('x-ratelimit-reset-tokens')) : null,
+    }).then(({ error }) => {
+      if (error) console.error('llm_call_logs insert failed:', error.message);
+    });
+  } catch (err) {
+    // Logging must never break the actual LLM call.
+    console.error('logLLMCall failed:', (err as Error).message);
+  }
+}
+
+function numOrNull(v: string | null): number | null {
+  if (v == null) return null;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function callLLMOnce({ prompt, schema, model, functionName, attempt }: { prompt: string; schema: LLMSchema; model?: string; functionName: string; attempt: number }): Promise<any> {
   const apiKey = Deno.env.get('GROQ_API_KEY');
   if (!apiKey) {
     throw new Error('GROQ_API_KEY is not set. Run `supabase secrets set GROQ_API_KEY=...` before deploying AI-driven functions.');
   }
 
+  const usedModel = model || GROQ_MODEL;
+  const startedAt = Date.now();
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -65,7 +109,7 @@ async function callLLMOnce({ prompt, schema, model }: { prompt: string; schema: 
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: model || GROQ_MODEL,
+      model: usedModel,
       messages: [{ role: 'user', content: prompt }],
       tools: [{
         type: 'function',
@@ -74,17 +118,22 @@ async function callLLMOnce({ prompt, schema, model }: { prompt: string; schema: 
       tool_choice: { type: 'function', function: { name: 'respond' } },
     }),
   });
+  const latencyMs = Date.now() - startedAt;
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    logLLMCall({ functionName, model: usedModel, status: 'error', attempt, latencyMs, errorMessage: `${res.status}: ${text}`.slice(0, 2000), rateLimitHeaders: res.headers });
     throw new Error(`Groq API error ${res.status}: ${text}`);
   }
 
   const data = await res.json();
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
   if (!toolCall?.function?.arguments || toolCall.function.name !== 'respond') {
-    throw new Error(`Groq response had no valid 'respond' tool call (got ${toolCall?.function?.name ?? 'none'}).`);
+    const message = `Groq response had no valid 'respond' tool call (got ${toolCall?.function?.name ?? 'none'}).`;
+    logLLMCall({ functionName, model: usedModel, status: 'error', attempt, latencyMs, errorMessage: message, rateLimitHeaders: res.headers });
+    throw new Error(message);
   }
+  logLLMCall({ functionName, model: usedModel, status: 'ok', attempt, latencyMs, rateLimitHeaders: res.headers });
   return JSON.parse(toolCall.function.arguments);
 }
 
@@ -94,12 +143,12 @@ async function callLLMOnce({ prompt, schema, model }: { prompt: string; schema: 
 // couple of times with a short backoff before giving up. Auth/config errors
 // (missing key, 401/403) are not retried — those won't fix themselves.
 const RETRYABLE_STATUS = /Groq API error (400|429|5\d\d)/;
-export async function callLLM(args: { prompt: string; schema: LLMSchema; model?: string }): Promise<any> {
+export async function callLLM(args: { prompt: string; schema: LLMSchema; model?: string; functionName: string }): Promise<any> {
   const maxAttempts = 3;
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await callLLMOnce(args);
+      return await callLLMOnce({ ...args, attempt });
     } catch (err) {
       lastError = err;
       const message = (err as Error).message || '';

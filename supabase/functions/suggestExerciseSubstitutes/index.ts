@@ -30,6 +30,7 @@ ${candidates.map((c: any) => `- ${c.name} (muscle: ${c.primary_muscle_group || '
 For each candidate, explain in one sentence why it's a good substitute (same muscles/movement/intent) and give a confidence 0-100. Return JSON.`;
 
     const res = await callLLM({
+      functionName: 'suggestExerciseSubstitutes',
       prompt,
       schema: {
         type: 'object',

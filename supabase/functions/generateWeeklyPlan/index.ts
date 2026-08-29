@@ -67,6 +67,7 @@ YOUR TASK:
 Return JSON with a "days" array, each item { day, slot_type, modality (for train days), focus (for strength-modality train days), activity (for activity days) }.`;
 
     const structureRes = await callLLM({
+      functionName: 'generateWeeklyPlan:structure',
       prompt: structurePrompt,
       schema: {
         type: 'object',
@@ -139,6 +140,7 @@ RULES:
 Return JSON with "selections" (array of { day, workout_id, reason }) and "suggestions" (array of { day, workout_ids }).`;
 
     const selRes = await callLLM({
+      functionName: 'generateWeeklyPlan:selection',
       prompt: selectionPrompt,
       schema: {
         type: 'object',

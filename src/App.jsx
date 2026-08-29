@@ -22,6 +22,7 @@ import StrengthCalibration from '@/pages/StrengthCalibration';
 import WorkoutExecution from '@/pages/WorkoutExecution';
 import AdminReview from '@/pages/AdminReview';
 import AdminTaxonomy from '@/pages/AdminTaxonomy';
+import AdminAlerts from '@/pages/AdminAlerts';
 import MySubmissionsPage from '@/pages/MySubmissionsPage';
 
 const AuthenticatedApp = () => {
@@ -62,6 +63,7 @@ const AuthenticatedApp = () => {
         <Route path="/workout/:workoutId" element={<WorkoutExecution />} />
         <Route path="/admin-review" element={<AdminReview />} />
         <Route path="/admin-taxonomy" element={<AdminTaxonomy />} />
+        <Route path="/admin-alerts" element={<AdminAlerts />} />
         <Route path="/my-submissions" element={<MySubmissionsPage />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
