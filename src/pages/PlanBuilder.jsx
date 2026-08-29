@@ -38,6 +38,37 @@ const FOLLOWUP_PLACEHOLDER = {
   schedule: 'e.g. Can only train Tue/Thu/Sat',
 };
 
+const BUILDING_MESSAGES = [
+  'Analyzing your training history…',
+  'Balancing volume across muscle groups…',
+  'Sequencing your workout days…',
+  'Applying progressive overload…',
+  'Checking recovery between sessions…',
+  'Matching exercises to your equipment…',
+  'Fine-tuning sets and reps…',
+  'Optimizing your split…',
+  'Cross-checking exercise history…',
+];
+const BUILDING_FINAL_MESSAGE = 'Putting the final touches on your plan…';
+
+function useRotatingLoadingText(active) {
+  const [text, setText] = useState(BUILDING_MESSAGES[0]);
+  useEffect(() => {
+    if (!active) return;
+    setText(BUILDING_MESSAGES[Math.floor(Math.random() * BUILDING_MESSAGES.length)]);
+    const interval = setInterval(() => {
+      setText((prev) => {
+        const options = BUILDING_MESSAGES.filter((m) => m !== prev);
+        return options[Math.floor(Math.random() * options.length)];
+      });
+    }, 2200);
+    return () => clearInterval(interval);
+  }, [active]);
+  return [text, setText];
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function PlanBuilder() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +81,7 @@ export default function PlanBuilder() {
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const [regenerating, setRegenerating] = useState(false);
+  const [buildingText, setBuildingText] = useRotatingLoadingText(phase === 'building');
   const [swapFor, setSwapFor] = useState(null);
   const [swapLoading, setSwapLoading] = useState(false);
   const [alternatives, setAlternatives] = useState([]);
@@ -110,6 +142,8 @@ export default function PlanBuilder() {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || res.data.plan.regenerations_used || 0 });
       } catch {}
+      setBuildingText(BUILDING_FINAL_MESSAGE);
+      await sleep(700);
       setPhase(profile?.auto_approve_plans ? 'auto_approved' : 'review');
     } catch {
       setError('Could not generate the plan. Please try again.'); setPhase('context');
@@ -343,8 +377,7 @@ export default function PlanBuilder() {
       {phase === 'building' && (
         <div className="flex flex-col items-center justify-center py-24">
           <Loader2 className="h-10 w-10 text-brand animate-spin mb-4" />
-          <p className="text-sm font-medium">Building your week…</p>
-          <p className="text-xs text-muted-foreground mt-1">Structuring your days and ranking workouts</p>
+          <p key={buildingText} className="text-sm font-medium animate-in fade-in duration-300">{buildingText}</p>
         </div>
       )}
 
