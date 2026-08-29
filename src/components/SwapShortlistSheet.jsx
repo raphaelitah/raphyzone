@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export default function SwapShortlistSheet({ open, onOpenChange, loading, alternatives, currentName, onPick, onViewDetails, keepLabel, onSearchLibrary }) {
+export default function SwapShortlistSheet({ open, onOpenChange, loading, alternatives, currentName, onPick, onViewDetails = null, keepLabel = null, onSearchLibrary = null }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl h-[70vh] flex flex-col p-0">

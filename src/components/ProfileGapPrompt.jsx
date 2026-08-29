@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export default function ProfileGapPrompt({ gap, profile, context, onAnswer, onDismiss, className }) {
+export default function ProfileGapPrompt({ gap, profile, context = null, onAnswer, onDismiss, className = '' }) {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();

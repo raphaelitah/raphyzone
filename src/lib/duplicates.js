@@ -83,6 +83,10 @@ async function loadWorkoutExerciseSets(excludeWorkoutId) {
 // Compares a candidate list of block_exercises against every approved
 // workout's exercise composition and returns the closest matches, most
 // similar first. Each match's score is a 0-1 Jaccard overlap.
+/**
+ * @param {any[]} candidateBlockExercises
+ * @param {{ excludeWorkoutId?: string, limit?: number }} [options]
+ */
 export async function findSimilarWorkouts(candidateBlockExercises, { excludeWorkoutId, limit = 3 } = {}) {
   const candidateSet = new Set(
     (candidateBlockExercises || []).filter(be => be.step_type === 'exercise').map(exerciseKey)

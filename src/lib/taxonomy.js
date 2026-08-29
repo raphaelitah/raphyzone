@@ -29,6 +29,7 @@ const FIELD_MAP = {
 
 export async function fetchAllTaxonomy() {
   const { data } = await supabase.from('taxonomy_terms').select('*').order('sort_order').limit(500);
+  /** @type {Record<string, string[]>} */
   const byDimension = {};
   (data || []).forEach(t => {
     if (!byDimension[t.dimension]) byDimension[t.dimension] = [];
@@ -60,10 +61,11 @@ export async function checkUsage(dimension, term) {
       .or(`${config.fields[0]}.eq.${term},${config.fields[1]}.eq.${term}`);
     return count || 0;
   } else {
-    const { count } = await supabase
+    /** @type {any} */
+    const query = supabase
       .from('exercises')
-      .select('id', { count: 'exact', head: true })
-      .eq(config.field, term);
+      .select('id', { count: 'exact', head: true });
+    const { count } = await query.eq(config.field, term);
     return count || 0;
   }
 }
@@ -79,10 +81,14 @@ export async function transferExercises(dimension, oldTerm, newTerm) {
       .update({ equipment: e.equipment.split(',').map(s => s.trim()).map(item => item === oldTerm ? newTerm : item).join(', ') })
       .eq('id', e.id)));
   } else if (config.type === 'multi') {
-    await supabase.from('exercises').update({ [config.fields[0]]: newTerm }).eq(config.fields[0], oldTerm);
-    await supabase.from('exercises').update({ [config.fields[1]]: newTerm }).eq(config.fields[1], oldTerm);
+    /** @type {any} */
+    const table = supabase.from('exercises');
+    await table.update({ [config.fields[0]]: newTerm }).eq(config.fields[0], oldTerm);
+    await table.update({ [config.fields[1]]: newTerm }).eq(config.fields[1], oldTerm);
   } else {
-    await supabase.from('exercises').update({ [config.field]: newTerm }).eq(config.field, oldTerm);
+    /** @type {any} */
+    const table = supabase.from('exercises');
+    await table.update({ [config.field]: newTerm }).eq(config.field, oldTerm);
   }
 }
 

@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-const AuthContext = createContext();
+const AuthContext = createContext(/** @type {any} */ (undefined));
 
 // Supabase's auth user has no `role` or `full_name` — role lives in the
 // `profiles` table (set by the handle_new_user trigger) and full_name in

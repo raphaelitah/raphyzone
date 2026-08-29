@@ -27,7 +27,7 @@ function modeDifficulty(arr) {
   return Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0] || 'normal';
 }
 
-export default function SessionDetailSheet({ session, open, onOpenChange, editable, onSaved }) {
+export default function SessionDetailSheet({ session, open, onOpenChange, editable = false, onSaved = null }) {
   const [loading, setLoading] = useState(false);
   const [exerciseSessions, setExerciseSessions] = useState([]);
   const [history, setHistory] = useState([]);
@@ -76,7 +76,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         allEs.forEach((es) => {
           (esBySession[es.workout_session_id] = esBySession[es.workout_session_id] || []).push(es);
         });
-        const sortedSessions = allSessions.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+        const sortedSessions = allSessions.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         setHistory(sortedSessions.map((s) => ({ session: s, exerciseSessions: esBySession[s.id] || [] })));
 
         const exerciseMap = {};

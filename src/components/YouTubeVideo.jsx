@@ -17,7 +17,7 @@ function videoIdFromUrl(url) {
   return null;
 }
 
-export default function YouTubeVideo({ url, title, className }) {
+export default function YouTubeVideo({ url, title, className = '' }) {
   const [playing, setPlaying] = useState(false);
   const id = videoIdFromUrl(url);
   if (!id) return null;

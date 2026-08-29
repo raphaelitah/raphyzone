@@ -737,7 +737,7 @@ export default function Home() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, accent }) {
+function StatCard({ icon: Icon, label, value, sub, accent = false }) {
   return (
     <Card className={cn('rounded-2xl border-border p-4', accent && 'bg-brand text-brand-foreground border-transparent')}>
       <Icon className={cn('h-4 w-4 mb-2', accent ? 'text-brand-foreground/80' : 'text-muted-foreground')} />

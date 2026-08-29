@@ -561,7 +561,7 @@ export default function WorkoutExecution() {
   );
 }
 
-function Spec({ label, value, subtext, loading, onClick }) {
+function Spec({ label, value, subtext = null, loading = false, onClick = null }) {
   return (
     <div className={cn('rounded-xl bg-muted/50 p-3 text-center', onClick && 'cursor-pointer hover:bg-muted transition-colors')} onClick={onClick || undefined}>
       <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center justify-center gap-1">

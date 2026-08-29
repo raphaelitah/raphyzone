@@ -15,7 +15,7 @@ import {
   getWorkoutMetaLine,
 } from '@/lib/workoutStructure';
 
-export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine, reason, selectMode, onSelect }) {
+export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null }) {
   const [blocksByWorkout, setBlocksByWorkout] = useState({});
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
@@ -184,7 +184,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
   );
 }
 
-function Tag({ children, className }) {
+function Tag({ children, className = '' }) {
   return (
     <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium', className)}>
       {children}

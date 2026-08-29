@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 const MANDATORY = ['name', 'video_url', 'movement_category', 'body_region', 'movement_pattern', 'modality', 'laterality', 'compound_isolation', 'primary_muscle_group', 'technical_difficulty', 'physical_demand'];
 
-function Field({ label, required, children }) {
+function Field({ label, required = false, children }) {
   return (
     <div>
       <label className="text-xs font-medium text-muted-foreground">{label}{required && <span className="text-brand"> *</span>}</label>
@@ -21,7 +21,7 @@ function Field({ label, required, children }) {
   );
 }
 
-function FieldSelect({ label, required, value, onChange, options, disabled }) {
+function FieldSelect({ label, required = false, value, onChange, options, disabled = false }) {
   return (
     <Field label={label} required={required}>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
@@ -56,7 +56,7 @@ export default function EditExerciseSheet({ exercise, open, onOpenChange, onSave
   const { toast } = useToast();
   const [form, setForm] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [taxonomy, setTaxonomy] = useState({});
+  const [taxonomy, setTaxonomy] = useState(/** @type {Record<string, string[]>} */ ({}));
 
   useEffect(() => {
     if (!open || !exercise) return;

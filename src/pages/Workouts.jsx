@@ -648,7 +648,7 @@ export default function Workouts() {
   );
 }
 
-function Tag({ children, className }) {
+function Tag({ children, className = '' }) {
   return (
     <span
       className={cn(

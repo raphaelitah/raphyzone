@@ -276,6 +276,6 @@ export default function Library() {
   );
 }
 
-function Tag({ children, className }) {
+function Tag({ children, className = '' }) {
   return <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full bg-brand/10 text-brand text-xs font-medium', className)}>{children}</span>;
 }

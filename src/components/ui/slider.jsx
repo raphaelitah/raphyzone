@@ -3,6 +3,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { cn } from "@/lib/utils"
 
+/** @type {React.ForwardRefExoticComponent<React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & React.RefAttributes<React.ElementRef<typeof SliderPrimitive.Root>>>} */
 const Slider = React.forwardRef(({ className, value, defaultValue, ...props }, ref) => {
   const raw = value ?? defaultValue ?? [];
   const thumbs = Array.isArray(raw) ? raw : [raw];

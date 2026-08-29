@@ -24,7 +24,7 @@ const EMPTY = {
   notes: '',
 };
 
-function Field({ label, required, children }) {
+function Field({ label, required = false, children }) {
   return (
     <div>
       <label className="text-xs font-medium text-muted-foreground">{label}{required && <span className="text-brand"> *</span>}</label>
@@ -33,7 +33,7 @@ function Field({ label, required, children }) {
   );
 }
 
-function FieldSelect({ label, required, value, onChange, options, disabled }) {
+function FieldSelect({ label, required = false, value, onChange, options, disabled = false }) {
   return (
     <Field label={label} required={required}>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
@@ -64,12 +64,12 @@ function RatingButtons({ value, onChange }) {
   );
 }
 
-export default function AddExerciseSheet({ open, onOpenChange, onSubmitted }) {
+export default function AddExerciseSheet({ open, onOpenChange, onSubmitted = undefined }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState(EMPTY);
   const [submitting, setSubmitting] = useState(false);
-  const [taxonomy, setTaxonomy] = useState({});
+  const [taxonomy, setTaxonomy] = useState(/** @type {Record<string, string[]>} */ ({}));
 
   useEffect(() => {
     if (!open) return;

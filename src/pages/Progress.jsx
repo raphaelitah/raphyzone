@@ -216,7 +216,7 @@ export default function Progress() {
   );
 }
 
-function Stat({ icon: Icon, value, label, accent }) {
+function Stat({ icon: Icon, value, label, accent = false }) {
   return (
     <Card className={cn('rounded-2xl border-border p-3 text-center', accent && 'bg-brand text-brand-foreground border-transparent')}>
       <Icon className={cn('h-4 w-4 mx-auto mb-1', accent ? 'text-brand-foreground/80' : 'text-muted-foreground')} />
