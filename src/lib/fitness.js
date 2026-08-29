@@ -11,7 +11,7 @@ export const EQUIPMENT_GROUPS = [
   { label: 'Free Weights', items: ['Barbell', 'EZ Bar', 'Dumbbells', 'Adjustable Dumbbells', 'Kettlebell', 'Weight Plates'] },
   { label: 'Machines', items: ['Smith Machine', 'Leg Press', 'Hack Squat Machine', 'Cable Crossover', 'Lat Pulldown', 'Seated Cable Row', 'Chest Press Machine', 'Shoulder Press Machine', 'Leg Extension', 'Leg Curl', 'Pec Deck', 'Calf Raise', 'Hip Thrust', 'Back Extension', 'Assisted Pull-up'] },
   { label: 'Benches & Stations', items: ['Flat Bench', 'Incline Bench', 'Decline Bench', 'Squat Rack', 'Power Rack', 'Pull-up Bar', 'Dip Station'] },
-  { label: 'Accessories', items: ['Resistance Bands', 'Suspension Trainer (TRX or similar)', 'Slam Ball', 'Jump Rope', 'Step Box', 'Foam Roller', 'Weight Vest', 'Cable'] },
+  { label: 'Accessories', items: ['Resistance Bands', 'Suspension Trainer (TRX or similar)', 'Slam Ball', 'Sandbag', 'Jump Rope', 'Step Box', 'Foam Roller', 'Weight Vest', 'Cable'] },
   { label: 'Cardio', items: ['Treadmill', 'Rowing Machine', 'Assault Bike', 'Stationary Bike', 'Stairmaster', 'SkiErg'] },
 ];
 
