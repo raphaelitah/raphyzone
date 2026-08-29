@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
+import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -15,8 +16,12 @@ export default function Profile() {
   const { user, logout } = useAuth();
   const { profile, loading, reload } = useAthleteProfile();
   const navigate = useNavigate();
-  const [autoApprove, setAutoApprove] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  const toggleAutoApprove = async (checked) => {
+    await supabase.from('athlete_profiles').update({ auto_approve_plans: checked }).eq('id', profile.id);
+    reload();
+  };
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
 
@@ -77,7 +82,7 @@ export default function Profile() {
             <p className="text-sm font-medium flex items-center gap-1.5"><Settings className="h-4 w-4 text-muted-foreground" /> Auto-approve AI plans</p>
             <p className="text-xs text-muted-foreground mt-0.5">Let the AI publish your weekly plan without manual approval.</p>
           </div>
-          <Switch checked={autoApprove} onCheckedChange={setAutoApprove} />
+          <Switch checked={!!profile?.auto_approve_plans} onCheckedChange={toggleAutoApprove} />
         </div>
       </Card>
 

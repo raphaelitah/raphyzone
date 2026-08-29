@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus } from 'lucide-react';
+import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus, CheckCircle2 } from 'lucide-react';
 import { mondayOf, fmtISO, fmtDate, parseDate } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import SwapShortlistSheet from '@/components/SwapShortlistSheet';
@@ -41,7 +41,7 @@ const FOLLOWUP_PLACEHOLDER = {
 export default function PlanBuilder() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  useAthleteProfile();
+  const { profile } = useAthleteProfile();
   const [phase, setPhase] = useState('context');
   const [context, setContext] = useState('');
   const [followup, setFollowup] = useState('');
@@ -85,6 +85,12 @@ export default function PlanBuilder() {
     })();
   }, [user, weekStart]);
 
+  useEffect(() => {
+    if (phase !== 'auto_approved') return;
+    const timer = setTimeout(() => navigate('/'), 3000);
+    return () => clearTimeout(timer);
+  }, [phase, navigate]);
+
   const generate = async () => {
     setPhase('building'); setError('');
     try {
@@ -104,7 +110,7 @@ export default function PlanBuilder() {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || res.data.plan.regenerations_used || 0 });
       } catch {}
-      setPhase('review');
+      setPhase(profile?.auto_approve_plans ? 'auto_approved' : 'review');
     } catch {
       setError('Could not generate the plan. Please try again.'); setPhase('context');
     }
@@ -339,6 +345,21 @@ export default function PlanBuilder() {
           <Loader2 className="h-10 w-10 text-brand animate-spin mb-4" />
           <p className="text-sm font-medium">Building your week…</p>
           <p className="text-xs text-muted-foreground mt-1">Structuring your days and ranking workouts</p>
+        </div>
+      )}
+
+      {phase === 'auto_approved' && (
+        <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-300">
+          <div className="h-14 w-14 rounded-full bg-brand/10 flex items-center justify-center mb-4">
+            <CheckCircle2 className="h-8 w-8 text-brand" />
+          </div>
+          <p className="text-lg font-semibold">Plan auto-approved</p>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-xs leading-relaxed">
+            Auto-approve AI plans is on, so this week went live without review. Turn it off in Settings anytime to review plans yourself.
+          </p>
+          <Button onClick={() => navigate('/')} variant="outline" className="rounded-xl h-11 px-6 mt-6">
+            Go to today
+          </Button>
         </div>
       )}
 
