@@ -5,10 +5,13 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon } from 'lucide-react';
+import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus } from 'lucide-react';
 import { mondayOf, fmtISO, fmtDate, parseDate } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import SwapShortlistSheet from '@/components/SwapShortlistSheet';
+import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
+import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
+import RestToWorkoutChoiceSheet from '@/components/RestToWorkoutChoiceSheet';
 
 const CONTEXT_OPTIONS = [
   { value: 'normal', label: 'Normal week', desc: 'Nothing unusual' },
@@ -53,6 +56,12 @@ export default function PlanBuilder() {
   const [swapFrom, setSwapFrom] = useState(null);
   const [suggestFor, setSuggestFor] = useState(null);
   const [workouts, setWorkouts] = useState({});
+  const [selectedWorkout, setSelectedWorkout] = useState(null);
+  const [selectedSlotIdx, setSelectedSlotIdx] = useState(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [detailAlt, setDetailAlt] = useState(null);
+  const [restChoiceFor, setRestChoiceFor] = useState(null);
+  const [searchFor, setSearchFor] = useState(null);
 
   const weekStart = fmtISO(mondayOf(new Date()));
 
@@ -128,14 +137,13 @@ export default function PlanBuilder() {
 
   const findAlternative = async (idx) => {
     const slot = plan.workouts[idx];
-    if (!slot.workout_id) return;
     setSwapFor(idx);
     setSwapLoading(true); setAlternatives([]);
     try {
       const otherDays = plan.workouts.filter((_, i) => i !== idx).filter((w) => w.workout_id).map((w) => `${w.day}: ${w.workout_name}`).join('; ');
       const res = await supabase.functions.invoke('swapWorkout', {
         body: {
-          current_workout_id: slot.workout_id,
+          current_workout_id: slot.workout_id || undefined,
           day: slot.day,
           focus: slot.focus,
           slot_type: slot.slot_type,
@@ -154,25 +162,90 @@ export default function PlanBuilder() {
 
   const pickAlternative = async (alt) => {
     const idx = swapFor;
-    const slot = plan.workouts[idx];
     setSwapLoading(true);
-    try {
-      const res = await supabase.functions.invoke('applySwap', {
-        body: {
-          weekly_plan_id: planId,
-          day: slot.day,
-          old_workout_id: slot.workout_id,
-          new_workout_id: alt.workout_id,
-          reason: alt.reason,
-        },
-      });
-      if (res.error) throw res.error;
-      setPlan({ ...plan, workouts: res.data.plan.workouts });
-      setSwapFor(null); setAlternatives([]);
-    } catch {
-      setError('Could not apply that swap.');
-    }
+    await pickAlternativeAt(idx, alt);
+    setSwapFor(null); setAlternatives([]);
     setSwapLoading(false);
+  };
+
+  const assignWorkoutToSlot = async (idx, workoutId, workoutName, reason) => {
+    const updated = plan.workouts.map((w, i) => i === idx
+      ? { ...w, slot_type: 'train', workout_id: workoutId, workout_name: workoutName, reason: reason || 'Your pick', locked: false }
+      : w);
+    setPlan({ ...plan, workouts: updated });
+    try {
+      await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', planId);
+    } catch {
+      setError('Could not save that change.');
+    }
+    if (!workouts[workoutId]) {
+      try {
+        const { data: wo } = await supabase.from('workouts').select('*').eq('id', workoutId).single();
+        if (wo) setWorkouts((prev) => ({ ...prev, [wo.id]: wo }));
+      } catch { /* ignore */ }
+    }
+  };
+
+  const viewSwapDetails = async (alt) => {
+    const idx = swapFor;
+    if (idx === null) return;
+    setSwapFor(null); setAlternatives([]);
+    setDetailAlt(alt);
+    try {
+      const { data: wo, error } = await supabase.from('workouts').select('*').eq('id', alt.workout_id).single();
+      if (error) throw error;
+      setSelectedWorkout(wo);
+      setSelectedSlotIdx(idx);
+      setSelectMode(true);
+    } catch {
+      setDetailAlt(null);
+    }
+  };
+
+  const selectFromDetail = () => {
+    if (selectedSlotIdx === null || !selectedWorkout) return;
+    if (detailAlt) {
+      pickAlternativeAt(selectedSlotIdx, detailAlt);
+    } else {
+      assignWorkoutToSlot(selectedSlotIdx, selectedWorkout.id, selectedWorkout.name, 'Your pick');
+    }
+    setSelectedWorkout(null); setSelectedSlotIdx(null); setSelectMode(false); setDetailAlt(null);
+  };
+
+  const pickAlternativeAt = async (idx, alt) => {
+    const slot = plan.workouts[idx];
+    if (!slot) return;
+    if (slot.workout_id) {
+      try {
+        const res = await supabase.functions.invoke('applySwap', {
+          body: {
+            weekly_plan_id: planId,
+            day: slot.day,
+            old_workout_id: slot.workout_id,
+            new_workout_id: alt.workout_id,
+            reason: alt.reason,
+          },
+        });
+        if (res.error) throw res.error;
+        setPlan({ ...plan, workouts: res.data.plan.workouts });
+        const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
+        if (ids.size) {
+          const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
+          setWorkouts((prev) => ({ ...prev, ...Object.fromEntries((ws || []).map((w) => [w.id, w])) }));
+        }
+      } catch {
+        setError('Could not apply that swap.');
+      }
+    } else {
+      await assignWorkoutToSlot(idx, alt.workout_id, alt.workout_name, alt.reason);
+    }
+  };
+
+  const pickFromSearch = async (wo) => {
+    const idx = searchFor;
+    setSearchFor(null);
+    if (idx === null) return;
+    await assignWorkoutToSlot(idx, wo.id, wo.name, 'Your pick');
   };
 
   const useSuggestion = async (alt) => {
@@ -295,10 +368,15 @@ export default function PlanBuilder() {
               if (w.slot_type === 'rest') {
                 return (
                   <Card key={i} className="rounded-2xl border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Moon className="h-4 w-4" />
-                      <p className="text-xs font-medium">{w.day} · {fmtDate(parseDate(w.date), 'd MMM')}</p>
-                      <p className="font-medium ml-2">Rest</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Moon className="h-4 w-4" />
+                        <p className="text-xs font-medium">{w.day} · {fmtDate(parseDate(w.date), 'd MMM')}</p>
+                        <p className="font-medium ml-2">Rest</p>
+                      </div>
+                      <button onClick={() => setRestChoiceFor(i)} className="p-1.5 rounded-lg text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add workout">
+                        <Plus className="h-4 w-4" />
+                      </button>
                     </div>
                   </Card>
                 );
@@ -353,8 +431,10 @@ export default function PlanBuilder() {
         onOpenChange={(o) => { if (!o) { setSwapFor(null); setAlternatives([]); } }}
         loading={swapLoading}
         alternatives={alternatives}
-        currentName={swapFor !== null ? plan?.workouts[swapFor]?.workout_name : ''}
+        currentName={swapFor !== null ? (plan?.workouts[swapFor]?.workout_name || 'this day') : ''}
         onPick={pickAlternative}
+        onViewDetails={viewSwapDetails}
+        onSearchLibrary={() => { const idx = swapFor; setSwapFor(null); setAlternatives([]); setSearchFor(idx); }}
       />
 
       <SwapShortlistSheet
@@ -364,6 +444,31 @@ export default function PlanBuilder() {
         alternatives={suggestAlternatives}
         currentName={suggestFor !== null ? plan?.workouts[suggestFor]?.activity || 'your activity' : ''}
         onPick={useSuggestion}
+      />
+
+      <WorkoutDetailSheet
+        workout={selectedWorkout}
+        open={!!selectedWorkout}
+        onOpenChange={(o) => { if (!o) { setSelectedWorkout(null); setSelectedSlotIdx(null); setSelectMode(false); setDetailAlt(null); } }}
+        contextLine={selectedSlotIdx !== null ? `${plan?.workouts[selectedSlotIdx]?.day} · ${fmtDate(parseDate(plan?.workouts[selectedSlotIdx]?.date), 'd MMM')}` : null}
+        reason={detailAlt?.reason}
+        selectMode={selectMode}
+        onSelect={selectFromDetail}
+      />
+
+      <RestToWorkoutChoiceSheet
+        open={restChoiceFor !== null}
+        onOpenChange={(o) => { if (!o) setRestChoiceFor(null); }}
+        dayLabel={restChoiceFor !== null ? plan?.workouts[restChoiceFor]?.day : ''}
+        onAiSuggest={() => { const idx = restChoiceFor; setRestChoiceFor(null); findAlternative(idx); }}
+        onChooseSelf={() => { const idx = restChoiceFor; setRestChoiceFor(null); setSearchFor(idx); }}
+      />
+
+      <WorkoutSearchSheet
+        open={searchFor !== null}
+        onOpenChange={(o) => { if (!o) setSearchFor(null); }}
+        onPick={pickFromSearch}
+        dayLabel={searchFor !== null ? plan?.workouts[searchFor]?.day : ''}
       />
     </div>
   );
