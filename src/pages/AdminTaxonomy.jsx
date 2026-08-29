@@ -28,6 +28,7 @@ export default function AdminTaxonomy() {
   const [deleting, setDeleting] = useState(null);
   const [transferTarget, setTransferTarget] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
   const isEquipment = dimension === 'equipment';
 
@@ -60,6 +61,7 @@ export default function AdminTaxonomy() {
       setNewTerm('');
       setNewLabel('');
       setNewGroup('');
+      setShowAdd(false);
       loadTerms(dimension);
     } finally { setProcessing(false); }
   };
@@ -119,7 +121,13 @@ export default function AdminTaxonomy() {
       <button onClick={() => navigate('/profile')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to profile
       </button>
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Taxonomy Management</h1>
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Taxonomy Management</h1>
+        <Button size="sm" onClick={() => setShowAdd(true)} className="gap-1.5 h-8 shrink-0 bg-brand hover:bg-brand/90 text-brand-foreground">
+          <Plus className="h-3.5 w-3.5" />
+          Add
+        </Button>
+      </div>
       <p className="text-sm text-muted-foreground mb-5">Manage exercise classification options</p>
 
       <Select value={dimension} onValueChange={setDimension}>
@@ -192,25 +200,30 @@ export default function AdminTaxonomy() {
         </div>
       )}
 
-      <div className="space-y-2">
-        {isEquipment && (
-          <Select value={newGroup} onValueChange={setNewGroup}>
-            <SelectTrigger className="rounded-xl h-11"><SelectValue placeholder="Select type…" /></SelectTrigger>
-            <SelectContent>
-              {GROUP_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Friendly name (optional)…" className="rounded-xl h-11" />
-        <div className="flex gap-2">
-          <Input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="Machine name…" className="rounded-xl h-11"
-            onKeyDown={e => { if (e.key === 'Enter') addTerm(); }}
-          />
-          <Button onClick={addTerm} disabled={processing || !newTerm.trim() || (isEquipment && !newGroup)} className="shrink-0 rounded-xl h-11">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <Sheet open={showAdd} onOpenChange={(o) => { setShowAdd(o); if (!o) { setNewTerm(''); setNewLabel(''); setNewGroup(''); } }}>
+        <SheetContent side="bottom" className="rounded-t-3xl p-0">
+          <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
+            <SheetTitle className="text-left">Add {DIMENSIONS.find(d => d.value === dimension)?.label || 'term'}</SheetTitle>
+          </SheetHeader>
+          <div className="px-5 py-4 space-y-2">
+            {isEquipment && (
+              <Select value={newGroup} onValueChange={setNewGroup}>
+                <SelectTrigger className="rounded-xl h-11"><SelectValue placeholder="Select type…" /></SelectTrigger>
+                <SelectContent>
+                  {GROUP_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Friendly name (optional)…" className="rounded-xl h-11" />
+            <Input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="Machine name…" className="rounded-xl h-11" autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') addTerm(); }}
+            />
+            <Button onClick={addTerm} disabled={processing || !newTerm.trim() || (isEquipment && !newGroup)} className="w-full rounded-xl h-11">
+              {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={!!deleting} onOpenChange={(o) => { if (!o) { setDeleting(null); setTransferTarget(''); } }}>
         <SheetContent side="bottom" className="rounded-t-3xl p-0">
