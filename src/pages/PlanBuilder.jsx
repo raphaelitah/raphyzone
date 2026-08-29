@@ -416,7 +416,7 @@ export default function PlanBuilder() {
                       </div>
                       {w.modality && !isActivity && <p className="text-xs text-muted-foreground mt-0.5">{w.modality}{w.focus ? ' · ' + w.focus : ''}</p>}
                     </div>
-                    <button onClick={() => toggleLock(i)} className={cn('p-1.5 rounded-lg', w.locked ? 'text-brand' : 'text-muted-foreground')}>
+                    <button onClick={() => toggleLock(i)} title={w.locked ? 'Locked — this workout stays fixed and will be skipped when regenerating or finding alternatives' : 'Unlocked — this workout can be swapped or replaced'} className={cn('p-1.5 rounded-lg', w.locked ? 'text-brand' : 'text-muted-foreground')}>
                       {w.locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                     </button>
                   </div>
