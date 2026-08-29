@@ -4,3 +4,8 @@ dist
 .env
 *.log
 supabase/.temp/
+node_modules/.cache
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

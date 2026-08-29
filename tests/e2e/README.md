@@ -1,0 +1,54 @@
+# E2E tests (Playwright)
+
+Regression + common-action coverage against the real Supabase-backed app.
+
+## Run
+
+```bash
+npm run test:e2e        # headless
+npm run test:e2e:ui     # interactive UI mode
+```
+
+`playwright.config.js` starts `npm run dev` automatically and points at `http://localhost:5173`.
+
+## Authenticated tests
+
+Most flows (workouts, library, profile, admin) require a logged-in user, and log in against the
+**real** Supabase project via the UI (no mocking). They use the seeded accounts from
+[scripts/seed-test-data.sql](../../scripts/seed-test-data.sql):
+
+- Athlete: `test-athlete@raphyzone.dev` / `TestAthlete123!` (default for `login(page)`)
+- Admin: `test-admin@raphyzone.dev` / `TestAdmin123!` (`login(page, ADMIN)`)
+
+Run `scripts/seed-test-data.sql` against the target Supabase project (SQL editor, or the Supabase
+MCP `execute_sql` tool) before running the suite if those accounts don't exist yet — it's a no-op
+if they're already there. Override credentials with `TEST_ATHLETE_EMAIL`/`TEST_ATHLETE_PASSWORD`
+or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
+
+## Layout
+
+- `fixtures/auth.js` — shared login helper (`login(page)` / `login(page, ADMIN)`)
+- `fixtures/apiClient.js` — direct Supabase client for test setup/teardown (bypasses the UI)
+- `fixtures/reviewSeed.js` — seeds/cleans up pending exercise & workout submissions for
+  admin-review tests
+- `auth.spec.js` — login/logout, protected-route redirects
+- `navigation.spec.js` — bottom-nav smoke test across all main tabs
+- `library.spec.js` — exercise library: list, search, detail sheet
+- `workouts.spec.js` — workout library: list, search, detail sheet with structure
+- `workout-execution.spec.js` — starts a real workout, skips through every exercise, finishes
+  it, and verifies the session is persisted as `completed` in Supabase
+- `plan-builder.spec.js` — generates a weekly plan end to end via the real
+  `generateWeeklyPlan` LLM edge function (clears any existing plan for the current week first
+  so it always exercises full generation; allow extra time, hence the 90s suite timeout)
+- `admin-taxonomy.spec.js` — non-admin redirect, add/edit/delete a taxonomy term
+- `admin-review.spec.js` — non-admin redirect, approve/reject a seeded pending exercise or
+  workout submission
+
+Add one spec file per flow area as coverage grows.
+
+## Note on parallelism
+
+`playwright.config.js` pins `workers: 1`. Most specs sign in against the real Supabase
+project, and running many sign-ins concurrently trips its password-auth rate limit, causing
+flaky login timeouts — this isn't a bug in the app, just a constraint of testing against a
+real (non-dedicated-test-tier) backend.
