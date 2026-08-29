@@ -128,6 +128,7 @@ export default function useIntervalTimer(config) {
   }, [reset]);
 
   const current = sequence[phaseIndex] || sequence[0];
+  const next = sequence[phaseIndex + 1] || null;
   const remainingMs = status === 'running' && phaseEndAtRef.current != null
     ? Math.max(0, phaseEndAtRef.current - Date.now())
     : (remainingMsRef.current ?? (current?.durationSec || 0) * 1000);
@@ -137,6 +138,8 @@ export default function useIntervalTimer(config) {
     phase: current?.phase ?? null,
     round: current?.round ?? 1,
     exerciseIndex: current?.exerciseIndex ?? 0,
+    nextExerciseIndex: next?.exerciseIndex ?? null,
+    nextRound: next?.round ?? null,
     totalRounds: config.mode === 'interval' ? Math.max(1, config.rounds || 1) : 1,
     remainingSec: remainingMs / 1000,
     phaseDurationSec: current?.durationSec || 0,

@@ -15,10 +15,11 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock, Timer as TimerIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
-import WorkoutTimerSheet from '@/components/WorkoutTimerSheet';
+import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
+import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import {
   buildBlocksByWorkout,
@@ -57,7 +58,8 @@ export default function WorkoutExecution() {
   const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
   const [restartOpen, setRestartOpen] = useState(false);
-  const [timerOpen, setTimerOpen] = useState(false);
+  const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
+  const [armedTimerConfig, setArmedTimerConfig] = useState(null);
   const [, setTick] = useState(0);
 
   const fullExerciseMapRef = useRef(null);
@@ -195,37 +197,86 @@ export default function WorkoutExecution() {
   const totalElapsed = sessionStartMs ? (Date.now() - sessionStartMs) / 1000 : 0;
 
   const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
-  let timerInitialConfig = null;
+  let blockLabel = null;
+  let timerDefaultConfig = null;
   if (current?.block_type != null || current?.workout_format != null) {
     const blockMeta = { block_type: current.block_type, workout_format: current.workout_format };
     if (isTabataBlock(blockMeta)) {
-      timerInitialConfig = {
+      blockLabel = 'Tabata';
+      timerDefaultConfig = {
         workSec: current.work_seconds || 20,
         restSec: current.block_rest_seconds || 10,
         rounds: current.block_rounds || 1,
-        exerciseCount: currentBlockExercises.length,
-        exerciseNames: currentBlockExercises.map((e) => e.exercise_name),
       };
     } else if (isEMOMBlock(blockMeta)) {
-      timerInitialConfig = {
-        workSec: 60,
-        restSec: 0,
-        rounds: current.rounds || 1,
-        exerciseCount: currentBlockExercises.length,
-        exerciseNames: currentBlockExercises.map((e) => e.exercise_name),
-      };
+      blockLabel = 'EMOM';
+      timerDefaultConfig = { workSec: 60, restSec: 0, rounds: current.rounds || 1 };
     }
   }
+  const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id));
+  const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
 
-  const syncExerciseFromTimer = (exerciseIndexInBlock) => {
-    const target = currentBlockExercises[exerciseIndexInBlock];
-    if (!target) return;
-    const targetGlobalIndex = exercises.findIndex((e) => e.key === target.key);
-    if (targetGlobalIndex !== -1 && targetGlobalIndex !== indexRef.current) {
+  const timer = useIntervalTimer(armedTimerConfig || { mode: 'countdown', durationSec: 0 });
+
+  useEffect(() => {
+    if (armedTimerConfig && timer.status === 'idle') timer.start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armedTimerConfig]);
+
+  const finishBlockTimer = (blockId) => {
+    setCompletedBlockTimers((prev) => {
+      if (prev.has(blockId)) return prev;
+      const next = new Set(prev);
+      next.add(blockId);
+      return next;
+    });
+    const firstIdx = exercises.findIndex((e) => e.block_id === blockId);
+    if (firstIdx !== -1) {
       flushCurrentTime();
-      setIndex(targetGlobalIndex);
+      setIndex(firstIdx);
     }
   };
+
+  useEffect(() => {
+    if (!armedTimerConfig || timer.status !== 'done') return;
+    const blockId = armedTimerConfig.blockId;
+    setArmedTimerConfig(null);
+    finishBlockTimer(blockId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timer.status, armedTimerConfig]);
+
+  const handleStartBlockTimer = (values) => {
+    if (!current || !blockLabel) return;
+    setArmedTimerConfig({
+      mode: 'interval',
+      workSec: values.workSec,
+      restSec: values.restSec,
+      rounds: values.rounds,
+      exerciseCount: currentBlockExercises.length,
+      blockId: current.block_id,
+    });
+  };
+
+  const handleSkipBlock = () => {
+    if (!armedTimerConfig) return;
+    const blockId = armedTimerConfig.blockId;
+    timer.reset();
+    setArmedTimerConfig(null);
+    finishBlockTimer(blockId);
+  };
+
+  let displayExercise = current;
+  let isPreviewExercise = false;
+  if (isBlockActive && timerArmed) {
+    if (blockLabel === 'Tabata' && timer.phase === 'rest' && timer.nextExerciseIndex != null) {
+      displayExercise = currentBlockExercises[timer.nextExerciseIndex] || current;
+      isPreviewExercise = true;
+    } else {
+      displayExercise = currentBlockExercises[timer.exerciseIndex] || current;
+    }
+  } else if (isBlockActive) {
+    displayExercise = currentBlockExercises[0] || current;
+  }
 
   const updateLog = (key, patch) => {
     setLogs((l) => ({ ...l, [key]: { ...(l[key] || {}), ...patch } }));
@@ -470,7 +521,6 @@ export default function WorkoutExecution() {
             <Clock className="h-3.5 w-3.5" />
             {formatDuration(totalElapsed)}
           </div>
-          <button onClick={() => setTimerOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><TimerIcon className="h-4 w-4" /></button>
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
         </div>
         <div className="flex gap-1 mt-2">
@@ -481,81 +531,110 @@ export default function WorkoutExecution() {
       </header>
 
       <div className="flex-1 px-5 py-4 overflow-y-auto">
-        <h2 className="text-xl font-semibold tracking-tight">{current.exercise_name}</h2>
-        <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
-          {current.details?.movement_pattern && <span className="capitalize">{current.details.movement_pattern}</span>}
-          {current.details?.equipment && <><span>·</span><span>{current.details.equipment}</span></>}
-        </div>
-
-        {current.details?.video_url && (
-          <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="mb-4" />
-        )}
-
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
-          <Spec label="Reps" value={current.reps} />
-          {isRunning ? (
-            <Spec label="Pace" value={log.distance_km && log.duration_seconds ? `${(log.duration_seconds / 60 / log.distance_km).toFixed(1)}/km` : '—'} />
-          ) : (
-            <Spec label="Weight" value={current.target_weight ? current.target_weight + 'kg' : '—'} loading={weightLoading} onClick={requiresWeight && !current.target_weight ? calcWeight : null} />
-          )}
-          <Spec label="Rest" value={current.rest_seconds ? current.rest_seconds + 's' : '—'} />
-        </div>
-
-        {current.coach_note && <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 mb-4">Coach note: {current.coach_note}</p>}
-        {current.details?.notes && <p className="text-sm leading-relaxed text-muted-foreground mb-5">{current.details.notes}</p>}
-
-        {log.skipped ? (
-          <Card className="rounded-2xl border-border p-4 text-center text-sm text-muted-foreground">Exercise skipped</Card>
-        ) : (
-          <div className="space-y-4">
-            {isRunning && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
-                  <input type="number" inputMode="decimal" value={log.distance_km ?? ''} onChange={(e) => updateLog(current.key, { distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
-                  <input type="number" inputMode="decimal" value={log.duration_seconds != null ? log.duration_seconds / 60 : ''} onChange={(e) => updateLog(current.key, { duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                </div>
-              </div>
+        {isBlockActive ? (
+          <>
+            <WorkoutTimerPanel
+              blockLabel={blockLabel}
+              defaultConfig={timerDefaultConfig}
+              armed={timerArmed}
+              timer={timerArmed ? timer : null}
+              exerciseNames={currentBlockExercises.map((e) => e.exercise_name)}
+              onStart={handleStartBlockTimer}
+              onSkipBlock={handleSkipBlock}
+            />
+            {isPreviewExercise && (
+              <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground mb-2">Next up</span>
             )}
-            {requiresWeight && (
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
-                  <button type="button" onClick={() => updateLog(current.key, log.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors', log.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
-                </div>
-                {log.bodyweight ? (
-                  <div className="w-full mt-1 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-lg font-semibold text-brand text-center">Bodyweight</div>
-                ) : (
-                  <input type="number" inputMode="decimal" value={log.max_weight ?? ''} onChange={(e) => updateLog(current.key, { max_weight: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder={current.target_weight ? String(current.target_weight) : '0'} className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                )}
-              </div>
-            )}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
-              <div className="grid grid-cols-4 gap-2 mt-1">
-                {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
-                  <button key={val} onClick={() => updateLog(current.key, { difficulty: val })} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', log.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
-                ))}
-              </div>
+            <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
+            <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
+              {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
+              {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
             </div>
-            <textarea value={log.note || ''} onChange={(e) => updateLog(current.key, { note: e.target.value })} placeholder="Optional note…" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
-          </div>
+            {displayExercise?.details?.video_url && (
+              <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
+            )}
+          </>
+        ) : (
+          <>
+            <h2 className="text-xl font-semibold tracking-tight">{current.exercise_name}</h2>
+            <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
+              {current.details?.movement_pattern && <span className="capitalize">{current.details.movement_pattern}</span>}
+              {current.details?.equipment && <><span>·</span><span>{current.details.equipment}</span></>}
+            </div>
+
+            {current.details?.video_url && (
+              <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="mb-4" />
+            )}
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
+              <Spec label="Reps" value={current.reps} />
+              {isRunning ? (
+                <Spec label="Pace" value={log.distance_km && log.duration_seconds ? `${(log.duration_seconds / 60 / log.distance_km).toFixed(1)}/km` : '—'} />
+              ) : (
+                <Spec label="Weight" value={current.target_weight ? current.target_weight + 'kg' : '—'} loading={weightLoading} onClick={requiresWeight && !current.target_weight ? calcWeight : null} />
+              )}
+              <Spec label="Rest" value={current.rest_seconds ? current.rest_seconds + 's' : '—'} />
+            </div>
+
+            {current.coach_note && <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 mb-4">Coach note: {current.coach_note}</p>}
+            {current.details?.notes && <p className="text-sm leading-relaxed text-muted-foreground mb-5">{current.details.notes}</p>}
+
+            {log.skipped ? (
+              <Card className="rounded-2xl border-border p-4 text-center text-sm text-muted-foreground">Exercise skipped</Card>
+            ) : (
+              <div className="space-y-4">
+                {isRunning && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
+                      <input type="number" inputMode="decimal" value={log.distance_km ?? ''} onChange={(e) => updateLog(current.key, { distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
+                      <input type="number" inputMode="decimal" value={log.duration_seconds != null ? log.duration_seconds / 60 : ''} onChange={(e) => updateLog(current.key, { duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                    </div>
+                  </div>
+                )}
+                {requiresWeight && (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
+                      <button type="button" onClick={() => updateLog(current.key, log.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors', log.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
+                    </div>
+                    {log.bodyweight ? (
+                      <div className="w-full mt-1 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-lg font-semibold text-brand text-center">Bodyweight</div>
+                    ) : (
+                      <input type="number" inputMode="decimal" value={log.max_weight ?? ''} onChange={(e) => updateLog(current.key, { max_weight: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder={current.target_weight ? String(current.target_weight) : '0'} className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
+                  <div className="grid grid-cols-4 gap-2 mt-1">
+                    {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
+                      <button key={val} onClick={() => updateLog(current.key, { difficulty: val })} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', log.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <textarea value={log.note || ''} onChange={(e) => updateLog(current.key, { note: e.target.value })} placeholder="Optional note…" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
-        <div className="flex items-center gap-2">
-          <button onClick={() => { flushCurrentTime(); updateLog(current.key, { skipped: true }); }} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /><span className="text-[10px]">Skip</span></button>
-          <button onClick={requestSubstitute} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /><span className="text-[10px]">Swap</span></button>
-          <Button onClick={isLast ? finish : goNext} disabled={saving || !done} className="flex-1 rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
-            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : isLast ? <><Check className="h-5 w-5 mr-2" /> Finish workout</> : <>Next <ChevronRight className="h-5 w-5 ml-1" /></>}
-          </Button>
+      {!isBlockActive && (
+        <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
+          <div className="flex items-center gap-2">
+            <button onClick={() => { flushCurrentTime(); updateLog(current.key, { skipped: true }); }} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /><span className="text-[10px]">Skip</span></button>
+            <button onClick={requestSubstitute} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /><span className="text-[10px]">Swap</span></button>
+            <Button onClick={isLast ? finish : goNext} disabled={saving || !done} className="flex-1 rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
+              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : isLast ? <><Check className="h-5 w-5 mr-2" /> Finish workout</> : <>Next <ChevronRight className="h-5 w-5 ml-1" /></>}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <Sheet open={subSheet} onOpenChange={setSubSheet}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[80vh] overflow-y-auto">
@@ -578,13 +657,6 @@ export default function WorkoutExecution() {
           </div>
         </SheetContent>
       </Sheet>
-
-      <WorkoutTimerSheet
-        open={timerOpen}
-        onOpenChange={setTimerOpen}
-        initialConfig={timerInitialConfig}
-        onExerciseSync={syncExerciseFromTimer}
-      />
 
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent>
