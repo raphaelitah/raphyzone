@@ -20,6 +20,33 @@ import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
 
+const REGENERATING_MESSAGES = [
+  'Analyzing history…',
+  'Balancing volume…',
+  'Sequencing days…',
+  'Applying overload…',
+  'Checking recovery…',
+  'Matching equipment…',
+  'Fine-tuning sets…',
+  'Optimizing split…',
+];
+
+function useRotatingLabel(active, messages, intervalMs = 1400) {
+  const [text, setText] = useState(messages[0]);
+  useEffect(() => {
+    if (!active) return;
+    setText(messages[Math.floor(Math.random() * messages.length)]);
+    const interval = setInterval(() => {
+      setText((prev) => {
+        const options = messages.filter((m) => m !== prev);
+        return options[Math.floor(Math.random() * options.length)];
+      });
+    }, intervalMs);
+    return () => clearInterval(interval);
+  }, [active]);
+  return text;
+}
+
 export default function Home() {
   const { user } = useAuth();
   const { profile } = useAthleteProfile();
@@ -38,6 +65,7 @@ export default function Home() {
   const [selectMode, setSelectMode] = useState(false);
   const [suggestFor, setSuggestFor] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
+  const regeneratingLabel = useRotatingLabel(regenerating, REGENERATING_MESSAGES);
   const [swapFor, setSwapFor] = useState(null);
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapAlternatives, setSwapAlternatives] = useState([]);
@@ -517,7 +545,7 @@ export default function Home() {
             <h3 className="font-semibold">This week</h3>
             <button onClick={regenerate} disabled={regenerating} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand disabled:opacity-40 transition-colors">
               {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Regenerate plan
+              {regenerating ? <span key={regeneratingLabel} className="animate-in fade-in duration-200">{regeneratingLabel}</span> : 'Regenerate plan'}
             </button>
           </div>
           <div className="space-y-2.5">
