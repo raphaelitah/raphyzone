@@ -2,33 +2,19 @@
 
 ## Project Context
 
-This is a Base44 app repository. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
+This is a React/Vite app backed by Supabase (auth + database), hosted on Cloudflare Pages and deployed from GitHub. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.
 
-Start with `README.md` for local setup, environment variables, and publish workflow.
-
-## Base44 References
-
-- CLI overview: https://docs.base44.com/developers/references/cli/get-started/overview.md
-- Agent skills: https://docs.base44.com/developers/backend/overview/skills.md
-
-If your agent supports Agent Skills, install or update Base44 skills before Base44-specific work:
-
-```bash
-npx skills add base44/skills
-```
+Start with `README.md` for local setup and environment variables.
 
 ## Key Files
 
 - `src/`: frontend application source.
-- `src/api/base44Client.js`: frontend Base44 SDK client.
-- `vite.config.js`: Vite config and Base44 Vite plugin setup.
+- `src/lib/supabaseClient.js`: Supabase client.
+- `src/lib/AuthContext.jsx`: auth state and session handling.
 - `.env.local`: local-only environment values; never commit secrets.
 
 ## Working Notes
 
-- Use `base44 dev` as the default local development command when you need the local Base44 backend. It can run the backend and frontend together.
-- When docs or code mention the frontend being started automatically, that usually means the Base44 project config includes `site.serveCommand`, for example `"serveCommand": "npm run dev"` in `base44/config.jsonc`.
-- Use `npm run dev` only for frontend-only work against the hosted Base44 backend.
-- Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.
-- Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.
-- Run the relevant checks from `package.json` before finishing code changes.
+- Use `npm run dev` for local development.
+- Run the relevant checks from `package.json` (`lint`, `typecheck`, `test:e2e`) before finishing code changes.
+- Deploys happen automatically via Cloudflare Pages on push to the connected GitHub branch.
