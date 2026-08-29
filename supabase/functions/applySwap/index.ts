@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { generateWarmup } from '../_shared/warmupGenerator.ts';
 
 // Ported from base44/functions/applySwap. No LLM call — pure data update, so this
 // one needs no provider wiring and can be deployed/tested immediately.
@@ -19,13 +20,30 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = getServiceClient();
-    const [{ data: plan }, { data: oldWorkout }, { data: newWorkout }] = await Promise.all([
+    const [{ data: plan }, { data: oldWorkout }, { data: newWorkout }, { data: profiles }, { data: exerciseCatalog }] = await Promise.all([
       supabase.from('weekly_plans').select('*').eq('id', weekly_plan_id).maybeSingle(),
       supabase.from('workouts').select('*').eq('id', old_workout_id).maybeSingle(),
       supabase.from('workouts').select('*').eq('id', new_workout_id).maybeSingle(),
+      supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
+      supabase.from('exercises').select('id, name, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
     ]);
 
     if (!plan || plan.user_id !== user.id) return Response.json({ error: 'Plan not found' }, { status: 404, headers: corsHeaders });
+
+    const profile = profiles?.[0];
+    let warmup = null;
+    if (newWorkout && profile) {
+      try {
+        warmup = generateWarmup(
+          profile,
+          [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
+          newWorkout,
+          exerciseCatalog || []
+        );
+      } catch {
+        warmup = null;
+      }
+    }
 
     const updatedWorkouts = (plan.workouts || []).map((w: any) => {
       if (w.day === day) {
@@ -36,6 +54,7 @@ Deno.serve(async (req: Request) => {
           modality: newWorkout?.modality || w.modality,
           reason: reason || w.reason,
           locked: false,
+          warmup,
         };
       }
       return w;

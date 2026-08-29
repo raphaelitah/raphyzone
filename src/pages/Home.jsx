@@ -680,6 +680,7 @@ export default function Home() {
         reason={selectedSlot?.reason}
         selectMode={selectMode}
         onSelect={selectFromDetail}
+        warmup={selectedSlot?.warmup}
       />
 
       <SessionDetailSheet

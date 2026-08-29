@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, ChevronDown, Flame, X } from 'lucide-react';
 import { WORKOUT_DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
@@ -15,11 +16,19 @@ import {
   getWorkoutMetaLine,
 } from '@/lib/workoutStructure';
 
-export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null }) {
+export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null, warmup = null }) {
   const [blocksByWorkout, setBlocksByWorkout] = useState({});
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
   const [loading, setLoading] = useState(false);
+  const [warmupSkipped, setWarmupSkipped] = useState(false);
+  const [warmupOpen, setWarmupOpen] = useState(false);
+
+  // Reset the local skip/collapse state whenever a different workout is opened.
+  useEffect(() => {
+    setWarmupSkipped(false);
+    setWarmupOpen(false);
+  }, [workout?.id, workout?.workout_id, open]);
 
   useEffect(() => {
     if (!open || !workout?.workout_id) return;
@@ -77,6 +86,59 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
             <Tag>{duration} min</Tag>
             <Tag className="capitalize">{workout.workout_category}</Tag>
           </div>
+
+          {warmup && !warmupSkipped && (
+            <Collapsible open={warmupOpen} onOpenChange={setWarmupOpen} className="rounded-xl border border-amber-200/60 bg-amber-50/40">
+              <div className="flex items-center gap-2 p-3">
+                <CollapsibleTrigger className="flex-1 flex items-center gap-2 text-left">
+                  <Flame className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-amber-900">Warm Up</p>
+                    <p className="text-xs text-amber-700/80">{warmup.duration_minutes} min · not tracked</p>
+                  </div>
+                  <ChevronDown className={cn('h-4 w-4 text-amber-600 shrink-0 transition-transform', warmupOpen && 'rotate-180')} />
+                </CollapsibleTrigger>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setWarmupSkipped(true); }}
+                  className="p-1 rounded-md text-amber-700/70 hover:text-amber-900 hover:bg-amber-100 transition-colors shrink-0"
+                  title="Skip warm up"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <CollapsibleContent className="px-3 pb-3 space-y-2">
+                {warmup.mobility?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-amber-800 mb-1">Mobility</p>
+                    <ul className="text-sm text-amber-950/90 space-y-0.5">
+                      {warmup.mobility.map((m, i) => <li key={m.exercise_id || i}>· {m.exercise_name}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {warmup.cardio && (
+                  <div>
+                    <p className="text-xs font-medium text-amber-800 mb-1">Cardio primer</p>
+                    <p className="text-sm text-amber-950/90">{warmup.cardio.machine} · {warmup.cardio.duration_minutes} min easy</p>
+                  </div>
+                )}
+                {warmup.first_movement && (
+                  <div>
+                    <p className="text-xs font-medium text-amber-800 mb-1">Movement prep</p>
+                    <p className="text-sm text-amber-950/90">{warmup.first_movement.exercise_name} · {warmup.first_movement.sets} light sets</p>
+                  </div>
+                )}
+                {warmup.notes && <p className="text-xs text-amber-700/80 italic">{warmup.notes}</p>}
+                <button
+                  type="button"
+                  onClick={() => setWarmupSkipped(true)}
+                  className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2"
+                >
+                  Skip warm up
+                </button>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           {reason && (
             <div className="rounded-xl border border-brand/20 bg-brand/5 p-3">

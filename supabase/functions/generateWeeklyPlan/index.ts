@@ -5,6 +5,7 @@ import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, WEEK_DAYS } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
+import { generateWarmup } from '../_shared/warmupGenerator.ts';
 
 // Ported from base44/functions/generateWeeklyPlan. Behavior is unchanged from the
 // original — see that file's comments for the two-phase (structure, then
@@ -27,10 +28,11 @@ Deno.serve(async (req: Request) => {
 
     const supabase = getServiceClient();
 
-    const [{ data: profiles }, { data: feedback }, { data: workouts }] = await Promise.all([
+    const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: exerciseCatalog }] = await Promise.all([
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       supabase.from('workout_feedback').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('status', 'approved'),
+      supabase.from('exercises').select('id, name, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
     ]);
 
     const profile = profiles?.[0];
@@ -209,6 +211,7 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
         reason: null,
         suggested_workout_ids: [],
         locked: false,
+        warmup: null,
       };
       if (slot.slot_type === 'train' || slot.slot_type === 'activity') {
         const sel = selByDay[slot.day];
@@ -218,6 +221,18 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
           entry.workout_name = wo?.name || sel.workout_id;
           entry.reason = verifiedReasons[sel.workout_id] || sel.reason;
           if (slot.slot_type === 'train' && wo?.modality) entry.modality = wo.modality;
+          if (wo) {
+            try {
+              entry.warmup = generateWarmup(
+                profile,
+                [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
+                wo,
+                exerciseCatalog || []
+              );
+            } catch {
+              entry.warmup = null;
+            }
+          }
         } else if (slot.slot_type === 'activity') {
           entry.suggested_workout_ids = (sugByDay[slot.day] || [])
             .filter((id: string) => workoutMap.has(id))
