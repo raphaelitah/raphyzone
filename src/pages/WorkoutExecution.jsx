@@ -228,7 +228,14 @@ export default function WorkoutExecution() {
       blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
         ? `E${intervalSec / 60}MOM`
         : 'EMOM';
-      timerDefaultConfig = { workSec: intervalSec, restSec: 0, rounds: rawRounds };
+      // For an alternating EMOM, the stored "rounds" is the total number of
+      // individual turns (e.g. "Alternating EMOM x9" cycling 3 exercises =
+      // 9 turns), not cycles through the whole group — divide it back down
+      // since the timer engine multiplies rounds × exerciseCount itself.
+      const groupRounds = isAlternatingEmom
+        ? Math.max(1, Math.round(rawRounds / Math.max(1, currentBlockExercises.length)))
+        : rawRounds;
+      timerDefaultConfig = { workSec: intervalSec, restSec: 0, rounds: groupRounds };
     }
   }
   const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && blockLogPrompt !== current.block_id);
