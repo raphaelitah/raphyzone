@@ -84,7 +84,7 @@ export function buildFlatExerciseList(
         effective_sets: rounds * setCount,
         reps,
         target_weight: targetWeight,
-        rest_seconds: block.rest_between_rounds_sec || null,
+        rest_seconds: block.rest_between_rounds_sec ?? null,
         coach_note: be.notes || '',
         order: order++,
         details,
@@ -92,10 +92,10 @@ export function buildFlatExerciseList(
         block_id: block.block_id,
         block_type: block.block_type || null,
         workout_format: block.workout_format || null,
-        block_rounds: block.rounds || null,
-        time_cap_sec: block.time_cap_sec || null,
-        work_seconds: block.work_seconds || null,
-        block_rest_seconds: block.rest_seconds || null,
+        block_rounds: block.rounds ?? null,
+        time_cap_sec: block.time_cap_sec ?? null,
+        work_seconds: block.work_seconds ?? null,
+        block_rest_seconds: block.rest_seconds ?? null,
       });
     });
   });

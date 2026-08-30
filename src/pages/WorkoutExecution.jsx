@@ -60,6 +60,7 @@ export default function WorkoutExecution() {
   const [restartOpen, setRestartOpen] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
+  const [expandedVideoKey, setExpandedVideoKey] = useState(null);
   const [, setTick] = useState(0);
 
   const fullExerciseMapRef = useRef(null);
@@ -205,9 +206,9 @@ export default function WorkoutExecution() {
     if (isTabataBlock(blockMeta)) {
       blockLabel = 'Tabata';
       timerDefaultConfig = {
-        workSec: current.work_seconds || 20,
-        restSec: current.block_rest_seconds || 10,
-        rounds: current.block_rounds || 1,
+        workSec: current.work_seconds ?? 20,
+        restSec: current.block_rest_seconds ?? 10,
+        rounds: current.block_rounds ?? 1,
       };
     } else if (isEMOMBlock(blockMeta)) {
       isEmomFamily = true;
@@ -215,7 +216,7 @@ export default function WorkoutExecution() {
       // total time cap divided by its round count (defaulting to a classic 60s
       // minute when time_cap_sec isn't set). Every round covers the block's full
       // set of exercises together — there's no per-exercise rotation/sub-timing.
-      const rawRounds = current.block_rounds || 1;
+      const rawRounds = current.block_rounds ?? 1;
       const intervalSec = current.time_cap_sec ? Math.round(current.time_cap_sec / rawRounds) : 60;
       blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
         ? `E${intervalSec / 60}MOM`
@@ -568,8 +569,27 @@ export default function WorkoutExecution() {
                 <div className="space-y-2">
                   {currentBlockExercises.map((e) => (
                     <div key={e.key} className="rounded-xl border border-border p-3">
-                      <p className="font-medium text-sm">{e.exercise_name}</p>
-                      <p className="text-xs text-muted-foreground">{e.reps ? `${e.reps} reps` : null}{e.details?.equipment ? ` · ${e.details.equipment}` : ''}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-sm">{e.exercise_name}</p>
+                          <p className="text-xs text-muted-foreground">{e.reps ? `${e.reps} reps` : null}{e.details?.equipment ? ` · ${e.details.equipment}` : ''}</p>
+                        </div>
+                        {e.details?.video_url && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedVideoKey((k) => (k === e.key ? null : e.key))}
+                            className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground"
+                            aria-label={`Watch ${e.exercise_name} video`}
+                          >
+                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 ml-0.5 fill-current">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {expandedVideoKey === e.key && e.details?.video_url && (
+                        <YouTubeVideo url={e.details.video_url} title={e.exercise_name} className="mt-3" />
+                      )}
                     </div>
                   ))}
                 </div>
