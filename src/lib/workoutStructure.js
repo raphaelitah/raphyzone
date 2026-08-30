@@ -110,7 +110,16 @@ export function roundToFive(minutes) {
 export function isEMOMBlock(block) {
   const type = (block.block_type || '').toLowerCase();
   const format = (block.workout_format || '').toLowerCase();
-  return type === 'emom' || format === 'emom';
+  return type === 'emom' || format === 'emom' || type === 'emom_alternating' || format === 'emom_alternating';
+}
+
+// A rotating EMOM: one exercise per round (e.g. "Alternating EMOM x9" cycling
+// through 3 movements), as opposed to the default of the whole block's
+// exercises done together every round.
+export function isAlternatingEmomBlock(block) {
+  const type = (block.block_type || '').toLowerCase();
+  const format = (block.workout_format || '').toLowerCase();
+  return type === 'emom_alternating' || format === 'emom_alternating';
 }
 
 export function getEMOMMinutes(block) {

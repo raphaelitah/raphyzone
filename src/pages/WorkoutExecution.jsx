@@ -29,6 +29,7 @@ import {
   buildFlatExerciseList,
   isEMOMBlock,
   isTabataBlock,
+  isAlternatingEmomBlock,
 } from '@/lib/workoutStructure';
 
 function formatDuration(sec) {
@@ -203,6 +204,7 @@ export default function WorkoutExecution() {
   const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
   let blockLabel = null;
   let isEmomFamily = false;
+  let isAlternatingEmom = false;
   let timerDefaultConfig = null;
   if (current?.block_type != null || current?.workout_format != null) {
     const blockMeta = { block_type: current.block_type, workout_format: current.workout_format };
@@ -215,10 +217,12 @@ export default function WorkoutExecution() {
       };
     } else if (isEMOMBlock(blockMeta)) {
       isEmomFamily = true;
+      isAlternatingEmom = isAlternatingEmomBlock(blockMeta);
       // EMOM is "every N minutes" generalized: the interval length is the block's
       // total time cap divided by its round count (defaulting to a classic 60s
-      // minute when time_cap_sec isn't set). Every round covers the block's full
-      // set of exercises together — there's no per-exercise rotation/sub-timing.
+      // minute when time_cap_sec isn't set). By default every round covers the
+      // block's full set of exercises together; an "alternating" EMOM instead
+      // rotates a single exercise per round, like Tabata without a rest phase.
       const rawRounds = current.block_rounds ?? 1;
       const intervalSec = current.time_cap_sec ? Math.round(current.time_cap_sec / rawRounds) : 60;
       blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
@@ -271,7 +275,7 @@ export default function WorkoutExecution() {
       workSec: values.workSec,
       restSec: values.restSec,
       rounds: values.rounds,
-      exerciseCount: isEmomFamily ? 1 : currentBlockExercises.length,
+      exerciseCount: (isEmomFamily && !isAlternatingEmom) ? 1 : currentBlockExercises.length,
       blockId: current.block_id,
     });
   };
@@ -296,16 +300,23 @@ export default function WorkoutExecution() {
     advancePastBlock(blockId);
   };
 
+  // A block either rotates through its exercises one at a time (Tabata, and an
+  // "alternating" EMOM) or runs them all together every round (default EMOM).
+  const isRotatingBlock = !isEmomFamily || isAlternatingEmom;
   let displayExercise = current;
   let isPreviewExercise = false;
-  if (isBlockActive && !isEmomFamily && timerArmed) {
-    if (timer.phase === 'rest' && timer.nextExerciseIndex != null) {
+  let nextUpName = null;
+  if (isBlockActive && isRotatingBlock && timerArmed) {
+    if (blockLabel === 'Tabata' && timer.phase === 'rest' && timer.nextExerciseIndex != null) {
       displayExercise = currentBlockExercises[timer.nextExerciseIndex] || current;
       isPreviewExercise = true;
     } else {
       displayExercise = currentBlockExercises[timer.exerciseIndex] || current;
+      if (isAlternatingEmom && timer.nextExerciseIndex != null) {
+        nextUpName = currentBlockExercises[timer.nextExerciseIndex]?.exercise_name || null;
+      }
     }
-  } else if (isBlockActive && !isEmomFamily) {
+  } else if (isBlockActive && isRotatingBlock) {
     displayExercise = currentBlockExercises[0] || current;
   }
 
@@ -589,7 +600,7 @@ export default function WorkoutExecution() {
               onStart={handleStartBlockTimer}
               onSkipBlock={handleSkipBlock}
             />
-            {isEmomFamily ? (
+            {isEmomFamily && !isAlternatingEmom ? (
               currentBlockExercises.length <= 1 ? (
                 <>
                   <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
@@ -642,6 +653,9 @@ export default function WorkoutExecution() {
                 </div>
                 {displayExercise?.details?.video_url && (
                   <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
+                )}
+                {nextUpName && (
+                  <p className="text-xs font-medium text-muted-foreground -mt-2 mb-4">Next up: {nextUpName}</p>
                 )}
               </>
             )}
