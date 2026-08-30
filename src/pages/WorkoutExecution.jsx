@@ -198,6 +198,7 @@ export default function WorkoutExecution() {
 
   const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
   let blockLabel = null;
+  let isEmomFamily = false;
   let timerDefaultConfig = null;
   if (current?.block_type != null || current?.workout_format != null) {
     const blockMeta = { block_type: current.block_type, workout_format: current.workout_format };
@@ -209,8 +210,17 @@ export default function WorkoutExecution() {
         rounds: current.block_rounds || 1,
       };
     } else if (isEMOMBlock(blockMeta)) {
-      blockLabel = 'EMOM';
-      timerDefaultConfig = { workSec: 60, restSec: 0, rounds: current.rounds || 1 };
+      isEmomFamily = true;
+      // EMOM is "every N minutes" generalized: the interval length is the block's
+      // total time cap divided by its round count (defaulting to a classic 60s
+      // minute when time_cap_sec isn't set). Every round covers the block's full
+      // set of exercises together — there's no per-exercise rotation/sub-timing.
+      const rawRounds = current.block_rounds || 1;
+      const intervalSec = current.time_cap_sec ? Math.round(current.time_cap_sec / rawRounds) : 60;
+      blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
+        ? `E${intervalSec / 60}MOM`
+        : 'EMOM';
+      timerDefaultConfig = { workSec: intervalSec, restSec: 0, rounds: rawRounds };
     }
   }
   const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id));
@@ -252,7 +262,7 @@ export default function WorkoutExecution() {
       workSec: values.workSec,
       restSec: values.restSec,
       rounds: values.rounds,
-      exerciseCount: currentBlockExercises.length,
+      exerciseCount: isEmomFamily ? 1 : currentBlockExercises.length,
       blockId: current.block_id,
     });
   };
@@ -267,14 +277,14 @@ export default function WorkoutExecution() {
 
   let displayExercise = current;
   let isPreviewExercise = false;
-  if (isBlockActive && timerArmed) {
-    if (blockLabel === 'Tabata' && timer.phase === 'rest' && timer.nextExerciseIndex != null) {
+  if (isBlockActive && !isEmomFamily && timerArmed) {
+    if (timer.phase === 'rest' && timer.nextExerciseIndex != null) {
       displayExercise = currentBlockExercises[timer.nextExerciseIndex] || current;
       isPreviewExercise = true;
     } else {
       displayExercise = currentBlockExercises[timer.exerciseIndex] || current;
     }
-  } else if (isBlockActive) {
+  } else if (isBlockActive && !isEmomFamily) {
     displayExercise = currentBlockExercises[0] || current;
   }
 
@@ -534,24 +544,50 @@ export default function WorkoutExecution() {
         {isBlockActive ? (
           <>
             <WorkoutTimerPanel
+              key={current.block_id}
               blockLabel={blockLabel}
               defaultConfig={timerDefaultConfig}
               armed={timerArmed}
               timer={timerArmed ? timer : null}
-              exerciseNames={currentBlockExercises.map((e) => e.exercise_name)}
               onStart={handleStartBlockTimer}
               onSkipBlock={handleSkipBlock}
             />
-            {isPreviewExercise && (
-              <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground mb-2">Next up</span>
-            )}
-            <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
-            <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
-              {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
-              {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
-            </div>
-            {displayExercise?.details?.video_url && (
-              <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
+            {isEmomFamily ? (
+              currentBlockExercises.length <= 1 ? (
+                <>
+                  <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
+                  <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
+                    {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
+                    {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
+                  </div>
+                  {displayExercise?.details?.video_url && (
+                    <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  {currentBlockExercises.map((e) => (
+                    <div key={e.key} className="rounded-xl border border-border p-3">
+                      <p className="font-medium text-sm">{e.exercise_name}</p>
+                      <p className="text-xs text-muted-foreground">{e.reps ? `${e.reps} reps` : null}{e.details?.equipment ? ` · ${e.details.equipment}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <>
+                {isPreviewExercise && (
+                  <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground mb-2">Next up</span>
+                )}
+                <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
+                <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
+                  {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
+                  {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
+                </div>
+                {displayExercise?.details?.video_url && (
+                  <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
+                )}
+              </>
             )}
           </>
         ) : (

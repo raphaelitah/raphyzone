@@ -21,7 +21,6 @@ export default function WorkoutTimerPanel({
   defaultConfig,
   armed,
   timer,
-  exerciseNames,
   onStart,
   onSkipBlock,
 }) {
@@ -29,8 +28,7 @@ export default function WorkoutTimerPanel({
   const [restSec, setRestSec] = useState(defaultConfig?.restSec?.toString() || '10');
   const [rounds, setRounds] = useState(defaultConfig?.rounds?.toString() || '8');
 
-  const isEmom = blockLabel === 'EMOM';
-  const nextName = timer?.nextExerciseIndex != null ? exerciseNames?.[timer.nextExerciseIndex] : null;
+  const isEmom = /^E\d*MOM$/.test(blockLabel || '');
   const progressPct = armed && timer?.phaseDurationSec > 0
     ? ((timer.phaseDurationSec - timer.remainingSec) / timer.phaseDurationSec) * 100
     : 0;
@@ -79,9 +77,6 @@ export default function WorkoutTimerPanel({
           )}
           <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(timer.remainingSec)}</p>
           <p className="text-xs text-muted-foreground">Round {timer.round} of {timer.totalRounds}</p>
-          {isEmom && nextName && timer.status !== 'done' && (
-            <p className="text-xs font-medium text-muted-foreground">Next up: {nextName}</p>
-          )}
           <Progress value={progressPct} className="w-full" />
           <div className="flex items-center gap-2 w-full">
             <button onClick={timer.reset} className="flex items-center justify-center w-11 h-11 rounded-xl border border-border text-muted-foreground">
