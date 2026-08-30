@@ -28,15 +28,41 @@ Deno.serve(async (req: Request) => {
 
     const supabase = getServiceClient();
 
-    const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: exerciseCatalog }] = await Promise.all([
+    const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: exerciseCatalog }, { data: existing }] = await Promise.all([
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       supabase.from('workout_feedback').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('status', 'approved'),
       supabase.from('exercises').select('id, name, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
+      supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStartDate),
     ]);
 
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Profile not found' }, { status: 404, headers: corsHeaders });
+
+    const existingPlan = existing?.[0];
+    const existingByDay: Record<string, any> = {};
+    (existingPlan?.workouts || []).forEach((w: any) => { existingByDay[w.day] = w; });
+
+    // On regenerate, never touch days that are already completed or already in
+    // the past — only "days left in the week" are up for regeneration.
+    const todayISO = new Date().toISOString().slice(0, 10);
+    let lockedDays = new Set<string>();
+    if (isRegen && existingPlan) {
+      const weekDates = Object.values(existingByDay).map((w: any) => w.date).filter(Boolean);
+      const { data: completedSessions } = weekDates.length
+        ? await supabase
+            .from('workout_sessions')
+            .select('date')
+            .eq('user_id', user.id)
+            .eq('status', 'completed')
+            .in('date', weekDates)
+        : { data: [] as any[] };
+      const completedDates = new Set((completedSessions || []).map((s: any) => s.date));
+      Object.values(existingByDay).forEach((w: any) => {
+        if (!w.date) return;
+        if (w.date < todayISO || completedDates.has(w.date)) lockedDays.add(w.day);
+      });
+    }
 
     const profileContext = buildProfileContext(profile, feedback || []);
     const baseSlots = computeBaseSlots(profile);
@@ -56,7 +82,8 @@ ${profileContext}
 WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}
 
 DETERMINED DAY SLOTS (the user is always right — do NOT change activity or rest days):
-${baseSlots.map((s) => `- ${s.day}: ${s.slot_type}${s.activity ? ' (' + s.activity + ')' : ''}`).join('\n')}
+${baseSlots.filter((s) => !lockedDays.has(s.day)).map((s) => `- ${s.day}: ${s.slot_type}${s.activity ? ' (' + s.activity + ')' : ''}`).join('\n')}
+${lockedDays.size ? `\nLOCKED DAYS (already completed or already past — do NOT plan these, they are excluded above): ${[...lockedDays].join(', ')}` : ''}
 
 YOUR TASK:
 - For each TRAIN day, decide its "modality" — the kind of training that day should be. Choose from the catalog's modality values: "Strength / Muscular Endurance" (resistance training), "Mixed Conditioning" (metcons, circuits, cardio circuits), "Cyclical / Monostructural" (running, cycling, rowing), "Mobility / Flexibility" (yoga, mobility), "Skill / Power" (powerlifting/skill).
@@ -64,7 +91,7 @@ YOUR TASK:
 - RESISTANCE/CONDITIONING RATIO (strong guiding constraint — stay close to this): The athlete has ${trainDayCount} train day(s). Aim for ~${targetStrengthDays} strength-modality day(s) and ~${targetConditioningDays} conditioning/mixed-modality day(s). You may deviate when the athlete's goal or focus clearly justifies it, but do not stray far.
 - For each TRAIN day assigned "Strength / Muscular Endurance" modality, also set a concise "focus" that balances movement patterns across the week and respects body_focus/performance_focus.
 - You MAY downgrade a train day to "rest" ONLY if the week's context clearly requires it (e.g. recovery issue, schedule change). Never upgrade a rest or activity day. Never change an activity day or its activity.
-- Return all 7 days.
+- Return only the DETERMINED DAY SLOTS listed above — do not include locked days.
 
 Return JSON with a "days" array, each item { day, slot_type, modality (for train days), focus (for strength-modality train days), activity (for activity days) }.`;
 
@@ -96,6 +123,17 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
     const structByDay: Record<string, any> = {};
     (structureRes.days || []).forEach((d: any) => { structByDay[d.day] = d; });
     const finalSlots = baseSlots.map((base) => {
+      if (lockedDays.has(base.day)) {
+        const existingEntry = existingByDay[base.day];
+        return {
+          day: base.day,
+          slot_type: existingEntry.slot_type,
+          activity: existingEntry.activity || null,
+          modality: existingEntry.modality || null,
+          focus: existingEntry.focus || null,
+          locked: true,
+        };
+      }
       const s = structByDay[base.day] || {};
       let slot_type = base.slot_type;
       if (base.slot_type === 'train' && s.slot_type === 'rest') slot_type = 'rest';
@@ -108,8 +146,8 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
       };
     });
 
-    const trainDays = finalSlots.filter((s) => s.slot_type === 'train');
-    const activityDays = finalSlots.filter((s) => s.slot_type === 'activity');
+    const trainDays = finalSlots.filter((s) => s.slot_type === 'train' && !(s as any).locked);
+    const activityDays = finalSlots.filter((s) => s.slot_type === 'activity' && !(s as any).locked);
     const neededModalities = [...new Set(trainDays.map((s) => s.modality).filter(Boolean))];
     const filteredWorkouts = filterCatalogForSelection(workouts || [], profile, neededModalities, activityDays.length > 0);
     const catalog = buildWorkoutCatalog(filteredWorkouts);
@@ -197,6 +235,9 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
 
     const monday = new Date(weekStartDate + 'T00:00:00Z');
     const mapped = finalSlots.map((slot) => {
+      if ((slot as any).locked) {
+        return { ...existingByDay[slot.day], locked: true };
+      }
       const idx = WEEK_DAYS.indexOf(slot.day);
       const date = idx >= 0 ? new Date(monday.getTime() + idx * 86400000).toISOString().slice(0, 10) : weekStartDate;
       const entry: any = {
@@ -242,12 +283,7 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
       return entry;
     });
 
-    const { data: existing } = await supabase
-      .from('weekly_plans')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('week_start_date', weekStartDate);
-    const regenCount = (existing?.[0]?.regenerations_used || 0) + (isRegen ? 1 : 0);
+    const regenCount = (existingPlan?.regenerations_used || 0) + (isRegen ? 1 : 0);
     const payload = {
       user_id: user.id,
       week_start_date: weekStartDate,
@@ -258,8 +294,8 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
       regenerations_used: regenCount,
     };
     let plan;
-    if (existing?.[0]) {
-      const { data } = await supabase.from('weekly_plans').update(payload).eq('id', existing[0].id).select().single();
+    if (existingPlan) {
+      const { data } = await supabase.from('weekly_plans').update(payload).eq('id', existingPlan.id).select().single();
       plan = data;
     } else {
       const { data } = await supabase.from('weekly_plans').insert(payload).select().single();
