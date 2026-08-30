@@ -256,6 +256,7 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!armedTimerConfig || timer.status !== 'done') return;
     const blockId = armedTimerConfig.blockId;
+    timer.reset(); // otherwise the next block's timer starts already "done"
     setArmedTimerConfig(null);
     setBlockLogDifficulty(null);
     setBlockLogNote('');
