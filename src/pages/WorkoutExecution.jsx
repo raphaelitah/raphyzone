@@ -60,6 +60,9 @@ export default function WorkoutExecution() {
   const [restartOpen, setRestartOpen] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
+  const [blockLogPrompt, setBlockLogPrompt] = useState(null);
+  const [blockLogDifficulty, setBlockLogDifficulty] = useState(null);
+  const [blockLogNote, setBlockLogNote] = useState('');
   const [expandedVideoKey, setExpandedVideoKey] = useState(null);
   const [, setTick] = useState(0);
 
@@ -224,7 +227,7 @@ export default function WorkoutExecution() {
       timerDefaultConfig = { workSec: intervalSec, restSec: 0, rounds: rawRounds };
     }
   }
-  const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id));
+  const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && blockLogPrompt !== current.block_id);
   const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
 
   const timer = useIntervalTimer(armedTimerConfig || { mode: 'countdown', durationSec: 0 });
@@ -234,25 +237,29 @@ export default function WorkoutExecution() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [armedTimerConfig]);
 
-  const finishBlockTimer = (blockId) => {
+  // Moves past every exercise in a finished/skipped block in one step, landing
+  // on whatever comes next in the workout (not back into the block itself).
+  const advancePastBlock = (blockId) => {
     setCompletedBlockTimers((prev) => {
       if (prev.has(blockId)) return prev;
       const next = new Set(prev);
       next.add(blockId);
       return next;
     });
-    const firstIdx = exercises.findIndex((e) => e.block_id === blockId);
-    if (firstIdx !== -1) {
-      flushCurrentTime();
-      setIndex(firstIdx);
-    }
+    let lastIdx = -1;
+    exercises.forEach((e, i) => { if (e.block_id === blockId) lastIdx = i; });
+    const nextIdx = Math.min(lastIdx + 1, exercises.length - 1);
+    flushCurrentTime();
+    setIndex(nextIdx);
   };
 
   useEffect(() => {
     if (!armedTimerConfig || timer.status !== 'done') return;
     const blockId = armedTimerConfig.blockId;
     setArmedTimerConfig(null);
-    finishBlockTimer(blockId);
+    setBlockLogDifficulty(null);
+    setBlockLogNote('');
+    setBlockLogPrompt(blockId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer.status, armedTimerConfig]);
 
@@ -268,12 +275,24 @@ export default function WorkoutExecution() {
     });
   };
 
+  // Bailing out mid-timer skips straight past the block with no log, same as
+  // skipping a single exercise — there's nothing to record for work not done.
   const handleSkipBlock = () => {
     if (!armedTimerConfig) return;
     const blockId = armedTimerConfig.blockId;
     timer.reset();
     setArmedTimerConfig(null);
-    finishBlockTimer(blockId);
+    advancePastBlock(blockId);
+  };
+
+  const handleSaveBlockLog = () => {
+    if (!blockLogPrompt) return;
+    const blockId = blockLogPrompt;
+    exercises.filter((e) => e.block_id === blockId).forEach((e) => {
+      updateLog(e.key, { difficulty: blockLogDifficulty || 'normal', note: blockLogNote });
+    });
+    setBlockLogPrompt(null);
+    advancePastBlock(blockId);
   };
 
   let displayExercise = current;
@@ -518,6 +537,8 @@ export default function WorkoutExecution() {
   const setsValue = current.rounds > 1 ? current.effective_sets : current.sets;
   const setsSubtext = current.rounds > 1 ? `${current.rounds} rounds` : null;
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
+  const showBlockLogPrompt = blockLogPrompt != null && current.block_id === blockLogPrompt;
+  const blockLogExercises = showBlockLogPrompt ? exercises.filter((e) => e.block_id === blockLogPrompt) : [];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -542,7 +563,21 @@ export default function WorkoutExecution() {
       </header>
 
       <div className="flex-1 px-5 py-4 overflow-y-auto">
-        {isBlockActive ? (
+        {showBlockLogPrompt ? (
+          <>
+            <h2 className="text-xl font-semibold tracking-tight">{blockLabel} complete</h2>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">{blockLogExercises.map((e) => e.exercise_name).join(', ')}</p>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
+              <div className="grid grid-cols-4 gap-2 mt-1">
+                {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
+                  <button key={val} onClick={() => setBlockLogDifficulty(val)} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', blockLogDifficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
+                ))}
+              </div>
+            </div>
+            <textarea value={blockLogNote} onChange={(e) => setBlockLogNote(e.target.value)} placeholder="Optional note…" className="w-full mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
+          </>
+        ) : isBlockActive ? (
           <>
             <WorkoutTimerPanel
               key={current.block_id}
@@ -680,7 +715,13 @@ export default function WorkoutExecution() {
         )}
       </div>
 
-      {!isBlockActive && (
+      {showBlockLogPrompt ? (
+        <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
+          <Button onClick={handleSaveBlockLog} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
+            Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" />
+          </Button>
+        </div>
+      ) : !isBlockActive && (
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <div className="flex items-center gap-2">
             <button onClick={() => { flushCurrentTime(); updateLog(current.key, { skipped: true }); }} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /><span className="text-[10px]">Skip</span></button>
