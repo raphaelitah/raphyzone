@@ -169,3 +169,53 @@ export function getEffectiveRounds(block, exerciseCount) {
   }
   return block.rounds || 1;
 }
+
+// Derives the block label and default interval-timer config (work/rest/rounds/
+// exerciseCount) for a Tabata or EMOM-family block, given how many exercises
+// are in it. Returns null for a block that isn't a timed rotating block.
+export function deriveBlockTimerConfig(block, exerciseCount) {
+  if (block.block_type == null && block.workout_format == null) return null;
+  const count = Math.max(1, exerciseCount || 1);
+
+  if (isTabataBlock(block)) {
+    return {
+      blockLabel: 'Tabata',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      timerDefaultConfig: {
+        workSec: block.work_seconds ?? 20,
+        restSec: block.rest_seconds ?? 10,
+        rounds: block.rounds ?? 1,
+      },
+    };
+  }
+
+  if (isEMOMBlock(block)) {
+    const isAlternatingEmom = isAlternatingEmomBlock(block);
+    // EMOM is "every N minutes" generalized: the interval length is the block's
+    // total time cap divided by its round count (defaulting to a classic 60s
+    // minute when time_cap_sec isn't set). By default every round covers the
+    // block's full set of exercises together; an "alternating" EMOM instead
+    // rotates a single exercise per round, like Tabata without a rest phase.
+    const rawRounds = block.rounds ?? 1;
+    const intervalSec = block.time_cap_sec ? Math.round(block.time_cap_sec / rawRounds) : 60;
+    const blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
+      ? `E${intervalSec / 60}MOM`
+      : 'EMOM';
+    // For an alternating EMOM, the stored "rounds" is the total number of
+    // individual turns (e.g. "Alternating EMOM x9" cycling 3 exercises =
+    // 9 turns), not cycles through the whole group — divide it back down
+    // since the timer engine multiplies rounds × exerciseCount itself.
+    const groupRounds = isAlternatingEmom
+      ? Math.max(1, Math.round(rawRounds / count))
+      : rawRounds;
+    return {
+      blockLabel,
+      isEmomFamily: true,
+      isAlternatingEmom,
+      timerDefaultConfig: { workSec: intervalSec, restSec: 0, rounds: groupRounds },
+    };
+  }
+
+  return null;
+}

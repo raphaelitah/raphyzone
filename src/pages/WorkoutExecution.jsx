@@ -27,9 +27,7 @@ import {
   buildSetsByBlockExercise,
   buildExerciseMapByCode,
   buildFlatExerciseList,
-  isEMOMBlock,
-  isTabataBlock,
-  isAlternatingEmomBlock,
+  deriveBlockTimerConfig,
 } from '@/lib/workoutStructure';
 
 function formatDuration(sec) {
@@ -202,42 +200,23 @@ export default function WorkoutExecution() {
   const totalElapsed = sessionStartMs ? (Date.now() - sessionStartMs) / 1000 : 0;
 
   const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
-  let blockLabel = null;
-  let isEmomFamily = false;
-  let isAlternatingEmom = false;
-  let timerDefaultConfig = null;
-  if (current?.block_type != null || current?.workout_format != null) {
-    const blockMeta = { block_type: current.block_type, workout_format: current.workout_format };
-    if (isTabataBlock(blockMeta)) {
-      blockLabel = 'Tabata';
-      timerDefaultConfig = {
-        workSec: current.work_seconds ?? 20,
-        restSec: current.block_rest_seconds ?? 10,
-        rounds: current.block_rounds ?? 1,
-      };
-    } else if (isEMOMBlock(blockMeta)) {
-      isEmomFamily = true;
-      isAlternatingEmom = isAlternatingEmomBlock(blockMeta);
-      // EMOM is "every N minutes" generalized: the interval length is the block's
-      // total time cap divided by its round count (defaulting to a classic 60s
-      // minute when time_cap_sec isn't set). By default every round covers the
-      // block's full set of exercises together; an "alternating" EMOM instead
-      // rotates a single exercise per round, like Tabata without a rest phase.
-      const rawRounds = current.block_rounds ?? 1;
-      const intervalSec = current.time_cap_sec ? Math.round(current.time_cap_sec / rawRounds) : 60;
-      blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
-        ? `E${intervalSec / 60}MOM`
-        : 'EMOM';
-      // For an alternating EMOM, the stored "rounds" is the total number of
-      // individual turns (e.g. "Alternating EMOM x9" cycling 3 exercises =
-      // 9 turns), not cycles through the whole group — divide it back down
-      // since the timer engine multiplies rounds × exerciseCount itself.
-      const groupRounds = isAlternatingEmom
-        ? Math.max(1, Math.round(rawRounds / Math.max(1, currentBlockExercises.length)))
-        : rawRounds;
-      timerDefaultConfig = { workSec: intervalSec, restSec: 0, rounds: groupRounds };
-    }
-  }
+  const blockTimerMeta = current
+    ? deriveBlockTimerConfig(
+        {
+          block_type: current.block_type,
+          workout_format: current.workout_format,
+          work_seconds: current.work_seconds,
+          rest_seconds: current.block_rest_seconds,
+          rounds: current.block_rounds,
+          time_cap_sec: current.time_cap_sec,
+        },
+        currentBlockExercises.length
+      )
+    : null;
+  const blockLabel = blockTimerMeta?.blockLabel ?? null;
+  const isEmomFamily = blockTimerMeta?.isEmomFamily ?? false;
+  const isAlternatingEmom = blockTimerMeta?.isAlternatingEmom ?? false;
+  const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
   const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && blockLogPrompt !== current.block_id);
   const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
 
