@@ -175,6 +175,8 @@ export default function WorkoutExecution() {
   useEffect(() => {
     let alive = true;
     const active = () => alive;
+    setConflictSession(null);
+    pendingLoadRef.current = null;
     (async () => {
       try {
         const monday = fmtISO(mondayOf(parseDate(targetDate)));
@@ -222,7 +224,7 @@ export default function WorkoutExecution() {
     if (!conflictSession || !user) return;
     setEndingConflict(true);
     try {
-      await supabase.from('workout_sessions').update({ status: 'abandoned' }).eq('id', conflictSession.id);
+      await supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', conflictSession.id);
       const { w, plans } = pendingLoadRef.current || {};
       const { data: created } = await supabase.from('workout_sessions').insert({
         user_id: user.id, workout_id: workoutId, workout_name: w?.name,
