@@ -109,11 +109,12 @@ export default function WorkoutExecution() {
     setSessionStartMs(startMs);
     enterTimeRef.current = Date.now();
 
-    // Load any already-saved exercise sessions for hydration
-    try {
-      const { data } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', sess.id);
-      loadedExerciseSessionsRef.current = data || [];
-    } catch { loadedExerciseSessionsRef.current = []; }
+    // Load any already-saved exercise sessions for hydration, in parallel with the workout's blocks
+    const [exerciseSessionsResult, blocksResult] = await Promise.allSettled([
+      supabase.from('exercise_sessions').select('*').eq('workout_session_id', sess.id),
+      supabase.from('workout_blocks').select('*').eq('workout_id', w.workout_id).order('order_index').limit(500),
+    ]);
+    loadedExerciseSessionsRef.current = (exerciseSessionsResult.status === 'fulfilled' ? exerciseSessionsResult.value.data : null) || [];
     if (!active()) return;
 
     setLoading(false);
@@ -123,8 +124,7 @@ export default function WorkoutExecution() {
     const planSlot = currentPlan?.workouts?.find((s) => s.workout_id === workoutId);
     const exerciseWeights = planSlot?.exercise_weights || {};
 
-    const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', w.workout_id).order('order_index').limit(500);
-    const blocks = blocksData || [];
+    const blocks = (blocksResult.status === 'fulfilled' ? blocksResult.value.data : null) || [];
     if (!active()) return;
     const blockIds = blocks.map((b) => b.block_id);
     const blockExs = blockIds.length
@@ -450,7 +450,10 @@ export default function WorkoutExecution() {
       const ex = current.details;
       if (!ex) { setLoadingSubs(false); return; }
       if (!fullExerciseMapRef.current) {
-        const { data: allExs } = await supabase.from('exercises').select('*').order('created_date', { ascending: false }).limit(3000);
+        const { data: allExs } = await supabase.from('exercises')
+          .select('id, exercise_code, name, movement_pattern, primary_muscle_group, secondary_muscle_group, technical_difficulty, equipment')
+          .order('created_date', { ascending: false })
+          .limit(3000);
         fullExerciseMapRef.current = buildExerciseMapByCode(allExs || []);
       }
       const candidates = Object.values(fullExerciseMapRef.current).filter((e) => e.id !== ex.id);
