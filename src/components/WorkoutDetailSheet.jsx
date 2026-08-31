@@ -70,7 +70,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
           <div className="flex items-start justify-between gap-2">
             <SheetTitle className="text-xl text-left">{workout.name}</SheetTitle>
             {selectMode && (
-              <Button size="sm" onClick={() => { onSelect(); onOpenChange(false); }} className="bg-brand text-brand-foreground shrink-0">
+              <Button size="sm" onClick={() => { onSelect(); onOpenChange(false); }} className="bg-brand text-brand-foreground shrink-0 mr-8">
                 Select
               </Button>
             )}
