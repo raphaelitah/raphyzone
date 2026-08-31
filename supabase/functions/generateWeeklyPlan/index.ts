@@ -22,6 +22,7 @@ Deno.serve(async (req: Request) => {
     const weekStartDate = body.week_start_date;
     const contextAnswer = body.context_answer || '';
     const contextNotes = body.context_notes || '';
+    const setupEquipment: string[] | null = Array.isArray(body.setup_equipment) && body.setup_equipment.length ? body.setup_equipment : null;
     const isRegen = !!body.regenerate;
 
     if (!weekStartDate) return Response.json({ error: 'week_start_date required' }, { status: 400, headers: corsHeaders });
@@ -64,7 +65,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const profileContext = buildProfileContext(profile, feedback || []);
+    // A structured week-level equipment override (e.g. "bodyweight and running
+    // only" while travelling) replaces the profile's normal equipment for this
+    // generation only — the saved profile itself is untouched.
+    const effectiveProfile = setupEquipment
+      ? { ...profile, equipment_profile: 'custom', available_equipment: setupEquipment, custom_equipment: [] }
+      : profile;
+
+    const profileContext = buildProfileContext(effectiveProfile, feedback || []);
     const baseSlots = computeBaseSlots(profile);
 
     const trainDayCount = baseSlots.filter((s) => s.slot_type === 'train').length;
@@ -79,7 +87,7 @@ Deno.serve(async (req: Request) => {
 
 ${profileContext}
 
-WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}
+WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}${setupEquipment ? `\nWEEK EQUIPMENT OVERRIDE (replaces the athlete's normal equipment for THIS WEEK ONLY): ${setupEquipment.join(', ')}` : ''}
 
 DETERMINED DAY SLOTS (the user is always right — do NOT change activity or rest days):
 ${baseSlots.filter((s) => !lockedDays.has(s.day)).map((s) => `- ${s.day}: ${s.slot_type}${s.activity ? ' (' + s.activity + ')' : ''}`).join('\n')}
@@ -149,7 +157,7 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
     const trainDays = finalSlots.filter((s) => s.slot_type === 'train' && !(s as any).locked);
     const activityDays = finalSlots.filter((s) => s.slot_type === 'activity' && !(s as any).locked);
     const neededModalities = [...new Set(trainDays.map((s) => s.modality).filter(Boolean))];
-    const filteredWorkouts = filterCatalogForSelection(workouts || [], profile, neededModalities, activityDays.length > 0);
+    const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, neededModalities, activityDays.length > 0);
     const catalog = buildWorkoutCatalog(filteredWorkouts);
 
     // Phase 2 — selection: pick catalog workouts matching each day's decided modality.
@@ -157,7 +165,7 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
 
 ${profileContext}
 
-WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}
+WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}${setupEquipment ? `\nWEEK EQUIPMENT OVERRIDE (replaces the athlete's normal equipment for THIS WEEK ONLY): ${setupEquipment.join(', ')}` : ''}
 
 TRAIN DAYS TO FILL (pick exactly one catalog workout per day, no duplicates across the week):
 ${trainDays.map((s) => `- ${s.day}: modality "${s.modality}"${s.focus ? ', focus "' + s.focus + '"' : ''}`).join('\n') || 'none'}
@@ -174,6 +182,7 @@ RULES:
 - Never assign a workout to a rest day.
 - Match each day's modality/focus/activity, the athlete's desired duration, and goal.
 - EQUIPMENT MATCHING IS MANDATORY: Only assign a workout if ALL its required equipment is in the athlete's "Available equipment" list. If the equipment profile is CUSTOM, the athlete does NOT have a full gym — never assign a workout requiring equipment they don't have, even if it fits the modality/focus/goal perfectly.
+- EVERY TRAIN DAY MUST GET A WORKOUT: never leave a train day with no selection. If no catalog workout satisfies the day's modality AND equipment constraints together, first relax the modality match (pick the closest available modality) before relaxing equipment; only relax equipment as a last resort, and pick the workout requiring the fewest missing items.
 - Strongly avoid any exercise/pattern in dislikes or frequently-rejected.
 - VARY movement_focus across the week: when multiple train days share the same modality, do NOT repeat the same "movement_focus" value on consecutive or multiple days if the catalog offers a different one that still fits — spread the training stimulus out instead of picking the same focus every time.
 
@@ -283,6 +292,28 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
       return entry;
     });
 
+    // Safety net: the LLM's selection is prompted to never skip a train day, but
+    // is not guaranteed to comply. Rather than silently ship a blank card (as
+    // happened before), fall back in code — first to any equipment-matched
+    // workout of the day's modality, then to any workout of that modality at
+    // all — so a train day is never left without a name.
+    const usedWorkoutIds = new Set(mapped.map((m: any) => m.workout_id).filter(Boolean));
+    for (const entry of mapped) {
+      if (entry.slot_type !== 'train' || entry.workout_id || (entry as any).locked) continue;
+      const modality = entry.modality;
+      const candidates = (workouts || []).filter((w: any) => w.modality === modality && !usedWorkoutIds.has(w.id));
+      const equipped = candidates.filter((w: any) => filteredWorkouts.some((f: any) => f.id === w.id));
+      const fallback = equipped[0] || candidates[0];
+      if (fallback) {
+        entry.workout_id = fallback.id;
+        entry.workout_name = fallback.name;
+        entry.reason = equipped[0]
+          ? 'Assigned automatically to keep every training day filled.'
+          : 'Assigned automatically — closest match; equipment may not fully match your setup for this week.';
+        usedWorkoutIds.add(fallback.id);
+      }
+    }
+
     const regenCount = (existingPlan?.regenerations_used || 0) + (isRegen ? 1 : 0);
     const payload = {
       user_id: user.id,
@@ -290,6 +321,7 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
       status: 'approved',
       context_answer: contextAnswer,
       context_notes: contextNotes,
+      setup_equipment: setupEquipment,
       workouts: mapped,
       regenerations_used: regenCount,
     };

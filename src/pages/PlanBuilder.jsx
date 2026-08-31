@@ -6,7 +6,7 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus, CheckCircle2 } from 'lucide-react';
-import { mondayOf, fmtISO, fmtDate, parseDate } from '@/lib/fitness';
+import { mondayOf, fmtISO, fmtDate, parseDate, ALL_EQUIPMENT } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import SwapShortlistSheet from '@/components/SwapShortlistSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
@@ -37,6 +37,11 @@ const FOLLOWUP_PLACEHOLDER = {
   recovery: 'e.g. Lower back is fatigued',
   schedule: 'e.g. Can only train Tue/Thu/Sat',
 };
+
+// These two contexts change what equipment is available for the week — captured
+// as a structured multi-select (not free text) so generation and "find an
+// alternative" can both enforce it reliably instead of parsing prose.
+const EQUIPMENT_CONTEXTS = new Set(['travelling', 'less_equipment']);
 
 const BUILDING_MESSAGES = [
   'Analyzing your training history…',
@@ -77,6 +82,7 @@ export default function PlanBuilder() {
   const [phase, setPhase] = useState('context');
   const [context, setContext] = useState('');
   const [followup, setFollowup] = useState('');
+  const [setupEquipment, setSetupEquipment] = useState([]);
   const [plan, setPlan] = useState(null);
   const [planId, setPlanId] = useState(null);
   const [summary, setSummary] = useState('');
@@ -105,6 +111,7 @@ export default function PlanBuilder() {
         setPlanId(existing[0].id);
         setContext(existing[0].context_answer || '');
         setFollowup(existing[0].context_notes || '');
+        setSetupEquipment(existing[0].setup_equipment || []);
         if (existing[0].workouts?.length) {
           setPlan({ workouts: existing[0].workouts, regenerations_used: existing[0].regenerations_used || 0 });
           setPhase('review');
@@ -128,7 +135,7 @@ export default function PlanBuilder() {
     setPhase('building'); setError('');
     try {
       const res = await supabase.functions.invoke('generateWeeklyPlan', {
-        body: { week_start_date: weekStart, context_answer: context, context_notes: followup },
+        body: { week_start_date: weekStart, context_answer: context, context_notes: followup, setup_equipment: EQUIPMENT_CONTEXTS.has(context) ? setupEquipment : null },
       });
       if (res.error) throw res.error;
       setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
@@ -156,7 +163,7 @@ export default function PlanBuilder() {
     setRegenerating(true); setError('');
     try {
       const res = await supabase.functions.invoke('generateWeeklyPlan', {
-        body: { week_start_date: weekStart, context_answer: context, context_notes: followup, regenerate: true },
+        body: { week_start_date: weekStart, context_answer: context, context_notes: followup, setup_equipment: EQUIPMENT_CONTEXTS.has(context) ? setupEquipment : null, regenerate: true },
       });
       if (res.error) throw res.error;
       setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
@@ -191,6 +198,7 @@ export default function PlanBuilder() {
           activity: slot.activity,
           modality: slot.modality,
           other_days: otherDays,
+          week_start_date: weekStart,
         },
       });
       if (res.error) throw res.error;
@@ -358,12 +366,32 @@ export default function PlanBuilder() {
           <p className="text-sm text-muted-foreground mb-4">We'll only ask what's changed.</p>
           <div className="space-y-2.5 mb-6">
             {CONTEXT_OPTIONS.map((o) => (
-              <button key={o.value} onClick={() => { setContext(o.value); setFollowup(''); setPhase('followup'); }} className={cn('w-full rounded-xl border px-4 py-3.5 text-left transition-all', context === o.value ? 'border-brand bg-brand/5' : 'border-border')}>
+              <button key={o.value} onClick={() => { setContext(o.value); setFollowup(''); setSetupEquipment([]); setPhase('followup'); }} className={cn('w-full rounded-xl border px-4 py-3.5 text-left transition-all', context === o.value ? 'border-brand bg-brand/5' : 'border-border')}>
                 <div className="flex items-center justify-between"><div><p className="font-medium">{o.label}</p><p className="text-xs text-muted-foreground mt-0.5">{o.desc}</p></div>{context === o.value && <Check className="h-5 w-5 text-brand" />}</div>
               </button>
             ))}
           </div>
-          {phase === 'followup' && context !== 'normal' && (
+          {phase === 'followup' && context !== 'normal' && EQUIPMENT_CONTEXTS.has(context) && (
+            <div className="animate-in slide-in-from-bottom-2 duration-300 mb-6">
+              <h3 className="font-medium mb-2">{FOLLOWUP_LABEL[context]}</h3>
+              <p className="text-xs text-muted-foreground mb-3">Select everything you'll have access to — this replaces your usual equipment for this week only. Leave everything unselected for bodyweight/running only.</p>
+              <div className="flex flex-wrap gap-2">
+                {ALL_EQUIPMENT.map((eq) => {
+                  const on = setupEquipment.includes(eq);
+                  return (
+                    <button
+                      key={eq}
+                      onClick={() => setSetupEquipment((prev) => (prev.includes(eq) ? prev.filter((e) => e !== eq) : [...prev, eq]))}
+                      className={cn('px-3 py-2 rounded-full text-xs font-medium border transition-colors', on ? 'bg-brand text-brand-foreground border-transparent' : 'border-border text-muted-foreground')}
+                    >
+                      {eq}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {phase === 'followup' && context !== 'normal' && !EQUIPMENT_CONTEXTS.has(context) && (
             <div className="animate-in slide-in-from-bottom-2 duration-300">
               <h3 className="font-medium mb-2">{FOLLOWUP_LABEL[context]}</h3>
               <textarea value={followup} onChange={(e) => setFollowup(e.target.value)} placeholder={FOLLOWUP_PLACEHOLDER[context]} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-brand mb-6" />

@@ -15,20 +15,34 @@ Deno.serve(async (req: Request) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
 
     const body = await req.json();
-    const { current_workout_id, day, other_days, focus, slot_type, activity, modality } = body;
+    const { current_workout_id, day, other_days, focus, slot_type, activity, modality, week_start_date } = body;
 
     const supabase = getServiceClient();
-    const [{ data: profiles }, { data: feedback }, { data: workouts }] = await Promise.all([
+    const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: weeklyPlans }] = await Promise.all([
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       supabase.from('workout_feedback').select('*').eq('user_id', user.id),
       supabase.from('workouts').select('*').eq('status', 'approved'),
+      week_start_date
+        ? supabase.from('weekly_plans').select('context_answer, context_notes, setup_equipment').eq('user_id', user.id).eq('week_start_date', week_start_date)
+        : Promise.resolve({ data: null as any }),
     ]);
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Profile not found' }, { status: 404, headers: corsHeaders });
 
+    // Respect this week's saved context/equipment override (set when the plan
+    // was generated, e.g. "travelling — bodyweight and running only") so an
+    // alternative never suggests something the athlete can't actually do this week.
+    const weekPlan = weeklyPlans?.[0];
+    const contextAnswer = weekPlan?.context_answer || '';
+    const contextNotes = weekPlan?.context_notes || '';
+    const setupEquipment: string[] | null = Array.isArray(weekPlan?.setup_equipment) && weekPlan.setup_equipment.length ? weekPlan.setup_equipment : null;
+    const effectiveProfile = setupEquipment
+      ? { ...profile, equipment_profile: 'custom', available_equipment: setupEquipment, custom_equipment: [] }
+      : profile;
+
     const current = current_workout_id ? (workouts || []).find((w: any) => w.id === current_workout_id) : null;
-    const profileContext = buildProfileContext(profile, feedback || []);
-    const filteredWorkouts = filterCatalogForSelection(workouts || [], profile, modality ? [modality] : [], slot_type === 'activity');
+    const profileContext = buildProfileContext(effectiveProfile, feedback || []);
+    const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, modality ? [modality] : [], slot_type === 'activity');
     const catalog = buildWorkoutCatalog(filteredWorkouts);
 
     const dayContext = slot_type === 'activity'
@@ -48,6 +62,7 @@ Deno.serve(async (req: Request) => {
     const prompt = `You are an expert coach. The athlete wants to ${current ? 'replace ONE workout' : 'fill one empty rest day'} in their weekly plan.
 
 ${profileContext}
+${contextAnswer ? `\nWEEK CONTEXT: ${contextAnswer}${contextNotes ? ' — ' + contextNotes : ''}${setupEquipment ? `\nWEEK EQUIPMENT OVERRIDE (replaces the athlete's normal equipment for THIS WEEK ONLY): ${setupEquipment.join(', ')}` : ''}` : ''}
 
 ${dayLine}
 
