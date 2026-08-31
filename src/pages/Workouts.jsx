@@ -58,6 +58,8 @@ export default function Workouts() {
   const [loadedSetsFor, setLoadedSetsFor] = useState(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [searchResults, setSearchResults] = useState(null); // null = not searching; array = server-matched results
+  const [searchLoading, setSearchLoading] = useState(false);
   const sentinelRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const lastScrollTopRef = useRef(0);
@@ -101,7 +103,7 @@ export default function Workouts() {
   };
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || loading) return;
+    if (loadingMore || !hasMore || loading || searchResults !== null) return;
     setLoadingMore(true);
     try {
       const lastWorkout = workouts[workouts.length - 1];
@@ -125,7 +127,7 @@ export default function Workouts() {
     } finally {
       setLoadingMore(false);
     }
-  }, [workouts, loadingMore, hasMore, loading]);
+  }, [workouts, loadingMore, hasMore, loading, searchResults]);
 
   const loadWorkoutSets = async (workout) => {
     if (!workout || loadedSetsFor.has(workout.workout_id)) return;
@@ -167,6 +169,38 @@ export default function Workouts() {
     loadWorkouts();
   }, []);
 
+  // The paginated `workouts` list only holds whatever's been scrolled into
+  // view so far, so filtering it client-side made the search box silently
+  // miss anything not yet loaded — with the "no results" list empty, the
+  // infinite-scroll sentinel sat visible with nothing above it, kept firing
+  // loadMore, and the UI never settled on a "no results" state. A non-empty
+  // query now searches the whole table server-side instead.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('ownership_type', 'official')
+        .eq('status', 'approved')
+        .ilike('name', `%${trimmed}%`)
+        .order('name')
+        .limit(100);
+      if (cancelled) return;
+      const results = data || [];
+      setSearchResults(results);
+      await loadStructureData(results);
+      if (!cancelled) setSearchLoading(false);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query]);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -186,15 +220,14 @@ export default function Workouts() {
     }
   }, [selected, structureLoading, loadedSetsFor, blocksByWorkout]);
 
-  const filtered = useMemo(() => workouts.filter((w) => {
+  const filtered = useMemo(() => (searchResults ?? workouts).filter((w) => {
     const matchesRegion = running ? isRunningWorkout(w) : (region === 'All' || w.workout_category === region);
     const matchesDifficulty = difficulty === 'All' || w.difficulty === difficulty.toLowerCase();
     const matchesType = workoutType === 'All' || WORKOUT_FORMATS
       .filter((f) => f.label === workoutType)
       .some((f) => workoutFormatMatches(w.workout_format, f.value));
-    const matchesQuery = !query || (w.name || '').toLowerCase().includes(query.toLowerCase());
-    return matchesRegion && matchesDifficulty && matchesType && matchesQuery;
-  }), [workouts, region, running, difficulty, workoutType, query]);
+    return matchesRegion && matchesDifficulty && matchesType;
+  }), [workouts, searchResults, region, running, difficulty, workoutType]);
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -374,7 +407,7 @@ export default function Workouts() {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-3 pb-4" onScroll={handleListScroll}>
-      {loading ? (
+      {loading || (searchLoading && searchResults === null) ? (
         <div className="flex justify-center py-20">
           <div className="w-7 h-7 border-4 border-muted border-t-brand rounded-full animate-spin" />
         </div>
@@ -417,11 +450,13 @@ export default function Workouts() {
               </Card>
             </button>
           ))}
-          {filtered.length === 0 && !loadingMore && (
+          {filtered.length === 0 && !loadingMore && !searchLoading && (
             <p className="text-center text-sm text-muted-foreground py-16">No workouts found.</p>
           )}
           <div ref={sentinelRef} className="h-10 flex items-center justify-center">
-            {loadingMore ? (
+            {searchResults !== null ? (
+              searchLoading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : null
+            ) : loadingMore ? (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             ) : !hasMore && filtered.length > 0 ? (
               <p className="text-xs text-muted-foreground">No more workouts</p>
