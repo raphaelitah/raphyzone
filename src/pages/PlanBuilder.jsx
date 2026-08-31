@@ -499,6 +499,7 @@ export default function PlanBuilder() {
         alternatives={suggestAlternatives}
         currentName={suggestFor !== null ? plan?.workouts[suggestFor]?.activity || 'your activity' : ''}
         onPick={useSuggestion}
+        onSearchLibrary={() => { const idx = suggestFor; setSuggestFor(null); setSearchFor(idx); }}
       />
 
       <WorkoutDetailSheet
