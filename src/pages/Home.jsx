@@ -746,6 +746,7 @@ export default function Home() {
         currentName={swapFor?.workout_name || 'this workout'}
         onPick={pickAlternative}
         onViewDetails={viewSwapDetails}
+        onSearchLibrary={() => { const s = swapFor; setSwapFor(null); setSwapAlternatives([]); setSearchFor(s); }}
       />
 
       <RestToWorkoutChoiceSheet
