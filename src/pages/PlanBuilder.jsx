@@ -51,6 +51,7 @@ const BUILDING_MESSAGES = [
 ];
 const BUILDING_FINAL_MESSAGE = 'Putting the final touches on your plan…';
 
+/** @returns {[string, React.Dispatch<React.SetStateAction<string>>]} */
 function useRotatingLoadingText(active) {
   const [text, setText] = useState(BUILDING_MESSAGES[0]);
   useEffect(() => {
