@@ -735,6 +735,7 @@ export default function Home() {
         currentName={suggestFor?.activity || 'your activity'}
         onPick={(alt) => { assignWorkoutToSlot(alt.workout_id, alt.workout_name, alt.reason, suggestFor); setSuggestFor(null); }}
         onViewDetails={viewSuggestionDetails}
+        onSearchLibrary={() => { const s = suggestFor; setSuggestFor(null); setSearchFor(s); }}
         keepLabel="Keep my activity"
       />
 
@@ -746,6 +747,7 @@ export default function Home() {
         currentName={swapFor?.workout_name || 'this workout'}
         onPick={pickAlternative}
         onViewDetails={viewSwapDetails}
+        onSearchLibrary={() => { const s = swapFor; setSwapFor(null); setSwapAlternatives([]); setSearchFor(s); }}
       />
 
       <RestToWorkoutChoiceSheet
