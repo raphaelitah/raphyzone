@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus } from 'lucide-react';
+import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { WORKOUT_DIFFICULTY_META, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
@@ -32,6 +32,7 @@ import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
 import WorkoutEditorSheet from '@/components/WorkoutEditorSheet';
 import CreateWorkoutSheet from '@/components/CreateWorkoutSheet';
 import WorkoutFilters from '@/components/WorkoutFilters';
+import AddToPlanSheet from '@/components/AddToPlanSheet';
 
 const BATCH_SIZE = 20;
 
@@ -54,6 +55,7 @@ export default function Workouts() {
   const [deletingBe, setDeletingBe] = useState(null);
   const [editingWorkout, setEditingWorkout] = useState(null);
   const [creatingWorkout, setCreatingWorkout] = useState(false);
+  const [addingToPlan, setAddingToPlan] = useState(null);
   const [structureLoading, setStructureLoading] = useState(false);
   const [loadedSetsFor, setLoadedSetsFor] = useState(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
@@ -629,6 +631,13 @@ export default function Workouts() {
                   </Button>
                 )}
                 <Button
+                  variant="outline"
+                  onClick={() => setAddingToPlan(selected)}
+                  className="w-full rounded-xl h-12"
+                >
+                  <CalendarPlus className="h-4 w-4 mr-2" /> Add to weekly plan
+                </Button>
+                <Button
                   asChild
                   className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90"
                 >
@@ -678,6 +687,12 @@ export default function Workouts() {
         open={creatingWorkout}
         onOpenChange={setCreatingWorkout}
         onSubmitted={refreshData}
+      />
+
+      <AddToPlanSheet
+        workout={addingToPlan}
+        open={!!addingToPlan}
+        onOpenChange={(o) => !o && setAddingToPlan(null)}
       />
     </div>
   );
