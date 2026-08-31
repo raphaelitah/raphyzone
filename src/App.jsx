@@ -18,6 +18,7 @@ import Progress from '@/pages/Progress';
 import Profile from '@/pages/Profile';
 import Onboarding from '@/pages/Onboarding';
 import PlanBuilder from '@/pages/PlanBuilder';
+import PlanHistory from '@/pages/PlanHistory';
 import StrengthCalibration from '@/pages/StrengthCalibration';
 import WorkoutExecution from '@/pages/WorkoutExecution';
 import AdminReview from '@/pages/AdminReview';
@@ -60,6 +61,7 @@ const AuthenticatedApp = () => {
         <Route path="/progress" element={<Progress />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/plan" element={<PlanBuilder />} />
+        <Route path="/plan-history/:weekStart?" element={<PlanHistory />} />
         <Route path="/workout/:workoutId" element={<WorkoutExecution />} />
         <Route path="/admin-review" element={<AdminReview />} />
         <Route path="/admin-taxonomy" element={<AdminTaxonomy />} />

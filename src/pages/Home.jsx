@@ -543,10 +543,15 @@ export default function Home() {
         <div className="mt-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">This week</h3>
-            <button onClick={regenerate} disabled={regenerating} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand disabled:opacity-40 transition-colors">
-              {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {regenerating ? <span key={regeneratingLabel} className="animate-in fade-in duration-200">{regeneratingLabel}</span> : 'Regenerate plan'}
-            </button>
+            <div className="flex items-center gap-3">
+              <Link to="/plan-history" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand transition-colors">
+                <Calendar className="h-3.5 w-3.5" /> Past weeks
+              </Link>
+              <button onClick={regenerate} disabled={regenerating} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-brand disabled:opacity-40 transition-colors">
+                {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                {regenerating ? <span key={regeneratingLabel} className="animate-in fade-in duration-200">{regeneratingLabel}</span> : 'Regenerate plan'}
+              </button>
+            </div>
           </div>
           <div className="space-y-2.5">
             {plan.workouts?.map((slot, i) => {

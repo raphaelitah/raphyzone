@@ -16,7 +16,7 @@ import {
   getWorkoutMetaLine,
 } from '@/lib/workoutStructure';
 
-export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null, warmup = null }) {
+export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null, warmup = null, startDate = null }) {
   const [blocksByWorkout, setBlocksByWorkout] = useState({});
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
@@ -235,7 +235,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
 
           {!selectMode && (
             <Button asChild className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-              <Link to={`/workout/${workout.id}`} onClick={() => onOpenChange(false)}>
+              <Link to={`/workout/${workout.id}${startDate ? `?date=${startDate}` : ''}`} onClick={() => onOpenChange(false)}>
                 <Play className="h-4 w-4 mr-2" /> Start workout
               </Link>
             </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock } from 'lucide-react';
-import { DIFFICULTY_META, mondayOf, fmtISO, isRunningExercise } from '@/lib/fitness';
+import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
@@ -44,6 +44,8 @@ export default function WorkoutExecution() {
   const { workoutId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetDate = searchParams.get('date') || fmtISO(new Date());
   const [workout, setWorkout] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [index, setIndex] = useState(0);
@@ -57,6 +59,8 @@ export default function WorkoutExecution() {
   const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [conflictSession, setConflictSession] = useState(null);
+  const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
   const [blockLogPrompt, setBlockLogPrompt] = useState(null);
@@ -95,106 +99,144 @@ export default function WorkoutExecution() {
   // Reset per-exercise enter time whenever the active exercise changes
   useEffect(() => { enterTimeRef.current = Date.now(); }, [index]);
 
+  const pendingLoadRef = useRef(null);
+
+  const finishLoadingWorkout = async (sess, w, plans, active) => {
+    sessionIdRef.current = sess.id;
+    setSession(sess);
+    const startMs = sess.start_timestamp ? new Date(sess.start_timestamp).getTime() : Date.now();
+    sessionStartMsRef.current = startMs;
+    setSessionStartMs(startMs);
+    enterTimeRef.current = Date.now();
+
+    // Load any already-saved exercise sessions for hydration
+    try {
+      const { data } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', sess.id);
+      loadedExerciseSessionsRef.current = data || [];
+    } catch { loadedExerciseSessionsRef.current = []; }
+    if (!active()) return;
+
+    setLoading(false);
+
+    const currentPlan = (plans || []).find((p) => p.status === 'approved') || plans?.[0] || null;
+    setPlan(currentPlan);
+    const planSlot = currentPlan?.workouts?.find((s) => s.workout_id === workoutId);
+    const exerciseWeights = planSlot?.exercise_weights || {};
+
+    const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', w.workout_id).order('order_index').limit(500);
+    const blocks = blocksData || [];
+    if (!active()) return;
+    const blockIds = blocks.map((b) => b.block_id);
+    const blockExs = blockIds.length
+      ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
+      : [];
+    if (!active()) return;
+    const exerciseBlockExs = blockExs.filter((be) => be.step_type === 'exercise');
+    const beIds = exerciseBlockExs.map((be) => be.block_exercise_id);
+    const exerciseCodes = [...new Set(exerciseBlockExs.map((be) => be.exercise_id).filter(Boolean))];
+    const [{ data: setsData }, { data: referencedExsData }] = await Promise.all([
+      beIds.length ? supabase.from('prescribed_sets').select('*').in('block_exercise_id', beIds) : Promise.resolve({ data: [] }),
+      exerciseCodes.length ? supabase.from('exercises').select('*').in('exercise_code', exerciseCodes) : Promise.resolve({ data: [] }),
+    ]);
+    const sets = setsData || [];
+    const referencedExs = referencedExsData || [];
+    if (!active()) return;
+    const blocksByWorkout = buildBlocksByWorkout(blocks);
+    const blockExercisesByBlock = buildBlockExercisesByBlock(blockExs);
+    const setsByBlockExercise = buildSetsByBlockExercise(sets);
+    const exerciseMap = buildExerciseMapByCode(referencedExs);
+    const merged = buildFlatExerciseList(w, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
+    const finalExercises = merged.map((e) => ({
+      ...e,
+      target_weight: (e.exercise_id && exerciseWeights[e.exercise_id] != null) ? exerciseWeights[e.exercise_id] : null,
+    }));
+    setExercises(finalExercises);
+
+    // Hydrate logs + per-exercise time from any previously saved exercise sessions
+    const hydrated = {};
+    loadedExerciseSessionsRef.current.forEach((es) => {
+      const ex = finalExercises.find((e) => e.exercise_id === es.exercise_id);
+      if (ex) {
+        hydrated[ex.key] = {
+          max_weight: es.max_weight || null,
+          bodyweight: es.max_weight === 0,
+          distance_km: es.distance_km ?? null,
+          duration_seconds: es.duration_seconds ?? null,
+          difficulty: es.difficulty,
+          note: es.note,
+        };
+        exerciseSessionIdsRef.current[ex.key] = es.id;
+        exerciseElapsedRef.current[ex.key] = es.elapsed_seconds || 0;
+      }
+    });
+    if (Object.keys(hydrated).length) setLogs(hydrated);
+  };
+
   useEffect(() => {
-    let active = true;
+    let alive = true;
+    const active = () => alive;
     (async () => {
       try {
-        const monday = fmtISO(mondayOf(new Date()));
-        const [{ data: w }, { data: plans }, { data: existing }] = await Promise.all([
+        const monday = fmtISO(mondayOf(parseDate(targetDate)));
+        const [{ data: w }, { data: plans }] = await Promise.all([
           supabase.from('workouts').select('*').eq('id', workoutId).single(),
           user ? supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', monday) : Promise.resolve({ data: [] }),
-          user
-            ? supabase.from('workout_sessions').select('*').eq('user_id', user.id).eq('workout_id', workoutId).eq('status', 'in_progress').order('created_date', { ascending: false }).limit(1)
-            : Promise.resolve({ data: [] }),
         ]);
-        if (!active) return;
+        if (!active()) return;
         setWorkout(w);
 
-        // Resume or create an in-progress session so the timer + logs persist across refresh/navigation
-        let sess = existing?.[0];
-        if (!sess && user) {
+        if (!user) { setLoading(false); return; }
+
+        const { data: inProgress } = await supabase.from('workout_sessions').select('*').eq('user_id', user.id).eq('status', 'in_progress').order('created_date', { ascending: false });
+        if (!active()) return;
+        const sessions = inProgress || [];
+        let sess = sessions.find((s) => s.workout_id === workoutId && s.date === targetDate);
+        const other = sessions.find((s) => s.id !== sess?.id);
+
+        if (!sess && other) {
+          // Another workout is already in progress — hold off starting a new one until the user decides.
+          pendingLoadRef.current = { w, plans };
+          setLoading(false);
+          setConflictSession(other);
+          return;
+        }
+
+        if (!sess) {
           const { data: created } = await supabase.from('workout_sessions').insert({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
-            date: new Date().toISOString().slice(0, 10), status: 'in_progress',
+            date: targetDate, status: 'in_progress',
             start_timestamp: new Date().toISOString(),
           }).select().single();
           sess = created;
         }
-        if (!active || !sess) return;
-        sessionIdRef.current = sess.id;
-        setSession(sess);
-        const startMs = sess.start_timestamp ? new Date(sess.start_timestamp).getTime() : Date.now();
-        sessionStartMsRef.current = startMs;
-        setSessionStartMs(startMs);
-        enterTimeRef.current = Date.now();
-
-        // Load any already-saved exercise sessions for hydration
-        try {
-          const { data } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', sess.id);
-          loadedExerciseSessionsRef.current = data || [];
-        } catch { loadedExerciseSessionsRef.current = []; }
-        if (!active) return;
-
-        setLoading(false);
-
-        const currentPlan = (plans || []).find((p) => p.status === 'approved') || plans?.[0] || null;
-        setPlan(currentPlan);
-        const planSlot = currentPlan?.workouts?.find((s) => s.workout_id === workoutId);
-        const exerciseWeights = planSlot?.exercise_weights || {};
-
-        const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', w.workout_id).order('order_index').limit(500);
-        const blocks = blocksData || [];
-        if (!active) return;
-        const blockIds = blocks.map((b) => b.block_id);
-        const blockExs = blockIds.length
-          ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
-          : [];
-        if (!active) return;
-        const exerciseBlockExs = blockExs.filter((be) => be.step_type === 'exercise');
-        const beIds = exerciseBlockExs.map((be) => be.block_exercise_id);
-        const exerciseCodes = [...new Set(exerciseBlockExs.map((be) => be.exercise_id).filter(Boolean))];
-        const [{ data: setsData }, { data: referencedExsData }] = await Promise.all([
-          beIds.length ? supabase.from('prescribed_sets').select('*').in('block_exercise_id', beIds) : Promise.resolve({ data: [] }),
-          exerciseCodes.length ? supabase.from('exercises').select('*').in('exercise_code', exerciseCodes) : Promise.resolve({ data: [] }),
-        ]);
-        const sets = setsData || [];
-        const referencedExs = referencedExsData || [];
-        if (!active) return;
-        const blocksByWorkout = buildBlocksByWorkout(blocks);
-        const blockExercisesByBlock = buildBlockExercisesByBlock(blockExs);
-        const setsByBlockExercise = buildSetsByBlockExercise(sets);
-        const exerciseMap = buildExerciseMapByCode(referencedExs);
-        const merged = buildFlatExerciseList(w, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
-        const finalExercises = merged.map((e) => ({
-          ...e,
-          target_weight: (e.exercise_id && exerciseWeights[e.exercise_id] != null) ? exerciseWeights[e.exercise_id] : null,
-        }));
-        setExercises(finalExercises);
-
-        // Hydrate logs + per-exercise time from any previously saved exercise sessions
-        const hydrated = {};
-        loadedExerciseSessionsRef.current.forEach((es) => {
-          const ex = finalExercises.find((e) => e.exercise_id === es.exercise_id);
-          if (ex) {
-            hydrated[ex.key] = {
-              max_weight: es.max_weight || null,
-              bodyweight: es.max_weight === 0,
-              distance_km: es.distance_km ?? null,
-              duration_seconds: es.duration_seconds ?? null,
-              difficulty: es.difficulty,
-              note: es.note,
-            };
-            exerciseSessionIdsRef.current[ex.key] = es.id;
-            exerciseElapsedRef.current[ex.key] = es.elapsed_seconds || 0;
-          }
-        });
-        if (Object.keys(hydrated).length) setLogs(hydrated);
+        if (!active() || !sess) return;
+        await finishLoadingWorkout(sess, w, plans, active);
       } catch {
-        if (active) setLoading(false);
+        if (active()) setLoading(false);
       }
     })();
-    return () => { active = false; };
-  }, [workoutId, user]);
+    return () => { alive = false; };
+  }, [workoutId, user, targetDate]);
+
+  const endConflictAndStart = async () => {
+    if (!conflictSession || !user) return;
+    setEndingConflict(true);
+    try {
+      await supabase.from('workout_sessions').update({ status: 'abandoned' }).eq('id', conflictSession.id);
+      const { w, plans } = pendingLoadRef.current || {};
+      const { data: created } = await supabase.from('workout_sessions').insert({
+        user_id: user.id, workout_id: workoutId, workout_name: w?.name,
+        date: targetDate, status: 'in_progress',
+        start_timestamp: new Date().toISOString(),
+      }).select().single();
+      setConflictSession(null);
+      pendingLoadRef.current = null;
+      setLoading(true);
+      await finishLoadingWorkout(created, w, plans, () => true);
+    } finally {
+      setEndingConflict(false);
+    }
+  };
 
   const current = exercises[index];
   const totalElapsed = sessionStartMs ? (Date.now() - sessionStartMs) / 1000 : 0;
@@ -388,10 +430,9 @@ export default function WorkoutExecution() {
     exerciseElapsedRef.current = {};
     setIndex(0);
     indexRef.current = 0;
-    const dateStr = new Date().toISOString().slice(0, 10);
     const { data: s } = await supabase.from('workout_sessions').insert({
       user_id: userRef.current.id, workout_id: workoutId, workout_name: workoutRef.current?.name,
-      date: dateStr, status: 'in_progress', start_timestamp: new Date().toISOString(),
+      date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
     }).select().single();
     sessionIdRef.current = s.id;
     setSession(s);
@@ -508,6 +549,29 @@ export default function WorkoutExecution() {
       navigate('/progress');
     } finally { setSaving(false); }
   };
+
+  if (conflictSession) {
+    return (
+      <AlertDialog open>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Workout already in progress</AlertDialogTitle>
+            <AlertDialogDescription>
+              You still have &quot;{conflictSession.workout_name}&quot; in progress. End it before starting a new workout, or go back and finish it first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => navigate(`/workout/${conflictSession.workout_id}?date=${conflictSession.date}`)}>
+              Resume it instead
+            </AlertDialogCancel>
+            <AlertDialogAction disabled={endingConflict} onClick={endConflictAndStart}>
+              {endingConflict ? 'Ending…' : 'End it & start this one'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
   if (!workout) return <div className="p-6 text-center text-muted-foreground">Workout not found.</div>;
