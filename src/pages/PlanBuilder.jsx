@@ -473,9 +473,9 @@ export default function PlanBuilder() {
               {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Rebuild plan
             </button>
           </div>
-          <div className="fixed bottom-0 inset-x-0 max-w-md mx-auto px-5 py-4 bg-background border-t border-border">
+          <div className="fixed bottom-16 inset-x-0 z-50 max-w-md mx-auto px-5 py-4 bg-background border-t border-border">
             <Button onClick={approve} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-              <Check className="h-4 w-4 mr-2" /> Done
+              <Check className="h-4 w-4 mr-2" /> Approve plan
             </Button>
           </div>
         </div>
