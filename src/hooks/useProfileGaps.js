@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { PROFILE_GAPS } from '@/lib/profileGaps';
@@ -27,6 +27,7 @@ function addDismissed(userId, id) {
  */
 export function useProfileGaps(location, context = {}) {
   const { profile, reload } = useAthleteProfile();
+  const [dismissedVersion, setDismissedVersion] = useState(0);
   const userId = profile?.user_id;
   const activityKey = context.activity;
   const dayKey = context.day;
@@ -41,7 +42,7 @@ export function useProfileGaps(location, context = {}) {
       if (dismissed.has(idFor(g))) return false;
       return g.isMissing(profile, context);
     }) || null;
-  }, [profile, userId, location, activityKey, dayKey]);
+  }, [profile, userId, location, activityKey, dayKey, dismissedVersion]);
 
   const gapId = gap ? idFor(gap) : null;
 
@@ -53,10 +54,12 @@ export function useProfileGaps(location, context = {}) {
       await reload();
     }
     if (userId && gapId) addDismissed(userId, gapId);
+    setDismissedVersion((v) => v + 1);
   }, [gap, gapId, profile, context, reload, userId]);
 
   const dismiss = useCallback(() => {
     if (userId && gapId) addDismissed(userId, gapId);
+    setDismissedVersion((v) => v + 1);
   }, [userId, gapId]);
 
   return { gap, profile, context, answer, dismiss };
