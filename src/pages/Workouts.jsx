@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { WORKOUT_DIFFICULTY_META, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
@@ -458,9 +459,7 @@ export default function Workouts() {
                                                 </p>
                                               </div>
                                               <div className="flex items-center gap-1">
-                                                <button onClick={() => setEditingBe(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
-                                                  <Pencil className="h-3.5 w-3.5" />
-                                                </button>
+                                                <IconButton onClick={() => setEditingBe(be)} icon={Pencil} />
                                                 <button onClick={() => setDeletingBe(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                                                   <Trash2 className="h-3.5 w-3.5" />
                                                 </button>

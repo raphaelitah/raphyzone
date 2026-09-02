@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Pencil, Trash2, Plus, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function BlockEditor({
   block,
@@ -71,9 +72,7 @@ export default function BlockEditor({
         <button onClick={() => onMoveBlock(block, 'down')} disabled={isLast} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none">
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        <button onClick={() => setEditing(!editing)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
+        <IconButton onClick={() => setEditing(!editing)} icon={Pencil} />
         <button onClick={() => onDeleteBlock(block)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -148,9 +147,7 @@ export default function BlockEditor({
                             {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
                           </p>
                         </div>
-                        <button onClick={() => onEditExercise(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        <IconButton onClick={() => onEditExercise(be)} icon={Pencil} />
                         <button onClick={() => onDeleteExercise(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
