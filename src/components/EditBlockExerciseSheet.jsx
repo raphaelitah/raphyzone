@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +11,12 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
     prescription_value: '',
     load_value: '',
     notes: '',
+    speed: '',
+    incline: '',
   });
   const [saving, setSaving] = useState(false);
+  const [exerciseEquipment, setExerciseEquipment] = useState(null);
+  const isTreadmill = exerciseEquipment === 'Treadmill';
 
   useEffect(() => {
     if (blockExercise) {
@@ -21,9 +26,23 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
         prescription_value: currentReps,
         load_value: blockExercise.load_value || '',
         notes: blockExercise.notes || '',
+        speed: blockExercise.speed?.toString() || '',
+        incline: blockExercise.incline?.toString() || '',
       });
     }
   }, [blockExercise, prescribedSets]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setExerciseEquipment(null);
+    if (blockExercise?.exercise_id) {
+      supabase.from('exercises').select('equipment').eq('exercise_code', blockExercise.exercise_id).single()
+        .then(({ data }) => {
+          if (!cancelled) setExerciseEquipment(data?.equipment || null);
+        });
+    }
+    return () => { cancelled = true; };
+  }, [blockExercise]);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -72,6 +91,32 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
                   className="mt-1"
                 />
               </div>
+              {isTreadmill && (
+                <>
+                  <div>
+                    <Label>Speed</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={form.speed}
+                      onChange={(e) => setForm({ ...form, speed: e.target.value })}
+                      placeholder="e.g. 3.2"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Incline</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={form.incline}
+                      onChange={(e) => setForm({ ...form, incline: e.target.value })}
+                      placeholder="e.g. 10"
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <Label>Notes</Label>
                 <textarea

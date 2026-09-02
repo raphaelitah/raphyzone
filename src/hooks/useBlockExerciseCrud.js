@@ -44,6 +44,8 @@ export function useBlockExerciseCrud({
       prescription_value: formData.prescription_value,
       load_value: formData.load_value,
       notes: formData.notes,
+      speed: formData.speed === '' ? null : formData.speed,
+      incline: formData.incline === '' ? null : formData.incline,
     }).eq('id', editingBe.id).select().single();
     let sets = (setsByBlockExercise[editingBe.block_exercise_id] || []).slice().sort(
       (a, b) => (a.set_number || 0) - (b.set_number || 0)
