@@ -5,11 +5,19 @@ Regression + common-action coverage against the real Supabase-backed app.
 ## Run
 
 ```bash
-npm run test:e2e        # headless
-npm run test:e2e:ui     # interactive UI mode
+npm run test:e2e          # headless, mobile-chrome only (the app's primary use case)
+npm run test:e2e:mobile   # mobile-chrome + mobile-safari
+npm run test:e2e:desktop  # desktop chromium
+npm run test:e2e:all      # every project
+npm run test:e2e:ui       # interactive UI mode
 ```
 
 `playwright.config.js` starts `npm run dev` automatically and points at `http://localhost:5173`.
+
+This app is used almost exclusively on mobile, so `mobile-chrome` (Pixel 5 viewport) is the
+default project run by `npm run test:e2e`, with `mobile-safari` (iPhone 13 viewport) and
+desktop `chromium` available as additional projects. Running `test:e2e:all` triples the number
+of real Supabase sign-ins per run — mind the password-auth rate limit noted below.
 
 ## Authenticated tests
 
@@ -43,6 +51,8 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
 - `admin-taxonomy.spec.js` — non-admin redirect, add/edit/delete a taxonomy term
 - `admin-review.spec.js` — non-admin redirect, approve/reject a seeded pending exercise or
   workout submission
+- `mobile-rendering.spec.js` — checks every main page for horizontal overflow at mobile
+  viewport width and confirms bottom-nav tap targets and sheet dialogs stay usable on a phone
 
 Add one spec file per flow area as coverage grows.
 

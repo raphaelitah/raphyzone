@@ -15,6 +15,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // App is used almost exclusively on mobile — mobile viewport is the primary target.
+    { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } },
+    { name: 'mobile-safari', use: { ...devices['iPhone 13'] } },
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
