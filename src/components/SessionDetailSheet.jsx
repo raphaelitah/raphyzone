@@ -255,7 +255,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <YAxis domain={yAxisDomain} allowDecimals tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
+                      <YAxis domain={yAxisDomain} allowDecimals tickFormatter={(v) => Number(v.toFixed(2))} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                       <Tooltip
                         contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }}
                         formatter={(value, name) => {
