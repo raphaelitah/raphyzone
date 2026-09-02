@@ -5,11 +5,12 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { Dumbbell, Flame, CheckCircle2, Sparkles, Trophy, Loader2, Footprints, ChevronDown } from 'lucide-react';
+import { Dumbbell, Flame, CheckCircle2, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
 import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
 import SessionDetailSheet from '@/components/SessionDetailSheet';
+import ExpandableSection from '@/components/ExpandableSection';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
 
@@ -201,52 +202,34 @@ export default function Progress() {
 function PersonalRecordsSection({ prs, trendByExercise }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? prs : prs.slice(0, 3);
-  const canToggle = prs.length > 3;
   return (
-    <div>
-      <button
-        onClick={() => canToggle && setExpanded((e) => !e)}
-        className={cn('w-full flex items-center justify-between mb-2', canToggle && 'cursor-pointer group')}
-        data-state={expanded ? 'open' : 'closed'}
-        disabled={!canToggle}
-      >
-        <h2 className="font-semibold flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>
-        {canToggle && (
-          <span className="flex items-center gap-1 text-xs font-medium text-brand">
-            {expanded ? 'See less' : `See more (${prs.length - 3})`}
-            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-          </span>
-        )}
-      </button>
+    <ExpandableSection
+      title={<h2 className="font-semibold flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>}
+      expanded={expanded}
+      onToggle={() => setExpanded((e) => !e)}
+      canToggle={prs.length > 3}
+      moreCount={prs.length - 3}
+    >
       <div className="space-y-2">
         {prs.length ? visible.map((p) => (
           <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
         )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
       </div>
-    </div>
+    </ExpandableSection>
   );
 }
 
 function RecentWorkoutsSection({ completed, runningWorkoutIds, onSelect }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? completed.slice(0, 10) : completed.slice(0, 3);
-  const canToggle = completed.length > 3;
   return (
-    <div>
-      <button
-        onClick={() => canToggle && setExpanded((e) => !e)}
-        className={cn('w-full flex items-center justify-between mb-2', canToggle && 'cursor-pointer group')}
-        data-state={expanded ? 'open' : 'closed'}
-        disabled={!canToggle}
-      >
-        <h2 className="font-semibold">Recent workouts</h2>
-        {canToggle && (
-          <span className="flex items-center gap-1 text-xs font-medium text-brand">
-            {expanded ? 'See less' : `See more (${Math.min(completed.length, 10) - 3})`}
-            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-          </span>
-        )}
-      </button>
+    <ExpandableSection
+      title={<h2 className="font-semibold">Recent workouts</h2>}
+      expanded={expanded}
+      onToggle={() => setExpanded((e) => !e)}
+      canToggle={completed.length > 3}
+      moreCount={Math.min(completed.length, 10) - 3}
+    >
       <div className="space-y-2">
         {visible.map((s) => (
           <button key={s.id} onClick={() => onSelect(s)} className="w-full text-left">
@@ -264,7 +247,7 @@ function RecentWorkoutsSection({ completed, runningWorkoutIds, onSelect }) {
         ))}
         {completed.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No workouts logged yet.</p>}
       </div>
-    </div>
+    </ExpandableSection>
   );
 }
 

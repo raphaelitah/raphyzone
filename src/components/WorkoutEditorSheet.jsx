@@ -4,16 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { Plus, Loader2, ChevronDown } from 'lucide-react';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
@@ -23,6 +14,7 @@ import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 import BlockEditor from '@/components/BlockEditor';
 import ExercisePickerSheet from '@/components/ExercisePickerSheet';
 import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
+import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/useBlockExerciseCrud';
 
 export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChanged }) {
   const [blocks, setBlocks] = useState([]);
@@ -34,10 +26,19 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
   const [showWorkoutEdit, setShowWorkoutEdit] = useState(false);
   const [savingWorkout, setSavingWorkout] = useState(false);
 
-  const [editingBe, setEditingBe] = useState(null);
-  const [deletingBe, setDeletingBe] = useState(null);
   const [deletingBlock, setDeletingBlock] = useState(null);
   const [pickerBlock, setPickerBlock] = useState(null);
+
+  const {
+    editingBe, setEditingBe, deletingBe, setDeletingBe,
+    handleDeleteBe, handleSaveBe, handleDragEnd,
+  } = useBlockExerciseCrud({
+    blockExercisesByBlock,
+    setBlockExercisesByBlock,
+    setsByBlockExercise,
+    setSetsByBlockExercise,
+    onChanged: () => recomputeAndSaveFormatLabel(workout),
+  });
 
   const loadData = async () => {
     if (!workout) return;
@@ -140,17 +141,10 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
   };
 
   const handleMoveBlock = async (block, direction) => {
-    const sorted = [...blocks].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-    const currentIndex = sorted.findIndex((b) => b.id === block.id);
-    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (swapIndex < 0 || swapIndex >= sorted.length) return;
-    const newBlocks = [...sorted];
-    [newBlocks[currentIndex], newBlocks[swapIndex]] = [newBlocks[swapIndex], newBlocks[currentIndex]];
-    const relabeled = newBlocks.map((b, i) => ({ ...b, block_label: String.fromCharCode(65 + i), order_index: i }));
+    const relabeled = reorderBlocks(blocks, block.id, direction);
+    if (!relabeled) return;
     setBlocks(relabeled);
-    await Promise.all(
-      relabeled.map((b) => supabase.from('workout_blocks').update({ block_label: b.block_label, order_index: b.order_index }).eq('id', b.id))
-    );
+    await persistBlockOrder(relabeled);
   };
 
   const handleDeleteBlock = async () => {
@@ -229,124 +223,6 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
     }
     await recomputeAndSaveFormatLabel(workout);
     setPickerBlock(null);
-  };
-
-  const handleDeleteBe = async () => {
-    if (!deletingBe) return;
-    const sets = setsByBlockExercise[deletingBe.block_exercise_id] || [];
-    if (sets.length) {
-      await supabase.from('prescribed_sets').delete().in('id', sets.map((s) => s.id));
-    }
-    await supabase.from('block_exercises').delete().eq('id', deletingBe.id);
-    setBlockExercisesByBlock((prev) => {
-      const next = { ...prev };
-      next[deletingBe.block_id] = (next[deletingBe.block_id] || []).filter(
-        (be) => be.block_exercise_id !== deletingBe.block_exercise_id
-      );
-      return next;
-    });
-    setSetsByBlockExercise((prev) => {
-      const next = { ...prev };
-      delete next[deletingBe.block_exercise_id];
-      return next;
-    });
-    await recomputeAndSaveFormatLabel(workout);
-    setDeletingBe(null);
-  };
-
-  const handleSaveBe = async (formData) => {
-    const { data: fresh } = await supabase.from('block_exercises').update({
-      prescription_value: formData.prescription_value,
-      load_value: formData.load_value,
-      notes: formData.notes,
-    }).eq('id', editingBe.id).select().single();
-    let sets = (setsByBlockExercise[editingBe.block_exercise_id] || []).slice().sort(
-      (a, b) => (a.set_number || 0) - (b.set_number || 0)
-    );
-    const targetReps = parseInt(formData.prescription_value, 10);
-    const targetCount = Math.max(1, formData.set_count || sets.length || 1);
-
-    if (sets.length && !isNaN(targetReps)) {
-      await Promise.all(sets.map((s) => supabase.from('prescribed_sets').update({ target_reps: targetReps }).eq('id', s.id)));
-      sets = sets.map((s) => ({ ...s, target_reps: targetReps }));
-    }
-
-    if (targetCount > sets.length) {
-      const newSets = [];
-      for (let i = sets.length; i < targetCount; i++) {
-        newSets.push({
-          set_id: `${editingBe.block_exercise_id}-S${i + 1}`,
-          block_exercise_id: editingBe.block_exercise_id,
-          set_number: i + 1,
-          target_reps: !isNaN(targetReps) ? targetReps : (sets[0]?.target_reps ?? 8),
-        });
-      }
-      const { data: created } = await supabase.from('prescribed_sets').insert(newSets).select();
-      sets = [...sets, ...(created || [])];
-    } else if (targetCount < sets.length) {
-      const toDelete = sets.slice(targetCount);
-      await Promise.all(toDelete.map((s) => supabase.from('prescribed_sets').delete().eq('id', s.id)));
-      sets = sets.slice(0, targetCount);
-    }
-
-    setSetsByBlockExercise((prev) => {
-      const next = { ...prev };
-      next[editingBe.block_exercise_id] = sets;
-      return next;
-    });
-    setBlockExercisesByBlock((prev) => {
-      const next = { ...prev };
-      next[editingBe.block_id] = (next[editingBe.block_id] || []).map((be) =>
-        be.block_exercise_id === fresh.block_exercise_id ? { ...be, ...fresh } : be
-      );
-      return next;
-    });
-    setEditingBe(null);
-  };
-
-  const handleDragEnd = async (result) => {
-    if (!result.destination) return;
-    const { source, destination } = result;
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-
-    const sourceBlockId = source.droppableId;
-    const destBlockId = destination.droppableId;
-
-    const sourceExs = [...(blockExercisesByBlock[sourceBlockId] || [])];
-    const [moved] = sourceExs.splice(source.index, 1);
-
-    let destExs;
-    if (sourceBlockId === destBlockId) {
-      destExs = sourceExs;
-    } else {
-      destExs = [...(blockExercisesByBlock[destBlockId] || [])];
-    }
-    destExs.splice(destination.index, 0, moved);
-
-    const newBeMap = { ...blockExercisesByBlock };
-    if (sourceBlockId === destBlockId) {
-      newBeMap[sourceBlockId] = destExs;
-    } else {
-      newBeMap[sourceBlockId] = sourceExs;
-      newBeMap[destBlockId] = destExs;
-    }
-    setBlockExercisesByBlock(newBeMap);
-
-    const updates = [];
-    const movedUpdate = { order_in_block: destination.index };
-    if (sourceBlockId !== destBlockId) movedUpdate.block_id = destBlockId;
-    updates.push(supabase.from('block_exercises').update(movedUpdate).eq('id', moved.id));
-
-    if (sourceBlockId !== destBlockId) {
-      sourceExs.forEach((be, i) => {
-        if (be.order_in_block !== i) updates.push(supabase.from('block_exercises').update({ order_in_block: i }).eq('id', be.id));
-      });
-    }
-    destExs.forEach((be, i) => {
-      if (be.id === moved.id) return;
-      if (be.order_in_block !== i) updates.push(supabase.from('block_exercises').update({ order_in_block: i }).eq('id', be.id));
-    });
-    await Promise.all(updates);
   };
 
   return (
@@ -464,35 +340,21 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
         onSave={handleSaveBe}
       />
 
-      <AlertDialog open={!!deletingBe} onOpenChange={(o) => !o && setDeletingBe(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete exercise?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove "{deletingBe?.exercise_title_raw}" from this block? This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteBe} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!deletingBe}
+        onOpenChange={(o) => !o && setDeletingBe(null)}
+        title="Delete exercise?"
+        description={`Remove "${deletingBe?.exercise_title_raw}" from this block? This cannot be undone.`}
+        onConfirm={handleDeleteBe}
+      />
 
-      <AlertDialog open={!!deletingBlock} onOpenChange={(o) => !o && setDeletingBlock(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete block?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete this block and all its exercises? This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteBlock} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!deletingBlock}
+        onOpenChange={(o) => !o && setDeletingBlock(null)}
+        title="Delete block?"
+        description="Delete this block and all its exercises? This cannot be undone."
+        onConfirm={handleDeleteBlock}
+      />
     </>
   );
 }
