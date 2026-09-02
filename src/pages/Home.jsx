@@ -305,7 +305,7 @@ export default function Home() {
         setSessions((prev) => prev.filter((s) => s.id !== doneSession.id));
       } catch { /* ignore */ }
     }
-    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
+    const updated = plan.workouts.map((w) => w === slot ? {
       ...w,
       slot_type: 'rest',
       workout_id: undefined,
@@ -317,6 +317,8 @@ export default function Home() {
       exercise_weights: undefined,
       suggested_workout_ids: undefined,
       locked: false,
+      manual: undefined,
+      id: undefined,
     } : w);
     await persistPlan(updated);
     setRestConfirmFor(null);
@@ -462,7 +464,7 @@ export default function Home() {
     const done = !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
     const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
     const hasScheduled = scheduledForDay.length > 0;
-    const siblingManual = !slot.manual && plan.workouts.some((w) => w.day === slot.day && w.manual);
+    const hasSibling = plan.workouts.some((w) => w !== slot && w.day === slot.day);
 
     const scheduledCards = scheduledForDay.map((sa, j) => (
       <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
@@ -501,7 +503,7 @@ export default function Home() {
               <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {siblingManual ? (
+              {hasSibling ? (
                 <button onClick={() => setRemoveConfirmFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -559,12 +561,12 @@ export default function Home() {
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               <div className="flex items-center gap-1">
-                {!done && !slot.manual && !siblingManual && (
+                {!done && !hasSibling && (
                   <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
                     <ArrowLeftRight className="h-3 w-3" />
                   </button>
                 )}
-                {(slot.manual || siblingManual) ? (
+                {hasSibling ? (
                   <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
