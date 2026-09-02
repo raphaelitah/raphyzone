@@ -2,8 +2,11 @@ import { test, expect } from '@playwright/test';
 import { login, ATHLETE } from './fixtures/auth';
 import { makeApiClient, currentWeekStartISO } from './fixtures/apiClient';
 
-// Plan generation calls a real LLM-backed edge function, which can take a while.
-test.describe.configure({ timeout: 90000 });
+// Plan generation calls a real LLM-backed edge function, which can take a while —
+// particularly under the shared Groq free-tier rate limit, where the backend now
+// waits out and retries a 429 rather than failing fast (see supabase/functions/
+// _shared/llm.ts), so a single generation can legitimately take over a minute.
+test.describe.configure({ timeout: 180000 });
 
 test.describe('Weekly plan builder (regression)', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,9 +26,11 @@ test.describe('Weekly plan builder (regression)', () => {
     await page.getByText('Normal week', { exact: true }).click();
     await page.getByRole('button', { name: /generate my week/i }).click();
 
-    await expect(page.getByText(/building your week/i)).toBeVisible();
-    // Generation hits a real LLM edge function — give it a generous window.
-    await expect(page.getByRole('button', { name: /done/i })).toBeVisible({ timeout: 60000 });
+    // Generation moves through several transient loading phases (e.g. "building
+    // your week", "cross-checking exercise history") too quickly to reliably
+    // assert on any one of them, so just wait for completion. Generation hits a
+    // real LLM edge function — give it a generous window.
+    await expect(page.getByRole('button', { name: /done/i })).toBeVisible({ timeout: 150000 });
 
     // Seven days of the week should be laid out (train/rest/activity slots).
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

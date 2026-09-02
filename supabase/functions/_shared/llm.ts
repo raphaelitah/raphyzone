@@ -140,9 +140,28 @@ async function callLLMOnce({ prompt, schema, model, functionName, attempt }: { p
 // Groq occasionally hallucinates a different tool name (seen: 'json' instead of
 // the forced 'respond'), which the API rejects with a 400 tool_use_failed, or
 // returns rate-limit 429s under load — both transient, not systemic, so retry a
-// couple of times with a short backoff before giving up. Auth/config errors
-// (missing key, 401/403) are not retried — those won't fix themselves.
+// couple of times before giving up. Auth/config errors (missing key, 401/403)
+// are not retried — those won't fix themselves.
 const RETRYABLE_STATUS = /Groq API error (400|429|5\d\d)/;
+
+// On our free "on_demand" tier the shared 8000 TPM budget gets exhausted for
+// minutes at a stretch (see llm_call_logs), and Groq's 429 body tells us
+// exactly how long until it resets, e.g. "Please try again in 51.42s." A flat
+// short backoff never survives that wait, so parse it and sleep the requested
+// amount (plus a small buffer for clock drift) instead of guessing. Capped so
+// one stuck call can't stall the request indefinitely.
+const RETRY_AFTER_RE = /try again in ([\d.]+)s/i;
+const MAX_RATE_LIMIT_WAIT_MS = 60_000;
+
+function backoffMsFor(message: string, attempt: number): number {
+  const match = RETRY_AFTER_RE.exec(message);
+  if (match) {
+    const waitMs = Math.ceil(parseFloat(match[1]) * 1000) + 500;
+    return Math.min(waitMs, MAX_RATE_LIMIT_WAIT_MS);
+  }
+  return 400 * attempt;
+}
+
 export async function callLLM(args: { prompt: string; schema: LLMSchema; model?: string; functionName: string }): Promise<any> {
   const maxAttempts = 3;
   let lastError: unknown;
@@ -154,7 +173,7 @@ export async function callLLM(args: { prompt: string; schema: LLMSchema; model?:
       const message = (err as Error).message || '';
       const retryable = RETRYABLE_STATUS.test(message) || message.includes("no valid 'respond' tool call");
       if (!retryable || attempt === maxAttempts) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, backoffMsFor(message, attempt)));
     }
   }
   throw lastError;

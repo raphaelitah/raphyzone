@@ -63,7 +63,7 @@ describe('deriveBlockTimerConfig', () => {
   });
 
   it('returns null for a plain (non-timed) block', () => {
-    expect(deriveBlockTimerConfig({ block_type: 'superset' }, 3)).toBeNull();
+    expect(deriveBlockTimerConfig({ block_type: 'straight_sets' }, 3)).toBeNull();
   });
 
   it('builds a Tabata config from the block fields', () => {
@@ -75,6 +75,7 @@ describe('deriveBlockTimerConfig', () => {
       blockLabel: 'Tabata',
       isEmomFamily: false,
       isAlternatingEmom: false,
+      isSuperset: false,
       timerDefaultConfig: { workSec: 20, restSec: 10, rounds: 8 },
     });
   });

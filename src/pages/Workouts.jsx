@@ -25,6 +25,7 @@ import CreateWorkoutSheet from '@/components/CreateWorkoutSheet';
 import WorkoutFilters from '@/components/WorkoutFilters';
 import AddToPlanSheet from '@/components/AddToPlanSheet';
 import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/useBlockExerciseCrud';
+import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 
 const BATCH_SIZE = 20;
 
@@ -64,6 +65,7 @@ export default function Workouts() {
     setBlockExercisesByBlock,
     setsByBlockExercise,
     setSetsByBlockExercise,
+    onChanged: () => recomputeAndSaveFormatLabel(selected),
   });
 
   const loadWorkouts = async () => {

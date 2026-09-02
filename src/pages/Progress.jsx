@@ -110,7 +110,7 @@ export default function Progress() {
     if (!s.exercise_id || !s.max_weight) return;
     if (!prMap[s.exercise_id] || s.max_weight > prMap[s.exercise_id].max_weight) prMap[s.exercise_id] = s;
   });
-  const prs = Object.values(prMap).sort((a, b) => parseDate(b.date || b.created_date) - parseDate(a.date || a.created_date));
+  const prs = Object.values(prMap).sort((a, b) => parseDate(b.date || b.created_date).getTime() - parseDate(a.date || a.created_date).getTime());
 
   // per-exercise working weight trend: one point per workout (max weight across
   // that workout's rounds/sets of the movement), not one point per logged round
@@ -125,7 +125,7 @@ export default function Progress() {
         if (!existing || s.max_weight > existing.max_weight) byWorkout.set(key, s);
       });
     const points = [...byWorkout.values()]
-      .sort((a, b) => parseDate(a.date || a.created_date) - parseDate(b.date || b.created_date))
+      .sort((a, b) => parseDate(a.date || a.created_date).getTime() - parseDate(b.date || b.created_date).getTime())
       .map((s) => ({ date: fmtDate(parseDate(s.date || s.created_date), 'd MMM'), weight: s.max_weight }));
     trendByExercise[p.exercise_id] = points;
   });
