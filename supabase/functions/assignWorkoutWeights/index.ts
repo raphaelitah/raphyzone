@@ -32,6 +32,19 @@ const GOAL_FACTOR: Record<string, number> = {
   general_fitness: 1.0,
 };
 
+// Maps a strength_calibration entry's pattern key (src/lib/fitness.js CALIBRATION_PATTERNS)
+// to the exercise catalog's movement_pattern label, so calibration baselines can be
+// matched against exercises.movement_pattern.
+const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN: Record<string, string> = {
+  squat: 'Squat',
+  hinge: 'Hinge',
+  horizontal_push: 'Horizontal Push',
+  vertical_push: 'Vertical Push',
+  horizontal_pull: 'Horizontal Pull',
+  vertical_pull: 'Vertical Pull',
+  olympic_power: 'Olympic / Power',
+};
+
 function avgReps(reps: string | number): number {
   const nums = String(reps).split(/[-–]/).map((s) => parseFloat(s)).filter((x) => !isNaN(x));
   if (!nums.length) return 8;
@@ -228,7 +241,8 @@ Deno.serve(async (req: Request) => {
 
     const calibrationByPattern: Record<string, { weight_kg: number; reps: number }> = {};
     calibration.forEach((c: any) => {
-      if (c.pattern) calibrationByPattern[c.pattern] = { weight_kg: c.weight_kg, reps: c.reps || 8 };
+      const movementPattern = CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[c.pattern] || c.pattern;
+      if (movementPattern) calibrationByPattern[movementPattern] = { weight_kg: c.weight_kg, reps: c.reps || 8 };
     });
 
     const weights = rows

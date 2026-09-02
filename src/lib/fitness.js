@@ -96,7 +96,20 @@ export const CALIBRATION_PATTERNS = [
   { key: 'vertical_push', title: 'Vertical Push', question: 'What weight can you comfortably press overhead for around 8 repetitions?', options: ['Standing Overhead Press', 'Seated Dumbbell Press', 'Machine Shoulder Press', 'Other', "I don't perform this movement"] },
   { key: 'horizontal_pull', title: 'Horizontal Pull', question: 'What weight can you comfortably row for around 8 repetitions?', options: ['Barbell Row', 'Dumbbell Row', 'Cable Row', 'Machine Row', 'Other', "I don't perform this movement"] },
   { key: 'vertical_pull', title: 'Vertical Pull', question: 'What weight can you comfortably pull for around 8 repetitions?', options: ['Pull-ups', 'Assisted Pull-ups', 'Lat Pulldown', 'Other', "I don't perform this movement"] },
+  { key: 'olympic_power', title: 'Olympic / Power', question: 'What weight can you comfortably perform for around 8 repetitions?', options: ['Single DB Snatch', 'Other', "I don't perform this movement"] },
 ];
+
+// Maps a calibration pattern key to the exercise catalog's movement_pattern
+// label, so calibration baselines can be looked up against exercises.movement_pattern.
+export const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN = {
+  squat: 'Squat',
+  hinge: 'Hinge',
+  horizontal_push: 'Horizontal Push',
+  vertical_push: 'Vertical Push',
+  horizontal_pull: 'Horizontal Pull',
+  vertical_pull: 'Vertical Pull',
+  olympic_power: 'Olympic / Power',
+};
 
 export const TRAINING_FOCUS_RANKS = [
   { value: 0, label: 'Pure Strength', desc: 'Lift only · muscle hypertrophy' },
