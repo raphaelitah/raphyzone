@@ -164,6 +164,10 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
       for (const es of exerciseSessions) {
         const dr = drafts[es.id];
         if (!dr) { updated.push(es); continue; }
+        if (dr.skipped) {
+          await supabase.from('exercise_sessions').delete().eq('id', es.id);
+          continue;
+        }
         const payload = {
           max_weight: dr.bodyweight ? 0 : (dr.max_weight === '' ? null : dr.max_weight),
           distance_km: dr.distance_km === '' ? null : dr.distance_km,
@@ -295,26 +299,32 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   );
 }
 
-// Pairs each logged exercise_session up with its block_exercise (matched by
-// exercise_id, consumed in block/order_in_block sequence) so history can be
-// grouped exactly like the library view. Anything left unmatched (e.g. a
+// Pairs every block_exercise slot up with its logged exercise_session (matched
+// by exercise_id, consumed in block/order_in_block sequence) so history can be
+// grouped exactly like the library view — including slots that were skipped
+// (no matching log). Anything logged that doesn't match any slot (e.g. a
 // substituted exercise) is returned separately and rendered without a block.
 function groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions) {
   const remaining = exerciseSessions.slice();
   const groups = [];
   blocks.forEach((block) => {
     const blockExs = (blockExercisesByBlock[block.block_id] || []).filter((be) => be.step_type === 'exercise');
-    const items = [];
-    blockExs.forEach((be) => {
+    if (!blockExs.length) return;
+    const items = blockExs.map((be) => {
       const idx = remaining.findIndex((es) => es.exercise_id === be.exercise_id);
-      if (idx !== -1) {
-        items.push(remaining[idx]);
-        remaining.splice(idx, 1);
-      }
+      if (idx === -1) return { be, es: null };
+      const es = remaining[idx];
+      remaining.splice(idx, 1);
+      return { be, es };
     });
-    if (items.length) groups.push({ block, items });
+    groups.push({ block, items });
   });
   return { groups, leftover: remaining };
+}
+
+function blockTotalSeconds(items) {
+  const total = items.reduce((sum, { es }) => sum + (es ? (es.duration_seconds ?? es.elapsed_seconds ?? 0) : 0), 0);
+  return total > 0 ? total : null;
 }
 
 function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions }) {
@@ -330,33 +340,52 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
 
   return (
     <div className="space-y-4">
-      {groups.map(({ block, items }) => (
-        <div key={block.block_id}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-6 w-6 rounded-full bg-brand text-brand-foreground text-xs font-semibold flex items-center justify-center">
-              {block.block_label}
-            </span>
-            <span className="text-xs font-medium text-muted-foreground capitalize">
-              {block.block_type?.replace(/_/g, ' ')}
-            </span>
-            {block.rounds > 1 && <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>}
+      {groups.map(({ block, items }) => {
+        const allSkipped = items.every(({ es }) => !es);
+        const totalSec = blockTotalSeconds(items);
+        return (
+          <div key={block.block_id}>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="h-6 w-6 rounded-full bg-brand text-brand-foreground text-xs font-semibold flex items-center justify-center">
+                {block.block_label}
+              </span>
+              <span className="text-xs font-medium text-muted-foreground capitalize">
+                {block.block_type?.replace(/_/g, ' ')}
+              </span>
+              {block.rounds > 1 && <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>}
+              {totalSec != null && (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground ml-auto">
+                  <Clock className="h-3 w-3" />{fmtDuration(totalSec)}
+                </span>
+              )}
+              {allSkipped && (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Skipped</span>
+              )}
+            </div>
+            <div className="relative ml-8">
+              {items.length > 1 && <div className="absolute left-3 top-6 bottom-6 w-px bg-border" />}
+              {items.map(({ be, es }, index) => {
+                const stepLabel = items.length > 1 ? `${block.block_label}${index + 1}` : null;
+                return (
+                  <div key={be.block_exercise_id} className="flex items-center gap-2 mb-2 last:mb-0">
+                    {stepLabel && (
+                      <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
+                    )}
+                    {es ? (
+                      <ExercisePerformanceRow es={es} className="flex-1 min-w-0" />
+                    ) : (
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2 rounded-xl border border-dashed border-border p-3">
+                        <p className="text-sm font-medium text-muted-foreground truncate">{be.exercise_title_raw}</p>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">Skipped</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="relative ml-8">
-            {items.length > 1 && <div className="absolute left-3 top-6 bottom-6 w-px bg-border" />}
-            {items.map((es, index) => {
-              const stepLabel = items.length > 1 ? `${block.block_label}${index + 1}` : null;
-              return (
-                <div key={es.id} className="flex items-center gap-2 mb-2 last:mb-0">
-                  {stepLabel && (
-                    <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
-                  )}
-                  <ExercisePerformanceRow es={es} className="flex-1 min-w-0" />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {leftover.length > 0 && (
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-2">Other</p>
@@ -374,20 +403,13 @@ function ExercisePerformanceRow({ es, className = '' }) {
     <Card className={cn('rounded-xl border-border p-3', className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-        <div className="flex items-center gap-2 shrink-0">
-          {es.distance_km != null ? (
-            <span className="text-sm font-semibold">{es.distance_km}km</span>
-          ) : es.max_weight > 0 ? (
-            <span className="text-sm font-semibold">{es.max_weight}kg</span>
-          ) : es.max_weight === 0 ? (
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
-          ) : null}
-          {es.duration_seconds != null ? (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.duration_seconds)}</span>
-          ) : es.elapsed_seconds != null && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.elapsed_seconds)}</span>
-          )}
-        </div>
+        {es.distance_km != null ? (
+          <span className="text-sm font-semibold shrink-0">{es.distance_km}km</span>
+        ) : es.max_weight > 0 ? (
+          <span className="text-sm font-semibold shrink-0">{es.max_weight}kg</span>
+        ) : es.max_weight === 0 ? (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand shrink-0">Bodyweight</span>
+        ) : null}
       </div>
       {es.difficulty && (
         <span className={cn('inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[es.difficulty]?.color)}>{DIFFICULTY_META[es.difficulty]?.label}</span>
@@ -399,9 +421,18 @@ function ExercisePerformanceRow({ es, className = '' }) {
 
 function EditableExerciseRow({ es, draft, onChange }) {
   return (
-    <Card className="rounded-xl border-border p-3 space-y-2.5">
-      <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-      {es.distance_km != null || es.duration_seconds != null ? (
+    <Card className={cn('rounded-xl border-border p-3 space-y-2.5', draft.skipped && 'opacity-60')}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={cn('text-sm font-medium truncate', draft.skipped && 'line-through')}>{es.exercise_name}</p>
+        <button
+          type="button"
+          onClick={() => onChange({ skipped: !draft.skipped })}
+          className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0', draft.skipped ? 'bg-destructive text-destructive-foreground border-destructive' : 'border-border text-muted-foreground')}
+        >
+          {draft.skipped ? 'Skipped · Undo' : 'Skip'}
+        </button>
+      </div>
+      {draft.skipped ? null : es.distance_km != null || es.duration_seconds != null ? (
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[11px] text-muted-foreground">Distance (km)</label>
@@ -425,19 +456,19 @@ function EditableExerciseRow({ es, draft, onChange }) {
           )}
         </div>
       )}
-      <div>
+      {!draft.skipped && <div>
         <label className="text-[11px] text-muted-foreground">Difficulty</label>
         <div className="grid grid-cols-4 gap-1.5 mt-1">
           {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
             <button key={val} type="button" onClick={() => onChange({ difficulty: val })} className={cn('py-1.5 rounded-lg border text-[10px] font-medium', draft.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
           ))}
         </div>
-      </div>
-      <div>
+      </div>}
+      {!draft.skipped && <div>
         <label className="text-[11px] text-muted-foreground">Time (min)</label>
         <input type="number" inputMode="numeric" value={draft.elapsed_seconds ? Math.round(draft.elapsed_seconds / 60) : ''} onChange={(e) => onChange({ elapsed_seconds: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
-      </div>
-      <textarea value={draft.note || ''} onChange={(e) => onChange({ note: e.target.value })} placeholder="Note…" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand" />
+      </div>}
+      {!draft.skipped && <textarea value={draft.note || ''} onChange={(e) => onChange({ note: e.target.value })} placeholder="Note…" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand" />}
     </Card>
   );
 }

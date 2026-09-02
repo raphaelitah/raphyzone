@@ -212,7 +212,16 @@ export default function Progress() {
         {completed.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No workouts logged yet.</p>}
       </div>
 
-      <SessionDetailSheet session={detailSession} open={!!detailSession} onOpenChange={(o) => !o && setDetailSession(null)} />
+      <SessionDetailSheet
+        session={detailSession}
+        open={!!detailSession}
+        onOpenChange={(o) => !o && setDetailSession(null)}
+        editable
+        onSaved={(updated) => {
+          setDetailSession(updated);
+          setSessions((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+        }}
+      />
     </div>
   );
 }
