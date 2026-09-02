@@ -199,6 +199,7 @@ export default function PlanHistory() {
         session={sessionDetail}
         open={!!sessionDetail}
         onOpenChange={(o) => { if (!o) setSessionDetail(null); }}
+        editable
         onSaved={(updated) => {
           setSessionDetail(updated);
           setSessions((prev) => prev.map((s) => s.id === updated.id ? updated : s));
