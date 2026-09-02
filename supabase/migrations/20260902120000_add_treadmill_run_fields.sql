@@ -1,9 +1,8 @@
 -- Treadmill running is a distinct exercise from outdoor Run (EX01914): it is
--- performed on equipment that lets the athlete set speed and incline, so a
--- prescribed step can vary those over time (e.g. an interval program), which
--- outdoor running has no equivalent for.
+-- performed on equipment that lets the athlete set speed and incline. Duration
+-- is already covered by the existing prescription fields, so only speed and
+-- incline are new here.
 alter table public.block_exercises
-  add column duration_sec numeric,
   add column speed numeric,
   add column incline numeric;
 
