@@ -78,6 +78,7 @@ export default function Home() {
   const [restAiAlternatives, setRestAiAlternatives] = useState([]);
   const [searchFor, setSearchFor] = useState(null);
   const [extraFor, setExtraFor] = useState(null);
+  const [removeConfirmFor, setRemoveConfirmFor] = useState(null);
   const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('home');
 
   useEffect(() => {
@@ -491,14 +492,17 @@ export default function Home() {
     if (slot.slot_type === 'activity' && !slot.workout_id) {
       return wrap(
         <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
-          <div className="flex items-center gap-1 mb-2">
-            {slot.manual && <span className="text-[10px] font-medium text-muted-foreground mr-auto">Extra</span>}
-            <div className="flex items-center gap-1 ml-auto">
-              <button onClick={() => setExtraFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
-                <Plus className="h-3.5 w-3.5" />
-              </button>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold truncate capitalize flex items-center gap-1.5">
+                <Route className="h-4 w-4 text-amber-600 shrink-0" />
+                {slot.activity || 'Activity'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
               {siblingManual ? (
-                <button onClick={() => removeSlot(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
+                <button onClick={() => setRemoveConfirmFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               ) : (
@@ -508,13 +512,6 @@ export default function Home() {
               )}
               <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
             </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate capitalize flex items-center gap-1.5">
-              <Route className="h-4 w-4 text-amber-600 shrink-0" />
-              {slot.activity || 'Activity'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
           </div>
           {(slot.suggested_workout_ids?.length > 0) && (
             <button onClick={() => setSuggestFor(slot)} className="mt-3 text-xs font-medium text-amber-700 flex items-center gap-1">
@@ -529,17 +526,12 @@ export default function Home() {
       const isPast = slot.date < todayISO;
       return wrap(
         <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isPast ? 'border-brand/30 bg-brand/5' : 'bg-muted/30', !isPast && (isToday ? 'border-border' : 'border-border/60'))}>
-          <div className="flex items-center gap-1 mb-2">
-            <div className="flex items-center gap-1 ml-auto">
-              <button onClick={() => setRestChoiceFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add workout">
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
+          <div className="flex items-center justify-between gap-2">
+            <div className={cn('flex items-center gap-1.5', isPast ? 'text-brand' : 'text-muted-foreground')}>
+              <Moon className="h-4 w-4" />
+              <p className="font-medium">Rest</p>
             </div>
-          </div>
-          <div className={cn('flex items-center gap-1.5', isPast ? 'text-brand' : 'text-muted-foreground')}>
-            <Moon className="h-4 w-4" />
-            <p className="font-medium">Rest</p>
+            <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
           </div>
         </Card>
       );
@@ -552,34 +544,12 @@ export default function Home() {
     return wrap(
       <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
         <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
-          <div className="flex items-center gap-1 mb-2">
-            {slot.manual && <span className="text-[10px] font-medium text-muted-foreground mr-auto">Extra</span>}
-            <div className="flex items-center gap-1 ml-auto">
-              {!slot.manual && (
-                <button onClick={(e) => { e.stopPropagation(); setExtraFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              )}
-              {!done && !slot.manual && !siblingManual && (
-                <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
-                  <ArrowLeftRight className="h-3 w-3" />
-                </button>
-              )}
-              {(slot.manual || siblingManual) ? (
-                <button onClick={(e) => { e.stopPropagation(); removeSlot(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              ) : (
-                <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
-                  <Moon className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
-            </div>
-          </div>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
+                {slot.manual && (
+                  <span className="inline-flex items-center text-[10px] font-medium text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 shrink-0">Extra</span>
+                )}
                 {isGuidedActivity && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 capitalize shrink-0"><Route className="h-3 w-3" />{slot.activity}</span>
                 )}
@@ -587,7 +557,26 @@ export default function Home() {
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{slot.modality || wo?.format_label || 'Workout'}</p>
             </div>
-            {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <div className="flex items-center gap-1">
+                {!done && !slot.manual && !siblingManual && (
+                  <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
+                    <ArrowLeftRight className="h-3 w-3" />
+                  </button>
+                )}
+                {(slot.manual || siblingManual) ? (
+                  <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title={done ? 'Completed workouts can\'t become rest days' : 'Make rest day'}>
+                    <Moon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={done} />
+              </div>
+              {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
+            </div>
           </div>
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-4 text-xs text-muted-foreground min-w-0">
@@ -760,9 +749,22 @@ export default function Home() {
                 const isToday = group.date === todayISO;
                 return (
                   <div key={gi} className="space-y-2">
-                    <span className="block px-1 text-xs font-medium text-muted-foreground">
-                      {group.day.slice(0, 3)} · {fmtDate(parseDate(group.date), 'd MMM')}{isToday ? ' · Today' : ''}
-                    </span>
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {group.day.slice(0, 3)} · {fmtDate(parseDate(group.date), 'd MMM')}{isToday ? ' · Today' : ''}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const ref = group.items[0].slot;
+                          if (ref.slot_type === 'rest') setRestChoiceFor(ref);
+                          else setExtraFor(ref);
+                        }}
+                        className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors"
+                        title="Add workout"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                     <div className="space-y-2.5">
                       {group.items.map(({ slot, i }) => renderSlot(slot, i))}
                     </div>
@@ -889,6 +891,23 @@ export default function Home() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => makeRest(restConfirmFor)} className={cn('text-brand-foreground', restConfirmDone ? 'bg-destructive hover:bg-destructive/90' : 'bg-brand hover:bg-brand/90')}>
               {restConfirmDone ? 'Delete session & make rest day' : 'Make rest day'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!removeConfirmFor} onOpenChange={(o) => { if (!o) setRemoveConfirmFor(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeConfirmFor?.workout_name ? `"${removeConfirmFor.workout_name}" on ` : 'This workout on '}{removeConfirmFor?.day} will be removed from your plan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { removeSlot(removeConfirmFor); setRemoveConfirmFor(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
