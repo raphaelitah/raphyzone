@@ -184,6 +184,15 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     } finally { setSaving(false); }
   };
 
+  const yAxisDomain = (() => {
+    const values = chartData.flatMap((row) => chartKeys.map((k) => row[k.name]).filter((v) => typeof v === 'number'));
+    if (!values.length) return [0, 'auto'];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = (max - min) * 0.15 || max * 0.1 || 1;
+    return [Math.max(0, min - padding), max + padding];
+  })();
+
   if (!session) return null;
 
   return (
@@ -246,7 +255,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
+                      <YAxis domain={yAxisDomain} allowDecimals tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
                       <Tooltip
                         contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }}
                         formatter={(value, name) => {
