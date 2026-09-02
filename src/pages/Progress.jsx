@@ -185,11 +185,7 @@ export default function Progress() {
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="space-y-2">
-            {prs.length ? prs.map((p) => (
-              <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
-            )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
-          </div>
+          <PersonalRecordsList prs={prs} trendByExercise={trendByExercise} />
         </CollapsibleContent>
       </Collapsible>
 
@@ -226,12 +222,36 @@ export default function Progress() {
   );
 }
 
+function PersonalRecordsList({ prs, trendByExercise }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? prs : prs.slice(0, 3);
+  return (
+    <div className="space-y-2">
+      {prs.length ? visible.map((p) => (
+        <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
+      )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
+      {prs.length > 3 && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="w-full text-center text-xs font-medium text-brand py-2"
+        >
+          {expanded ? 'See less' : `See more (${prs.length - 3})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PersonalRecordRow({ record, trend }) {
   const showTrend = new Set(trend.map((t) => t.date)).size >= 3 && new Set(trend.map((t) => t.weight)).size > 1;
+  const recordDate = record.date || record.created_date;
   return (
     <Card className="rounded-xl border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium truncate">{record.exercise_name}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{record.exercise_name}</p>
+          {recordDate && <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDate(parseDate(recordDate), 'd MMM yyyy')}</p>}
+        </div>
         <span className="text-sm font-semibold shrink-0">{record.max_weight}kg</span>
       </div>
       {showTrend && (
