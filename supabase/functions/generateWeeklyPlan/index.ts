@@ -311,6 +311,16 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
           ? 'Assigned automatically to keep every training day filled.'
           : 'Assigned automatically — closest match; equipment may not fully match your setup for this week.';
         usedWorkoutIds.add(fallback.id);
+        try {
+          entry.warmup = generateWarmup(
+            profile,
+            [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
+            fallback,
+            exerciseCatalog || []
+          );
+        } catch {
+          entry.warmup = null;
+        }
       }
     }
 

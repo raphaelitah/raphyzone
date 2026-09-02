@@ -13,6 +13,7 @@ the remaining housekeeping (secrets, quality testing).
 | `learnFromSessionFeedback` | **no** — rewritten as a deterministic threshold rule | deployed, frontend repointed |
 | `applySwap` | no | deployed, frontend repointed |
 | `suggestExerciseSubstitutes` | yes (1 call), via Groq | deployed, frontend repointed |
+| `getWarmup` | no | deployed, frontend repointed |
 
 `assignWorkoutWeights` and `learnFromSessionFeedback` originally called an LLM, but
 their prompts were really spelling out a fixed formula/threshold (baseline × factors,
