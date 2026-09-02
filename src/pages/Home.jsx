@@ -281,40 +281,19 @@ export default function Home() {
     try { await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id); } catch { /* ignore */ }
   };
 
-  const getDayGroupBounds = (index) => {
-    const w = plan.workouts;
-    const slot = w[index];
-    let start = index;
-    while (start > 0 && w[start - 1].day === slot.day && w[start - 1].date === slot.date) start--;
-    let end = index;
-    while (end < w.length - 1 && w[end + 1].day === slot.day && w[end + 1].date === slot.date) end++;
-    return { start, end };
-  };
-
-  // Days can hold more than one slot (a plan workout plus manually-added extras), so
-  // reordering always moves the whole day-group together — otherwise a single-slot
-  // swap would split a day's cards apart and mislabel them under the wrong date.
+  // Each array position keeps the day/date it started with; moving a slot swaps the
+  // *workout content* between two adjacent positions, so within a day this reorders
+  // the cards, and at a day boundary it hands the workout off to the neighboring day
+  // (which keeps its own remaining slot) — days themselves never move.
   const moveSlot = async (index, dir) => {
     if (!plan?.workouts) return;
-    const w = plan.workouts;
-    const { start, end } = getDayGroupBounds(index);
-    const aDay = w[index].day;
-    const aDate = w[index].date;
-    let otherStart, otherEnd;
-    if (dir < 0) {
-      if (start === 0) return;
-      otherEnd = start - 1;
-      ({ start: otherStart } = getDayGroupBounds(otherEnd));
-    } else {
-      if (end === w.length - 1) return;
-      otherStart = end + 1;
-      ({ end: otherEnd } = getDayGroupBounds(otherStart));
-    }
-    const bDay = w[otherStart].day;
-    const bDate = w[otherStart].date;
-    const updated = [...w];
-    for (let k = start; k <= end; k++) updated[k] = { ...updated[k], day: bDay, date: bDate };
-    for (let k = otherStart; k <= otherEnd; k++) updated[k] = { ...updated[k], day: aDay, date: aDate };
+    const newIndex = index + dir;
+    if (newIndex < 0 || newIndex >= plan.workouts.length) return;
+    const updated = [...plan.workouts];
+    const a = updated[index];
+    const b = updated[newIndex];
+    updated[index] = { ...b, day: a.day, date: a.date };
+    updated[newIndex] = { ...a, day: b.day, date: b.date };
     await persistPlan(updated);
   };
 
@@ -490,11 +469,6 @@ export default function Home() {
     const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
     const hasScheduled = scheduledForDay.length > 0;
     const hasSibling = plan.workouts.some((w) => w !== slot && w.day === slot.day);
-    const { start: groupStart, end: groupEnd } = getDayGroupBounds(i);
-    const disableUp = groupStart === 0;
-    const disableDown = groupEnd === plan.workouts.length - 1;
-    const isSlotDone = (s) => !!s.workout_id && weekSessions.some((ss) => ss.workout_id === s.workout_id && sameDay(parseDate(ss.date), parseDate(s.date)));
-    const groupDone = plan.workouts.some((w) => w.day === slot.day && w.date === slot.date && isSlotDone(w));
 
     const scheduledCards = scheduledForDay.map((sa, j) => (
       <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
@@ -542,7 +516,7 @@ export default function Home() {
                   <Moon className="h-3.5 w-3.5" />
                 </button>
               )}
-              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disableUp={disableUp} disableDown={disableDown} />
+              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
             </div>
           </div>
           {(slot.suggested_workout_ids?.length > 0) && (
@@ -563,7 +537,7 @@ export default function Home() {
               <Moon className="h-4 w-4" />
               <p className="font-medium">Rest</p>
             </div>
-            <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disableUp={disableUp} disableDown={disableDown} />
+            <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
           </div>
         </Card>
       );
@@ -591,7 +565,7 @@ export default function Home() {
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               <div className="flex items-center gap-1">
-                {!done && !hasSibling && (
+                {!done && (
                   <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
                     <ArrowLeftRight className="h-3 w-3" />
                   </button>
@@ -605,7 +579,7 @@ export default function Home() {
                     <Moon className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={groupDone} disableUp={disableUp} disableDown={disableDown} />
+                <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={done} />
               </div>
               {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
             </div>
