@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Gauge, ChevronRight, Pencil, Check } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 import { CALIBRATION_PATTERNS } from '@/lib/fitness';
 import { formatWeight, inputToKg, kgToInput } from '@/lib/units';
 import { useNavigate } from 'react-router-dom';
@@ -158,7 +159,7 @@ export default function ProfileCalibrationCard({ profile }) {
                   <p className="text-sm font-semibold">{formatWeight(c.weight_kg, unit)}</p>
                   <p className="text-[11px] text-muted-foreground">×{c.reps} reps</p>
                 </div>
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-muted-foreground" />
+                <IconButton as="span" icon={Pencil} bare />
               </div>
             </button>
           );
