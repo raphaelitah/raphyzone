@@ -49,11 +49,13 @@ export default function YouTubeVideo({ url, title, className = '' }) {
         loading="lazy"
       />
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="flex items-center justify-center w-14 h-14 rounded-full bg-black/60">
-          <svg viewBox="0 0 24 24" className="w-6 h-6 ml-0.5 fill-white">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        </span>
+        <svg viewBox="0 0 68 48" className="w-16 h-auto">
+          <path
+            d="M66.52 7.74c-.78-2.93-2.49-5.41-4.86-6.51C57.36 0 33.66 0 33.66 0S9.96 0 5.66 1.23C3.29 2.33 1.58 4.81.8 7.74.02 11.4 0 24 0 24s.02 12.6.8 16.26c.78 2.93 2.49 5.41 4.86 6.51C9.96 48 33.66 48 33.66 48s23.7 0 27.94-1.23c2.37-1.1 4.08-3.58 4.86-6.51.78-3.66.8-16.26.8-16.26s-.02-12.6-.8-16.26z"
+            fill="#f00"
+          />
+          <path d="M27 34l17.5-10L27 14v20z" fill="#fff" />
+        </svg>
       </span>
     </button>
   );
