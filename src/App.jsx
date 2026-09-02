@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import Layout from '@/components/Layout';
+import { useWakeLock } from '@/hooks/useWakeLock';
 
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
@@ -85,6 +86,7 @@ const AuthenticatedApp = () => {
 
 
 function App() {
+  useWakeLock();
 
   return (
     <AuthProvider>
