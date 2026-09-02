@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const updatedWorkouts = (plan.workouts || []).map((w: any) => {
-      if (w.day === day) {
+      if (w.day === day && w.workout_id === old_workout_id) {
         return {
           ...w,
           workout_id: new_workout_id,
