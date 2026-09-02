@@ -149,10 +149,15 @@ export default function Home() {
   if (!sessionDates.has(fmtISO(cursor))) cursor = new Date(today.getTime() - 86400000);
   while (sessionDates.has(fmtISO(cursor))) { streak++; cursor = new Date(cursor.getTime() - 86400000); }
 
-  const todaySlot = plan?.workouts?.find((w) => w.date === todayISO);
-  const todayWorkout = todaySlot?.workout_id ? workouts[todaySlot.workout_id] : null;
-  const todayDone = !!todaySlot?.workout_id && weekSessions.some((s) => s.workout_id === todaySlot.workout_id);
-  const nextWorkoutSlot = plan?.workouts?.find((w) => w !== todaySlot && w.date >= todayISO && w.workout_id && !weekSessions.some((s) => s.workout_id === w.workout_id));
+  const todaySlots = plan?.workouts?.filter((w) => w.date === todayISO) || [];
+  const todaySlot = todaySlots[0];
+  const todayWorkoutSlots = todaySlots.filter((w) => w.workout_id);
+  const todayWorkoutSlot = todayWorkoutSlots.find((w) => !weekSessions.some((s) => s.workout_id === w.workout_id)) || null;
+  const todayWorkout = todayWorkoutSlot?.workout_id ? workouts[todayWorkoutSlot.workout_id] : null;
+  const todayDone = todayWorkoutSlots.length > 0 && todayWorkoutSlots.every((w) => weekSessions.some((s) => s.workout_id === w.workout_id));
+  const lastDoneTodaySlot = [...todayWorkoutSlots].reverse().find((w) => weekSessions.some((s) => s.workout_id === w.workout_id)) || todayWorkoutSlots[todayWorkoutSlots.length - 1];
+  const lastDoneTodayWorkout = lastDoneTodaySlot?.workout_id ? workouts[lastDoneTodaySlot.workout_id] : null;
+  const nextWorkoutSlot = plan?.workouts?.find((w) => w.date > todayISO && w.workout_id && !weekSessions.some((s) => s.workout_id === w.workout_id));
 
   const countedSlots = plan?.workouts?.filter((w) => w.workout_id || w.slot_type === 'activity') || [];
   const totalCount = countedSlots.length;
@@ -641,27 +646,27 @@ export default function Home() {
         </Card>
       )}
 
-      {todaySlot?.workout_id && !todayDone && (
+      {todayWorkoutSlot && (
         <Card className="rounded-2xl overflow-hidden mb-5 border-border">
           <div className="bg-brand p-5 text-brand-foreground">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wide opacity-80">{todaySlot.slot_type === 'activity' ? "Today's activity" : "Today's workout"}</span>
+              <span className="text-xs font-medium uppercase tracking-wide opacity-80">{todayWorkoutSlot.slot_type === 'activity' ? "Today's activity" : "Today's workout"}</span>
               <span className="text-xs opacity-80">{roundToFive(todayWorkout?.est_duration_min) || '~45'} min</span>
             </div>
-            <h2 className="text-xl font-semibold mt-1.5">{todayWorkout?.name || todaySlot.workout_name}</h2>
-            {todaySlot.slot_type === 'activity' && (
-              <p className="text-xs opacity-80 mt-1 capitalize flex items-center gap-1"><Route className="h-3 w-3" /> {todaySlot.activity}</p>
+            <h2 className="text-xl font-semibold mt-1.5">{todayWorkout?.name || todayWorkoutSlot.workout_name}</h2>
+            {todayWorkoutSlot.slot_type === 'activity' && (
+              <p className="text-xs opacity-80 mt-1 capitalize flex items-center gap-1"><Route className="h-3 w-3" /> {todayWorkoutSlot.activity}</p>
             )}
             {todayWorkout && (
               <p className="text-xs opacity-80 mt-1">
-                {todaySlot.modality ? todaySlot.modality + ' · ' : ''}{countWorkoutExercises(todayWorkout, blocksByWorkout, blockExercisesByBlock)} exercises · {todayWorkout.split || todayWorkout.goal}
+                {todayWorkoutSlot.modality ? todayWorkoutSlot.modality + ' · ' : ''}{countWorkoutExercises(todayWorkout, blocksByWorkout, blockExercisesByBlock)} exercises · {todayWorkout.split || todayWorkout.goal}
               </p>
             )}
           </div>
           <div className="p-4">
-            {todaySlot.reason && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{todaySlot.reason}</p>}
+            {todayWorkoutSlot.reason && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{todayWorkoutSlot.reason}</p>}
             <Button asChild className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-              <Link to={`/workout/${todaySlot.workout_id}`}><Play className="h-4 w-4 mr-2" /> Start workout</Link>
+              <Link to={`/workout/${todayWorkoutSlot.workout_id}`}><Play className="h-4 w-4 mr-2" /> Start workout</Link>
             </Button>
           </div>
         </Card>
@@ -692,17 +697,17 @@ export default function Home() {
         </Card>
       )}
 
-      {todaySlot?.workout_id && todayDone && (
+      {todayDone && (
         <Card className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 mb-5">
           <div className="flex items-center gap-2 text-emerald-700">
             <CheckCircle2 className="h-5 w-5" />
             <span className="font-medium">Today's workout complete</span>
           </div>
-          <p className="text-sm text-emerald-700/80 mt-1">{todayWorkout?.name || todaySlot.workout_name} — nice work.</p>
-          <button onClick={() => setSessionDetail(weekSessions.find((s) => s.workout_id === todaySlot.workout_id) || null)} className="mt-2 text-xs font-medium text-emerald-700 underline">View results</button>
+          <p className="text-sm text-emerald-700/80 mt-1">{lastDoneTodayWorkout?.name || lastDoneTodaySlot?.workout_name} — nice work.</p>
+          <button onClick={() => setSessionDetail(weekSessions.find((s) => s.workout_id === lastDoneTodaySlot?.workout_id) || null)} className="mt-2 text-xs font-medium text-emerald-700 underline">View results</button>
           {nextWorkoutSlot && (
             <div className="mt-4 pt-4 border-t border-emerald-200">
-              <p className="text-xs text-emerald-700/70 mb-1">Next up · {nextWorkoutSlot.date === todayISO ? 'Today' : fmtDate(parseDate(nextWorkoutSlot.date))}</p>
+              <p className="text-xs text-emerald-700/70 mb-1">Next up · {fmtDate(parseDate(nextWorkoutSlot.date))}</p>
               <Link to={`/workout/${nextWorkoutSlot.workout_id}`} className="font-medium text-emerald-800 flex items-center gap-1">
                 {nextWorkoutSlot.workout_name} <ChevronRight className="h-4 w-4" />
               </Link>
@@ -711,9 +716,9 @@ export default function Home() {
         </Card>
       )}
 
-      {!todaySlot?.workout_id && nextWorkoutSlot && (
+      {todayWorkoutSlots.length === 0 && nextWorkoutSlot && (
         <Card className="rounded-2xl border-border p-5 mb-5">
-          <p className="text-xs text-muted-foreground mb-1">Next workout · {nextWorkoutSlot.date === todayISO ? 'Today' : fmtDate(parseDate(nextWorkoutSlot.date))}</p>
+          <p className="text-xs text-muted-foreground mb-1">Next workout · {fmtDate(parseDate(nextWorkoutSlot.date))}</p>
           <Link to={`/workout/${nextWorkoutSlot.workout_id}`} className="font-semibold flex items-center gap-1">{nextWorkoutSlot.workout_name} <ChevronRight className="h-4 w-4" /></Link>
         </Card>
       )}
