@@ -294,6 +294,16 @@ export default function Home() {
 
   const makeRest = async (slot) => {
     if (!slot) return;
+    const doneSession = slot.workout_id
+      ? sessions.find((s) => s.workout_id === slot.workout_id && s.status === 'completed' && sameDay(parseDate(s.date), parseDate(slot.date)))
+      : null;
+    if (doneSession) {
+      try {
+        await supabase.from('exercise_sessions').delete().eq('workout_session_id', doneSession.id);
+        await supabase.from('workout_sessions').delete().eq('id', doneSession.id);
+        setSessions((prev) => prev.filter((s) => s.id !== doneSession.id));
+      } catch { /* ignore */ }
+    }
     const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
       ...w,
       slot_type: 'rest',
@@ -434,6 +444,8 @@ export default function Home() {
     } catch { setDetailAlt(null); }
   };
 
+  const restConfirmDone = !!restConfirmFor?.workout_id && weekSessions.some((s) => s.workout_id === restConfirmFor.workout_id && sameDay(parseDate(s.date), parseDate(restConfirmFor.date)));
+
   const selectFromDetail = () => {
     if (!selectedSlot || !selectedWorkout) return;
     if (detailAlt) {
@@ -442,6 +454,152 @@ export default function Home() {
       assignWorkoutToSlot(selectedWorkout.id, selectedWorkout.name, 'Guided session', selectedSlot);
     }
     setSelectedWorkout(null); setSelectedSlot(null); setSelectMode(false); setDetailAlt(null);
+  };
+
+  const renderSlot = (slot, i) => {
+    const isToday = slot.date === todayISO;
+    const done = !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
+    const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
+    const hasScheduled = scheduledForDay.length > 0;
+    const siblingManual = !slot.manual && plan.workouts.some((w) => w.day === slot.day && w.manual);
+
+    const scheduledCards = scheduledForDay.map((sa, j) => (
+      <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
+              {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
+            </div>
+          </div>
+          <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 shrink-0">Scheduled</span>
+        </div>
+      </Card>
+    ));
+
+    const wrap = (card) => hasScheduled ? (
+      <div key={i} className="rounded-2xl ring-1 ring-violet-200/70 bg-violet-50/10 p-1.5 space-y-2">
+        <p className="text-[10px] font-medium text-violet-700 px-1.5 flex items-center gap-1">
+          <CalendarClock className="h-3 w-3" /> {slot.day} · {1 + scheduledForDay.length} activities
+        </p>
+        {card}
+        {scheduledCards}
+      </div>
+    ) : card;
+
+    if (slot.slot_type === 'activity' && !slot.workout_id) {
+      return wrap(
+        <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
+          <div className="flex items-center gap-1 mb-2">
+            {slot.manual && <span className="text-[10px] font-medium text-muted-foreground mr-auto">Extra</span>}
+            <div className="flex items-center gap-1 ml-auto">
+              <button onClick={() => setExtraFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              {siblingManual ? (
+                <button onClick={() => removeSlot(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button onClick={() => setRestConfirmFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
+                  <Moon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate capitalize flex items-center gap-1.5">
+              <Route className="h-4 w-4 text-amber-600 shrink-0" />
+              {slot.activity || 'Activity'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
+          </div>
+          {(slot.suggested_workout_ids?.length > 0) && (
+            <button onClick={() => setSuggestFor(slot)} className="mt-3 text-xs font-medium text-amber-700 flex items-center gap-1">
+              <Sparkles className="h-3.5 w-3.5" /> {slot.suggested_workout_ids.length} guided suggestions
+            </button>
+          )}
+        </Card>
+      );
+    }
+
+    if (slot.slot_type === 'rest') {
+      const isPast = slot.date < todayISO;
+      return wrap(
+        <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isPast ? 'border-brand/30 bg-brand/5' : 'bg-muted/30', !isPast && (isToday ? 'border-border' : 'border-border/60'))}>
+          <div className="flex items-center gap-1 mb-2">
+            <div className="flex items-center gap-1 ml-auto">
+              <button onClick={() => setRestChoiceFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add workout">
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
+            </div>
+          </div>
+          <div className={cn('flex items-center gap-1.5', isPast ? 'text-brand' : 'text-muted-foreground')}>
+            <Moon className="h-4 w-4" />
+            <p className="font-medium">Rest</p>
+          </div>
+        </Card>
+      );
+    }
+
+    const wo = workouts[slot.workout_id];
+    const exCount = wo ? countWorkoutExercises(wo, blocksByWorkout, blockExercisesByBlock) : 0;
+    const isGuidedActivity = slot.slot_type === 'activity';
+    const doneSession = done ? weekSessions.find((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date))) : null;
+    return wrap(
+      <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
+        <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
+          <div className="flex items-center gap-1 mb-2">
+            {slot.manual && <span className="text-[10px] font-medium text-muted-foreground mr-auto">Extra</span>}
+            <div className="flex items-center gap-1 ml-auto">
+              {!slot.manual && (
+                <button onClick={(e) => { e.stopPropagation(); setExtraFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {!done && !slot.manual && !siblingManual && (
+                <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
+                  <ArrowLeftRight className="h-3 w-3" />
+                </button>
+              )}
+              {(slot.manual || siblingManual) ? (
+                <button onClick={(e) => { e.stopPropagation(); removeSlot(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
+                  <Moon className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
+            </div>
+          </div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                {isGuidedActivity && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 capitalize shrink-0"><Route className="h-3 w-3" />{slot.activity}</span>
+                )}
+                <p className="font-semibold truncate">{wo?.name || slot.workout_name}</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{slot.modality || wo?.format_label || 'Workout'}</p>
+            </div>
+            {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
+          </div>
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground min-w-0">
+              <span className="flex items-center gap-1 shrink-0"><Clock className="h-3.5 w-3.5" />{roundToFive(wo?.est_duration_min) || '~45'} min</span>
+              <span className="flex items-center gap-1 shrink-0"><Dumbbell className="h-3.5 w-3.5" />{exCount} {exCount === 1 ? 'Exercise' : 'Exercises'}</span>
+              {wo?.workout_category && <span className="capitalize truncate">{wo.workout_category}</span>}
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          </div>
+        </Card>
+      </button>
+    );
   };
 
   return (
@@ -587,175 +745,54 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <div className="space-y-2.5">
-            {plan.workouts?.map((slot, i) => {
-              const isToday = slot.date === todayISO;
-              const done = !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
-              const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
-              const hasScheduled = scheduledForDay.length > 0;
-              const siblingManual = !slot.manual && plan.workouts.some((w) => w.day === slot.day && w.manual);
-              const dateLabel = `${slot.day.slice(0, 3)} · ${fmtDate(parseDate(slot.date), 'd MMM')}${isToday ? ' · Today' : ''}${slot.manual ? ' · Extra' : ''}`;
-
-              const scheduledCards = scheduledForDay.map((sa, j) => (
-                <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
-                        {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 shrink-0">Scheduled</span>
-                  </div>
-                </Card>
-              ));
-
-              const wrap = (card) => hasScheduled ? (
-                <div key={i} className="rounded-2xl ring-1 ring-violet-200/70 bg-violet-50/10 p-1.5 space-y-2">
-                  <p className="text-[10px] font-medium text-violet-700 px-1.5 flex items-center gap-1">
-                    <CalendarClock className="h-3 w-3" /> {slot.day} · {1 + scheduledForDay.length} activities
-                  </p>
-                  {card}
-                  {scheduledCards}
-                </div>
-              ) : card;
-
-              if (slot.slot_type === 'activity' && !slot.workout_id) {
-                return wrap(
-                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => setExtraFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                        {siblingManual ? (
-                          <button onClick={() => removeSlot(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <button onClick={() => setRestConfirmFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
-                            <Moon className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate capitalize flex items-center gap-1.5">
-                        <Route className="h-4 w-4 text-amber-600 shrink-0" />
-                        {slot.activity || 'Activity'}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
-                    </div>
-                    {(slot.suggested_workout_ids?.length > 0) && (
-                      <button onClick={() => setSuggestFor(slot)} className="mt-3 text-xs font-medium text-amber-700 flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5" /> {slot.suggested_workout_ids.length} guided suggestions
-                      </button>
-                    )}
-                  </Card>
-                );
-              }
-
-              if (slot.slot_type === 'rest') {
-                const isPast = slot.date < todayISO;
-                return wrap(
-                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isPast ? 'border-brand/30 bg-brand/5' : 'bg-muted/30', !isPast && (isToday ? 'border-border' : 'border-border/60'))}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => setRestChoiceFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add workout">
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                        <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
-                      </div>
-                    </div>
-                    <div className={cn('flex items-center gap-1.5', isPast ? 'text-brand' : 'text-muted-foreground')}>
-                      <Moon className="h-4 w-4" />
-                      <p className="font-medium">Rest</p>
-                    </div>
-                  </Card>
-                );
-              }
-
-              const wo = workouts[slot.workout_id];
-              const exCount = wo ? countWorkoutExercises(wo, blocksByWorkout, blockExercisesByBlock) : 0;
-              const isGuidedActivity = slot.slot_type === 'activity';
-              const doneSession = done ? weekSessions.find((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date))) : null;
-              return wrap(
-                <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
-                  <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {!slot.manual && (
-                          <button onClick={(e) => { e.stopPropagation(); setExtraFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {!done && !slot.manual && !siblingManual && (
-                          <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
-                            <ArrowLeftRight className="h-3 w-3" />
-                          </button>
-                        )}
-                        {(slot.manual || siblingManual) ? (
-                          <button onClick={(e) => { e.stopPropagation(); removeSlot(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title={done ? 'Completed workouts can\'t become rest days' : 'Make rest day'}>
-                            <Moon className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={done} />
-                      </div>
-                    </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {isGuidedActivity && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 capitalize shrink-0"><Route className="h-3 w-3" />{slot.activity}</span>
-                          )}
-                          <p className="font-semibold truncate">{wo?.name || slot.workout_name}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{slot.modality || wo?.format_label || 'Workout'}</p>
-                      </div>
-                      {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
-                    </div>
-                    <div className="flex items-center justify-between mt-3">
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground min-w-0">
-                        <span className="flex items-center gap-1 shrink-0"><Clock className="h-3.5 w-3.5" />{roundToFive(wo?.est_duration_min) || '~45'} min</span>
-                        <span className="flex items-center gap-1 shrink-0"><Dumbbell className="h-3.5 w-3.5" />{exCount} {exCount === 1 ? 'Exercise' : 'Exercises'}</span>
-                        {wo?.workout_category && <span className="capitalize truncate">{wo.workout_category}</span>}
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </div>
-                  </Card>
-                </button>
-              );
-            })}
+          <div className="space-y-4">
             {(() => {
-              const scheduledDays = new Set((plan.workouts || []).map((s) => s.day));
-              const orphanScheduled = (profile?.scheduled_activities || []).filter((a) => !scheduledDays.has(a.day));
-              return orphanScheduled.map((sa, j) => (
-                <Card key={`sched-orphan-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
-                        {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-[10px] font-medium text-muted-foreground">{sa.day?.slice(0, 3)}</span>
-                      <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">Scheduled</span>
+              const groups = [];
+              (plan.workouts || []).forEach((slot, i) => {
+                const prevGroup = groups[groups.length - 1];
+                if (prevGroup && prevGroup.date === slot.date && prevGroup.day === slot.day) {
+                  prevGroup.items.push({ slot, i });
+                } else {
+                  groups.push({ day: slot.day, date: slot.date, items: [{ slot, i }] });
+                }
+              });
+              return groups.map((group, gi) => {
+                const isToday = group.date === todayISO;
+                return (
+                  <div key={gi} className="space-y-2">
+                    <span className="block px-1 text-xs font-medium text-muted-foreground">
+                      {group.day.slice(0, 3)} · {fmtDate(parseDate(group.date), 'd MMM')}{isToday ? ' · Today' : ''}
+                    </span>
+                    <div className="space-y-2.5">
+                      {group.items.map(({ slot, i }) => renderSlot(slot, i))}
                     </div>
                   </div>
-                </Card>
-              ));
+                );
+              });
             })()}
+            <div className="space-y-2.5">
+              {(() => {
+                const scheduledDays = new Set((plan.workouts || []).map((s) => s.day));
+                const orphanScheduled = (profile?.scheduled_activities || []).filter((a) => !scheduledDays.has(a.day));
+                return orphanScheduled.map((sa, j) => (
+                  <Card key={`sched-orphan-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CalendarClock className="h-4 w-4 text-violet-600 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate capitalize">{sa.activity || 'Scheduled activity'}</p>
+                          {sa.time_of_day && <p className="text-xs text-violet-700/70 capitalize">{sa.time_of_day}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] font-medium text-muted-foreground">{sa.day?.slice(0, 3)}</span>
+                        <span className="text-[10px] font-medium text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">Scheduled</span>
+                      </div>
+                    </div>
+                  </Card>
+                ));
+              })()}
+            </div>
           </div>
         </div>
       )}
@@ -843,13 +880,15 @@ export default function Home() {
           <AlertDialogHeader>
             <AlertDialogTitle>Turn this day into rest?</AlertDialogTitle>
             <AlertDialogDescription>
-              {restConfirmFor?.workout_name ? `"${restConfirmFor.workout_name}" on ` : ''}{restConfirmFor?.day} will be cleared and marked as a rest day. You can add a workout back later.
+              {restConfirmDone
+                ? `You've already logged "${restConfirmFor?.workout_name}" for ${restConfirmFor?.day}. Turning it into a rest day will permanently delete that logged session — this can't be undone.`
+                : <>{restConfirmFor?.workout_name ? `"${restConfirmFor.workout_name}" on ` : ''}{restConfirmFor?.day} will be cleared and marked as a rest day. You can add a workout back later.</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => makeRest(restConfirmFor)} className="bg-brand text-brand-foreground hover:bg-brand/90">
-              Make rest day
+            <AlertDialogAction onClick={() => makeRest(restConfirmFor)} className={cn('text-brand-foreground', restConfirmDone ? 'bg-destructive hover:bg-destructive/90' : 'bg-brand hover:bg-brand/90')}>
+              {restConfirmDone ? 'Delete session & make rest day' : 'Make rest day'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
