@@ -112,16 +112,21 @@ export default function Progress() {
   });
   const prs = Object.values(prMap).sort((a, b) => b.max_weight - a.max_weight);
 
-  // per-exercise working weight trend, one point per date (last logged that day)
+  // per-exercise working weight trend: one point per workout (max weight across
+  // that workout's rounds/sets of the movement), not one point per logged round
   const trendByExercise = {};
   prs.forEach((p) => {
-    const byDate = new Map();
+    const byWorkout = new Map();
     exerciseSessions
       .filter((s) => s.exercise_id === p.exercise_id && s.max_weight)
-      .forEach((s) => { byDate.set(s.date || s.created_date, s); });
-    const points = [...byDate.entries()]
-      .sort((a, b) => parseDate(a[0]) - parseDate(b[0]))
-      .map(([date, s]) => ({ date: fmtDate(parseDate(date), 'd MMM'), weight: s.max_weight }));
+      .forEach((s) => {
+        const key = s.workout_session_id || s.date || s.created_date;
+        const existing = byWorkout.get(key);
+        if (!existing || s.max_weight > existing.max_weight) byWorkout.set(key, s);
+      });
+    const points = [...byWorkout.values()]
+      .sort((a, b) => parseDate(a.date || a.created_date) - parseDate(b.date || b.created_date))
+      .map((s) => ({ date: fmtDate(parseDate(s.date || s.created_date), 'd MMM'), weight: s.max_weight }));
     trendByExercise[p.exercise_id] = points;
   });
 
@@ -213,7 +218,7 @@ export default function Progress() {
 }
 
 function PersonalRecordRow({ record, trend }) {
-  const showTrend = trend.length >= 3 && new Set(trend.map((t) => t.weight)).size > 1;
+  const showTrend = new Set(trend.map((t) => t.date)).size >= 3 && new Set(trend.map((t) => t.weight)).size > 1;
   return (
     <Card className="rounded-xl border-border p-3">
       <div className="flex items-center justify-between gap-2">
