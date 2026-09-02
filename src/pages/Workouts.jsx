@@ -260,8 +260,9 @@ export default function Workouts() {
             <h1 className="text-2xl font-semibold tracking-tight">Workout Library</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Curated training sessions</p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setCreatingWorkout(true)} className="rounded-xl shrink-0">
-            <Plus className="h-4 w-4 mr-1" /> New
+          <Button size="sm" onClick={() => setCreatingWorkout(true)} className="gap-1.5 h-8 shrink-0 bg-brand hover:bg-brand/90 text-brand-foreground">
+            <Plus className="h-3.5 w-3.5" />
+            Add
           </Button>
         </header>
 
