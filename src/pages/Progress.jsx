@@ -213,7 +213,7 @@ export default function Progress() {
 }
 
 function PersonalRecordRow({ record, trend }) {
-  const showTrend = trend.length >= 3;
+  const showTrend = trend.length >= 3 && new Set(trend.map((t) => t.weight)).size > 1;
   return (
     <Card className="rounded-xl border-border p-3">
       <div className="flex items-center justify-between gap-2">
