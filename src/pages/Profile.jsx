@@ -12,6 +12,7 @@ import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
 import { getProfileCompleteness } from '@/lib/profileGaps';
+import { IconButton } from '@/components/ui/icon-button';
 import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity } from 'lucide-react';
 
 export default function Profile() {
@@ -57,9 +58,9 @@ export default function Profile() {
           <div className="flex items-center gap-3">
             <div className="h-14 w-14 rounded-full bg-brand flex items-center justify-center text-brand-foreground font-semibold text-lg">{(user?.full_name || 'A')[0].toUpperCase()}</div>
             <div>
-              <button onClick={openNameEditor} className="flex items-center gap-1.5 text-xl font-semibold tracking-tight">
+              <button onClick={openNameEditor} className="group flex items-center gap-1.5 text-xl font-semibold tracking-tight">
                 {user?.full_name || 'Athlete'}
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                <IconButton as="span" icon={Pencil} bare />
               </button>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
@@ -89,7 +90,7 @@ export default function Profile() {
 
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Training profile</h2>
-        <button onClick={() => setEditing(true)} className="flex items-center gap-1 text-xs font-medium text-brand"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+        <IconButton as="button" onClick={() => setEditing(true)} icon={Pencil} label="Edit" variant="primary" bare />
       </div>
       {completePct < 100 && (
         <div className="flex items-center gap-2 mb-3">

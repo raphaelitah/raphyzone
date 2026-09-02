@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X, Loader2, AlertTriangle } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 import { EQUIPMENT_GROUPS } from '@/lib/fitness';
 import { DIMENSIONS, fetchTaxonomyTerms, checkUsage, transferExercises } from '@/lib/taxonomy';
 import { findDuplicateTaxonomyTerm, UNIQUE_VIOLATION } from '@/lib/duplicates';
@@ -207,9 +208,7 @@ export default function AdminTaxonomy() {
                           )}
                         </div>
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditing(term); setEditValue(term.value); setEditLabel(term.label || ''); setEditGroup(term.group || ''); }} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          <IconButton onClick={() => { setEditing(term); setEditValue(term.value); setEditLabel(term.label || ''); setEditGroup(term.group || ''); }} icon={Pencil} />
                           <button onClick={() => startDelete(term)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
