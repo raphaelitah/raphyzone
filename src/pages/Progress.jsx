@@ -110,7 +110,7 @@ export default function Progress() {
     if (!s.exercise_id || !s.max_weight) return;
     if (!prMap[s.exercise_id] || s.max_weight > prMap[s.exercise_id].max_weight) prMap[s.exercise_id] = s;
   });
-  const prs = Object.values(prMap).sort((a, b) => b.max_weight - a.max_weight);
+  const prs = Object.values(prMap).sort((a, b) => parseDate(b.date || b.created_date) - parseDate(a.date || a.created_date));
 
   // per-exercise working weight trend: one point per workout (max weight across
   // that workout's rounds/sets of the movement), not one point per logged round
