@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 export default function SwapShortlistSheet({ open, onOpenChange, loading, alternatives, currentName, onPick, onViewDetails = null, keepLabel = null, onSearchLibrary = null }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl h-[70vh] flex flex-col p-0">
+      <SheetContent side="bottom" className="rounded-t-3xl h-[70dvh] flex flex-col p-0">
         <SheetHeader className="px-5 pt-5 pb-3 shrink-0">
           <SheetTitle className="text-left">Find an alternative</SheetTitle>
           <SheetDescription className="text-left">

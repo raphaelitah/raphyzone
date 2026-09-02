@@ -141,7 +141,7 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto">
         <SheetHeader className="px-5 pt-5">
           <SheetTitle className="text-left">Add exercise</SheetTitle>
         </SheetHeader>
@@ -220,7 +220,7 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
                   <Loader2 className="h-6 w-6 text-brand animate-spin" />
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                <div className="space-y-2 max-h-[50dvh] overflow-y-auto">
                   {results.map((ex) => (
                     <button
                       key={ex.id}

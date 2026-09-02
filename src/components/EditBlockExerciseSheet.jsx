@@ -55,7 +55,7 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto">
         {blockExercise && (
           <>
             <SheetHeader className="px-5 pt-5">
