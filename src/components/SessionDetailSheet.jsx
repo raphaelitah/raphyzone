@@ -8,6 +8,7 @@ import { Clock, Loader2, Pencil, Save } from 'lucide-react';
 import { parseISO, format } from 'date-fns';
 import { DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
+import { buildBlocksByWorkout, buildBlockExercisesByBlock } from '@/lib/workoutStructure';
 
 const CHART_COLORS = ['hsl(var(--brand))', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 
@@ -36,6 +37,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(false);
+  const [blocks, setBlocks] = useState([]);
+  const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
     if (!open) { setEditing(false); setDrafts({}); }
@@ -49,9 +52,14 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     setHistory([]);
     setChartData([]);
     setChartKeys([]);
+    setBlocks([]);
+    setBlockExercisesByBlock({});
     (async () => {
       try {
-        const { data: thisEsData } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', session.id);
+        const [{ data: thisEsData }, { data: workoutRow }] = await Promise.all([
+          supabase.from('exercise_sessions').select('*').eq('workout_session_id', session.id),
+          supabase.from('workouts').select('workout_id').eq('id', session.workout_id).maybeSingle(),
+        ]);
         const thisEs = (thisEsData || []).slice().sort((a, b) => {
           if (a.order_index == null && b.order_index == null) return 0;
           if (a.order_index == null) return 1;
@@ -60,6 +68,19 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         });
         if (!active) return;
         setExerciseSessions(thisEs);
+
+        const textWorkoutId = workoutRow?.workout_id || null;
+        if (textWorkoutId) {
+          const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', textWorkoutId);
+          const blocksList = blocksData || [];
+          const blockIds = blocksList.map((b) => b.block_id);
+          const blockExsData = blockIds.length
+            ? (await supabase.from('block_exercises').select('*').in('block_id', blockIds)).data || []
+            : [];
+          if (!active) return;
+          setBlocks((buildBlocksByWorkout(blocksList))[textWorkoutId] || []);
+          setBlockExercisesByBlock(buildBlockExercisesByBlock(blockExsData));
+        }
 
         const { data: allSessionsData } = await supabase
           .from('workout_sessions')
@@ -97,7 +118,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
           const sessEs = esBySession[s.id] || [];
           keys.forEach((k) => {
             const es = sessEs.find((e) => e.exercise_id === k.id);
-            if (es) row[k.name] = k.loaded ? (es.max_weight || 0) : (es.elapsed_seconds || 0);
+            if (es) row[k.name] = k.loaded ? (es.max_weight || 0) : Math.round(((es.duration_seconds ?? es.elapsed_seconds ?? 0) / 60) * 10) / 10;
           });
           return row;
         });
@@ -196,38 +217,16 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
             <p className="text-xs font-medium text-muted-foreground mb-2">Exercises</p>
             {loading ? (
               <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 text-brand animate-spin" /></div>
-            ) : exerciseSessions.length ? (
-              <div className="space-y-2">
-                {exerciseSessions.map((es, i) => (
-                  editing ? (
+            ) : editing ? (
+              exerciseSessions.length ? (
+                <div className="space-y-2">
+                  {exerciseSessions.map((es, i) => (
                     <EditableExerciseRow key={es.id || i} es={es} draft={drafts[es.id] || {}} onChange={(patch) => setDraft(es.id, patch)} />
-                  ) : (
-                    <Card key={es.id || i} className="rounded-xl border-border p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {es.distance_km != null ? (
-                            <span className="text-sm font-semibold">{es.distance_km}km</span>
-                          ) : es.max_weight > 0 ? (
-                            <span className="text-sm font-semibold">{es.max_weight}kg</span>
-                          ) : es.max_weight === 0 ? (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
-                          ) : null}
-                          {es.duration_seconds != null ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.duration_seconds)}</span>
-                          ) : es.elapsed_seconds != null && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.elapsed_seconds)}</span>
-                          )}
-                        </div>
-                      </div>
-                      {es.difficulty && (
-                        <span className={cn('inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[es.difficulty]?.color)}>{DIFFICULTY_META[es.difficulty]?.label}</span>
-                      )}
-                      {es.note && <p className="text-xs text-muted-foreground mt-1.5">{es.note}</p>}
-                    </Card>
-                  )
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>
+            ) : exerciseSessions.length ? (
+              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} />
             ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>}
           </div>
 
@@ -240,7 +239,13 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                     <LineChart data={chartData}>
                       <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={36} />
-                      <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }}
+                        formatter={(value, name) => {
+                          const k = chartKeys.find((ck) => ck.name === name);
+                          return k?.loaded ? value : `${value} min`;
+                        }}
+                      />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       {chartKeys.map((k, i) => (
                         <Line key={k.id} type="monotone" dataKey={k.name} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
@@ -268,6 +273,108 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Pairs each logged exercise_session up with its block_exercise (matched by
+// exercise_id, consumed in block/order_in_block sequence) so history can be
+// grouped exactly like the library view. Anything left unmatched (e.g. a
+// substituted exercise) is returned separately and rendered without a block.
+function groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions) {
+  const remaining = exerciseSessions.slice();
+  const groups = [];
+  blocks.forEach((block) => {
+    const blockExs = (blockExercisesByBlock[block.block_id] || []).filter((be) => be.step_type === 'exercise');
+    const items = [];
+    blockExs.forEach((be) => {
+      const idx = remaining.findIndex((es) => es.exercise_id === be.exercise_id);
+      if (idx !== -1) {
+        items.push(remaining[idx]);
+        remaining.splice(idx, 1);
+      }
+    });
+    if (items.length) groups.push({ block, items });
+  });
+  return { groups, leftover: remaining };
+}
+
+function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions }) {
+  const { groups, leftover } = groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions);
+
+  if (!groups.length) {
+    return (
+      <div className="space-y-2">
+        {exerciseSessions.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map(({ block, items }) => (
+        <div key={block.block_id}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="h-6 w-6 rounded-full bg-brand text-brand-foreground text-xs font-semibold flex items-center justify-center">
+              {block.block_label}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground capitalize">
+              {block.block_type?.replace(/_/g, ' ')}
+            </span>
+            {block.rounds > 1 && <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>}
+          </div>
+          <div className="relative ml-8">
+            {items.length > 1 && <div className="absolute left-3 top-6 bottom-6 w-px bg-border" />}
+            {items.map((es, index) => {
+              const stepLabel = items.length > 1 ? `${block.block_label}${index + 1}` : null;
+              return (
+                <div key={es.id} className="flex items-center gap-2 mb-2 last:mb-0">
+                  {stepLabel && (
+                    <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
+                  )}
+                  <ExercisePerformanceRow es={es} className="flex-1 min-w-0" />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {leftover.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">Other</p>
+          <div className="space-y-2">
+            {leftover.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExercisePerformanceRow({ es, className = '' }) {
+  return (
+    <Card className={cn('rounded-xl border-border p-3', className)}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium truncate">{es.exercise_name}</p>
+        <div className="flex items-center gap-2 shrink-0">
+          {es.distance_km != null ? (
+            <span className="text-sm font-semibold">{es.distance_km}km</span>
+          ) : es.max_weight > 0 ? (
+            <span className="text-sm font-semibold">{es.max_weight}kg</span>
+          ) : es.max_weight === 0 ? (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
+          ) : null}
+          {es.duration_seconds != null ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.duration_seconds)}</span>
+          ) : es.elapsed_seconds != null && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(es.elapsed_seconds)}</span>
+          )}
+        </div>
+      </div>
+      {es.difficulty && (
+        <span className={cn('inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[es.difficulty]?.color)}>{DIFFICULTY_META[es.difficulty]?.label}</span>
+      )}
+      {es.note && <p className="text-xs text-muted-foreground mt-1.5">{es.note}</p>}
+    </Card>
   );
 }
 
