@@ -281,19 +281,29 @@ export default function Home() {
     try { await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id); } catch { /* ignore */ }
   };
 
-  // Each array position keeps the day/date it started with; moving a slot swaps the
-  // *workout content* between two adjacent positions, so within a day this reorders
-  // the cards, and at a day boundary it hands the workout off to the neighboring day
-  // (which keeps its own remaining slot) — days themselves never move.
+  // Within a day this just reorders two cards. Crossing into the neighboring day is
+  // a plain move, not a swap: the card takes on that day, joining whichever cards are
+  // already there (as their new first/last) without disturbing them — as long as its
+  // own day has another card left behind. If it's the only card on its day, hopping
+  // away would leave that day empty, so it falls back to trading places with just the
+  // adjacent card (pinning day/date to array position for this swap) — the only way
+  // to cross without skipping a day or splitting the neighboring day's cards apart.
   const moveSlot = async (index, dir) => {
     if (!plan?.workouts) return;
-    const newIndex = index + dir;
-    if (newIndex < 0 || newIndex >= plan.workouts.length) return;
-    const updated = [...plan.workouts];
-    const a = updated[index];
-    const b = updated[newIndex];
-    updated[index] = { ...b, day: a.day, date: a.date };
-    updated[newIndex] = { ...a, day: b.day, date: b.date };
+    const w = plan.workouts;
+    const neighborIndex = index + dir;
+    if (neighborIndex < 0 || neighborIndex >= w.length) return;
+    const slot = w[index];
+    const neighbor = w[neighborIndex];
+    const updated = [...w];
+    const crossingDay = slot.day !== neighbor.day || slot.date !== neighbor.date;
+    const ownGroupSize = w.filter((s) => s.day === slot.day && s.date === slot.date).length;
+    if (crossingDay && ownGroupSize > 1) {
+      updated[index] = { ...slot, day: neighbor.day, date: neighbor.date };
+    } else {
+      updated[index] = { ...neighbor, day: slot.day, date: slot.date };
+      updated[neighborIndex] = { ...slot, day: neighbor.day, date: neighbor.date };
+    }
     await persistPlan(updated);
   };
 
