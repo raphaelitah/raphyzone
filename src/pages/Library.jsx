@@ -26,6 +26,8 @@ export default function Library() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [category, setCategory] = useState('All');
   const [region, setRegion] = useState('All');
   const [pattern, setPattern] = useState('All');
@@ -40,17 +42,47 @@ export default function Library() {
   const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('library');
 
   useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(timeout);
+  }, [query]);
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
-      try {
-        const { data } = await supabase.from('exercises').select('*').order('name').limit(BATCH_SIZE);
-        setExercises(data || []);
-        setHasMore((data || []).length === BATCH_SIZE);
-      } finally { setLoading(false); }
+      if (debouncedQuery) {
+        setSearching(true);
+        try {
+          const { data } = await supabase
+            .from('exercises')
+            .select('*')
+            .ilike('name', `%${debouncedQuery}%`)
+            .order('name')
+            .limit(200);
+          if (!cancelled) {
+            setExercises(data || []);
+            setHasMore(false);
+          }
+        } finally {
+          if (!cancelled) setSearching(false);
+        }
+      } else {
+        setLoading(true);
+        try {
+          const { data } = await supabase.from('exercises').select('*').order('name').limit(BATCH_SIZE);
+          if (!cancelled) {
+            setExercises(data || []);
+            setHasMore((data || []).length === BATCH_SIZE);
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [debouncedQuery]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || loading) return;
+    if (loadingMore || !hasMore || loading || debouncedQuery) return;
     setLoadingMore(true);
     try {
       const lastExercise = exercises[exercises.length - 1];
@@ -71,7 +103,7 @@ export default function Library() {
     } finally {
       setLoadingMore(false);
     }
-  }, [exercises, loadingMore, hasMore, loading]);
+  }, [exercises, loadingMore, hasMore, loading, debouncedQuery]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -94,6 +126,8 @@ export default function Library() {
     const matchesPat = matchesPattern(e, pattern);
     return isApproved && matchesQ && matchesCat && matchesReg && matchesPat;
   }), [exercises, query, category, region, pattern]);
+
+  const isSearchPending = searching || query.trim() !== debouncedQuery;
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -141,7 +175,10 @@ export default function Library() {
 
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search exercises…" className="pl-9 rounded-xl h-11" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search exercises…" className="pl-9 pr-9 rounded-xl h-11" />
+          {isSearchPending && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </div>
 
         <LibraryFilters category={category} setCategory={setCategory} region={region} setRegion={setRegion} pattern={pattern} setPattern={setPattern} expanded={filtersExpanded} setExpanded={setFiltersExpanded} />
@@ -168,13 +205,13 @@ export default function Library() {
                 </Card>
               </button>
             ))}
-            {filtered.length === 0 && !loadingMore && (
+            {filtered.length === 0 && !loadingMore && !isSearchPending && (
               <p className="text-center text-sm text-muted-foreground py-16">No exercises found.</p>
             )}
             <div ref={sentinelRef} className="h-10 flex items-center justify-center">
               {loadingMore ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : !hasMore && filtered.length > 0 ? (
+              ) : !hasMore && !debouncedQuery && filtered.length > 0 ? (
                 <p className="text-xs text-muted-foreground">No more exercises</p>
               ) : null}
             </div>
