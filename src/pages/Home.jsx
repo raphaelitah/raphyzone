@@ -152,7 +152,7 @@ export default function Home() {
   const todaySlot = plan?.workouts?.find((w) => w.date === todayISO);
   const todayWorkout = todaySlot?.workout_id ? workouts[todaySlot.workout_id] : null;
   const todayDone = !!todaySlot?.workout_id && weekSessions.some((s) => s.workout_id === todaySlot.workout_id);
-  const nextWorkoutSlot = plan?.workouts?.find((w) => w.date > todayISO && w.workout_id && !weekSessions.some((s) => s.workout_id === w.workout_id));
+  const nextWorkoutSlot = plan?.workouts?.find((w) => w !== todaySlot && w.date >= todayISO && w.workout_id && !weekSessions.some((s) => s.workout_id === w.workout_id));
 
   const countedSlots = plan?.workouts?.filter((w) => w.workout_id || w.slot_type === 'activity') || [];
   const totalCount = countedSlots.length;
@@ -702,7 +702,7 @@ export default function Home() {
           <button onClick={() => setSessionDetail(weekSessions.find((s) => s.workout_id === todaySlot.workout_id) || null)} className="mt-2 text-xs font-medium text-emerald-700 underline">View results</button>
           {nextWorkoutSlot && (
             <div className="mt-4 pt-4 border-t border-emerald-200">
-              <p className="text-xs text-emerald-700/70 mb-1">Next up · {fmtDate(parseDate(nextWorkoutSlot.date))}</p>
+              <p className="text-xs text-emerald-700/70 mb-1">Next up · {nextWorkoutSlot.date === todayISO ? 'Today' : fmtDate(parseDate(nextWorkoutSlot.date))}</p>
               <Link to={`/workout/${nextWorkoutSlot.workout_id}`} className="font-medium text-emerald-800 flex items-center gap-1">
                 {nextWorkoutSlot.workout_name} <ChevronRight className="h-4 w-4" />
               </Link>
@@ -713,7 +713,7 @@ export default function Home() {
 
       {!todaySlot?.workout_id && nextWorkoutSlot && (
         <Card className="rounded-2xl border-border p-5 mb-5">
-          <p className="text-xs text-muted-foreground mb-1">Next workout · {fmtDate(parseDate(nextWorkoutSlot.date))}</p>
+          <p className="text-xs text-muted-foreground mb-1">Next workout · {nextWorkoutSlot.date === todayISO ? 'Today' : fmtDate(parseDate(nextWorkoutSlot.date))}</p>
           <Link to={`/workout/${nextWorkoutSlot.workout_id}`} className="font-semibold flex items-center gap-1">{nextWorkoutSlot.workout_name} <ChevronRight className="h-4 w-4" /></Link>
         </Card>
       )}
