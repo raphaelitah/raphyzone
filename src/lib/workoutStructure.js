@@ -132,6 +132,12 @@ export function isTabataBlock(block) {
   return type === 'tabata' || format === 'tabata';
 }
 
+export function isSupersetBlock(block) {
+  const type = (block.block_type || '').toLowerCase();
+  const format = (block.workout_format || '').toLowerCase();
+  return type === 'superset' || format === 'superset';
+}
+
 export function countWorkoutRests(workout, blocksByWorkout, blockExercisesByBlock) {
   const blocks = blocksByWorkout[workout.workout_id] || [];
   let count = 0;
@@ -182,10 +188,24 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
       blockLabel: 'Tabata',
       isEmomFamily: false,
       isAlternatingEmom: false,
+      isSuperset: false,
       timerDefaultConfig: {
         workSec: block.work_seconds ?? 20,
         restSec: block.rest_seconds ?? 10,
         rounds: block.rounds ?? 1,
+      },
+    };
+  }
+
+  if (isSupersetBlock(block)) {
+    return {
+      blockLabel: 'Superset',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      isSuperset: true,
+      timerDefaultConfig: {
+        rounds: block.rounds ?? 1,
+        restSec: block.rest_seconds ?? 60,
       },
     };
   }

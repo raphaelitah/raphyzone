@@ -19,6 +19,7 @@ import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, Rota
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
+import SupersetPanel from '@/components/SupersetPanel';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import {
@@ -196,7 +197,14 @@ export default function WorkoutExecution() {
 
         const { data: inProgress } = await supabase.from('workout_sessions').select('*').eq('user_id', user.id).eq('status', 'in_progress').order('created_date', { ascending: false });
         if (!active()) return;
-        const sessions = inProgress || [];
+        const STALE_MS = 6 * 60 * 60 * 1000; // sessions abandoned (tab closed, crash, etc.) without being explicitly ended
+        const isStale = (s) => Date.now() - new Date(s.created_date).getTime() > STALE_MS;
+        const allSessions = inProgress || [];
+        const staleSessions = allSessions.filter(isStale);
+        if (staleSessions.length) {
+          supabase.from('workout_sessions').update({ status: 'skipped' }).in('id', staleSessions.map((s) => s.id)).then(() => {});
+        }
+        const sessions = allSessions.filter((s) => !isStale(s));
         let sess = sessions.find((s) => s.workout_id === workoutId && s.date === targetDate);
         const other = sessions.find((s) => s.id !== sess?.id);
 
@@ -264,6 +272,7 @@ export default function WorkoutExecution() {
   const blockLabel = blockTimerMeta?.blockLabel ?? null;
   const isEmomFamily = blockTimerMeta?.isEmomFamily ?? false;
   const isAlternatingEmom = blockTimerMeta?.isAlternatingEmom ?? false;
+  const isSuperset = blockTimerMeta?.isSuperset ?? false;
   const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
   const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && blockLogPrompt !== current.block_id);
   const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
@@ -322,6 +331,26 @@ export default function WorkoutExecution() {
     timer.reset();
     setArmedTimerConfig(null);
     advancePastBlock(blockId);
+  };
+
+  // Accumulates the time spent on one superset exercise's set (tracked by
+  // SupersetPanel via tap-to-start/stop) into that exercise's saved elapsed time.
+  const handleSupersetExerciseElapsed = (key, deltaSeconds) => {
+    if (!deltaSeconds || deltaSeconds <= 0) return;
+    exerciseElapsedRef.current[key] = (exerciseElapsedRef.current[key] || 0) + deltaSeconds;
+    scheduleSave(key);
+  };
+
+  const handleSupersetFinish = () => {
+    if (!current) return;
+    setBlockLogDifficulty(null);
+    setBlockLogNote('');
+    setBlockLogPrompt(current.block_id);
+  };
+
+  const handleSupersetSkip = () => {
+    if (!current) return;
+    advancePastBlock(current.block_id);
   };
 
   const handleSaveBlockLog = () => {
@@ -401,6 +430,7 @@ export default function WorkoutExecution() {
         sets: ex.effective_sets || ex.sets, reps: ex.reps, target_weight: ex.target_weight,
         distance_km: log.distance_km ?? null, duration_seconds: log.duration_seconds ?? null,
         elapsed_seconds: Math.round(exerciseElapsedRef.current[key] || 0),
+        order_index: ex.order ?? null,
       };
       if (existingId) {
         await supabase.from('exercise_sessions').update(payload).eq('id', existingId);
@@ -597,17 +627,22 @@ export default function WorkoutExecution() {
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
   if (!workout) return <div className="p-6 text-center text-muted-foreground">Workout not found.</div>;
+  const backNoExercises = () => {
+    const sid = sessionIdRef.current;
+    if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});
+    window.history.length > 1 ? navigate(-1) : navigate('/');
+  };
   if (!current) return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="px-5 pt-8 pb-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="p-1 -ml-1"><ChevronLeft className="h-5 w-5" /></button>
+          <button onClick={backNoExercises} className="p-1 -ml-1"><ChevronLeft className="h-5 w-5" /></button>
           <h1 className="font-semibold truncate">{workout?.name}</h1>
         </div>
       </div>
       <div className="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-sm text-muted-foreground">This workout doesn't have any exercises set up yet.</p>
-        <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="mt-2 text-sm font-medium text-brand underline">Go back</button>
+        <button onClick={backNoExercises} className="mt-2 text-sm font-medium text-brand underline">Go back</button>
       </div>
     </div>
   );
@@ -620,7 +655,11 @@ export default function WorkoutExecution() {
     || (isRunning ? (log.distance_km != null && log.duration_seconds != null) : (!requiresWeight || log.max_weight != null || log.bodyweight));
   const setsValue = current.rounds > 1 ? current.effective_sets : current.sets;
   const setsSubtext = current.rounds > 1 ? `${current.rounds} rounds` : null;
-  const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/'));
+  const back = () => {
+    const sid = sessionIdRef.current;
+    if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});
+    window.history.length > 1 ? navigate(-1) : navigate('/');
+  };
   const showBlockLogPrompt = blockLogPrompt != null && current.block_id === blockLogPrompt;
   const blockLogExercises = showBlockLogPrompt ? exercises.filter((e) => e.block_id === blockLogPrompt) : [];
 
@@ -668,6 +707,16 @@ export default function WorkoutExecution() {
             </div>
             <textarea value={blockLogNote} onChange={(e) => setBlockLogNote(e.target.value)} placeholder="Optional note…" className="w-full mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
           </>
+        ) : isBlockActive && isSuperset ? (
+          <SupersetPanel
+            key={current.block_id}
+            exercises={currentBlockExercises}
+            rounds={timerDefaultConfig?.rounds || 1}
+            restSec={timerDefaultConfig?.restSec ?? 0}
+            onExerciseElapsed={handleSupersetExerciseElapsed}
+            onFinish={handleSupersetFinish}
+            onSkip={handleSupersetSkip}
+          />
         ) : isBlockActive ? (
           <>
             <WorkoutTimerPanel

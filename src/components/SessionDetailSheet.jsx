@@ -52,7 +52,12 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     (async () => {
       try {
         const { data: thisEsData } = await supabase.from('exercise_sessions').select('*').eq('workout_session_id', session.id);
-        const thisEs = thisEsData || [];
+        const thisEs = (thisEsData || []).slice().sort((a, b) => {
+          if (a.order_index == null && b.order_index == null) return 0;
+          if (a.order_index == null) return 1;
+          if (b.order_index == null) return -1;
+          return a.order_index - b.order_index;
+        });
         if (!active) return;
         setExerciseSessions(thisEs);
 
