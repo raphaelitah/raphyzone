@@ -5,10 +5,12 @@ import { supabase } from '@/lib/supabaseClient';
  * Strength-based formats (strength_sets, superset) become "Bodybuilding"
  * — or "Calisthenics" when allBodyweight is true.
  * Mixed formats show both components joined by " + ".
+ * A workout with "run" as a whole word anywhere in its name is always
+ * labeled "Conditioning", regardless of its raw workout_format.
  */
 export function computeFormatLabel(workoutFormat, allBodyweight, workoutName) {
   if (!workoutFormat) return '';
-  if (workoutName && /^run\b/i.test(workoutName.trim())) return 'Conditioning';
+  if (workoutName && /\brun\b/i.test(workoutName.trim())) return 'Conditioning';
 
   const strengthLabel = allBodyweight ? 'Calisthenics' : 'Bodybuilding';
 

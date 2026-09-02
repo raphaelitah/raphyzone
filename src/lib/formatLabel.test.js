@@ -7,9 +7,10 @@ describe('computeFormatLabel', () => {
     expect(computeFormatLabel(null, false, 'Leg Day')).toBe('');
   });
 
-  it('forces "Conditioning" for a workout named "Run..." regardless of format', () => {
+  it('forces "Conditioning" for a workout with "run" as a whole word in its name, regardless of format', () => {
     expect(computeFormatLabel('emom', false, 'Run intervals')).toBe('Conditioning');
     expect(computeFormatLabel('strength_sets', false, 'run')).toBe('Conditioning');
+    expect(computeFormatLabel('strength_sets', false, 'Easy Run')).toBe('Conditioning');
   });
 
   it('does not match "run" as a prefix of a longer word like "Running"', () => {
