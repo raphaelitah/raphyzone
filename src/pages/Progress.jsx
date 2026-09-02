@@ -12,7 +12,6 @@ import { recalcPlanWeights } from '@/lib/weightRecalc';
 import SessionDetailSheet from '@/components/SessionDetailSheet';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 export default function Progress() {
   const { user } = useAuth();
@@ -179,15 +178,9 @@ export default function Progress() {
         </div>
       )}
 
-      <Collapsible defaultOpen className="mb-6">
-        <CollapsibleTrigger className="w-full flex items-center justify-between mb-2 group">
-          <h2 className="font-semibold flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>
-          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <PersonalRecordsList prs={prs} trendByExercise={trendByExercise} />
-        </CollapsibleContent>
-      </Collapsible>
+      <div className="mb-6">
+        <PersonalRecordsSection prs={prs} trendByExercise={trendByExercise} />
+      </div>
 
       <h2 className="font-semibold mb-2">Recent workouts</h2>
       <div className="space-y-2">
@@ -222,22 +215,31 @@ export default function Progress() {
   );
 }
 
-function PersonalRecordsList({ prs, trendByExercise }) {
+function PersonalRecordsSection({ prs, trendByExercise }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? prs : prs.slice(0, 3);
+  const canToggle = prs.length > 3;
   return (
-    <div className="space-y-2">
-      {prs.length ? visible.map((p) => (
-        <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
-      )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
-      {prs.length > 3 && (
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="w-full text-center text-xs font-medium text-brand py-2"
-        >
-          {expanded ? 'See less' : `See more (${prs.length - 3})`}
-        </button>
-      )}
+    <div>
+      <button
+        onClick={() => canToggle && setExpanded((e) => !e)}
+        className={cn('w-full flex items-center justify-between mb-2', canToggle && 'cursor-pointer group')}
+        data-state={expanded ? 'open' : 'closed'}
+        disabled={!canToggle}
+      >
+        <h2 className="font-semibold flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>
+        {canToggle && (
+          <span className="flex items-center gap-1 text-xs font-medium text-brand">
+            {expanded ? 'See less' : `See more (${prs.length - 3})`}
+            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+          </span>
+        )}
+      </button>
+      <div className="space-y-2">
+        {prs.length ? visible.map((p) => (
+          <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
+        )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
+      </div>
     </div>
   );
 }
