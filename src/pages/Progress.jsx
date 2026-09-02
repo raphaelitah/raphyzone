@@ -4,14 +4,15 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { Dumbbell, Flame, CheckCircle2, TrendingUp, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { Dumbbell, Flame, CheckCircle2, Sparkles, Trophy, Loader2, Footprints, ChevronDown } from 'lucide-react';
 import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
 import SessionDetailSheet from '@/components/SessionDetailSheet';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 export default function Progress() {
   const { user } = useAuth();
@@ -111,11 +112,18 @@ export default function Progress() {
   });
   const prs = Object.values(prMap).sort((a, b) => b.max_weight - a.max_weight);
 
-  // working weight trend for top PR exercise
-  const trendExercise = prs[0]?.exercise_id;
-  const trendData = trendExercise
-    ? exerciseSessions.filter((s) => s.exercise_id === trendExercise && s.max_weight).reverse().map((s) => ({ date: fmtDate(parseDate(s.created_date || s.date), 'd MMM'), weight: s.max_weight }))
-    : [];
+  // per-exercise working weight trend, one point per date (last logged that day)
+  const trendByExercise = {};
+  prs.forEach((p) => {
+    const byDate = new Map();
+    exerciseSessions
+      .filter((s) => s.exercise_id === p.exercise_id && s.max_weight)
+      .forEach((s) => { byDate.set(s.date || s.created_date, s); });
+    const points = [...byDate.entries()]
+      .sort((a, b) => parseDate(a[0]) - parseDate(b[0]))
+      .map(([date, s]) => ({ date: fmtDate(parseDate(date), 'd MMM'), weight: s.max_weight }));
+    trendByExercise[p.exercise_id] = points;
+  });
 
   return (
     <div className="px-5 pt-10">
@@ -166,31 +174,19 @@ export default function Progress() {
         </div>
       )}
 
-      {trendData.length >= 2 && (
-        <Card className="rounded-2xl border-border p-4 mb-5">
-          <div className="flex items-center gap-1.5 mb-3"><TrendingUp className="h-4 w-4 text-brand" /><p className="text-sm font-medium">{prs[0].exercise_name} working weight</p></div>
-          <div className="h-36 -ml-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={32} domain={['dataMin - 5', 'dataMax + 5']} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }} />
-                <Line type="monotone" dataKey="weight" stroke="hsl(var(--brand))" strokeWidth={2.5} dot={{ r: 3, fill: 'hsl(var(--brand))' }} />
-              </LineChart>
-            </ResponsiveContainer>
+      <Collapsible defaultOpen className="mb-6">
+        <CollapsibleTrigger className="w-full flex items-center justify-between mb-2 group">
+          <h2 className="font-semibold flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="space-y-2">
+            {prs.length ? prs.map((p) => (
+              <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
+            )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
           </div>
-        </Card>
-      )}
-
-      <h2 className="font-semibold mb-2 flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> Personal records</h2>
-      <div className="space-y-2 mb-6">
-        {prs.length ? prs.map((p) => (
-          <Card key={p.id} className="rounded-xl border-border p-3 flex items-center justify-between">
-            <span className="text-sm font-medium truncate">{p.exercise_name}</span>
-            <span className="text-sm font-semibold">{p.max_weight}kg</span>
-          </Card>
-        )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <h2 className="font-semibold mb-2">Recent workouts</h2>
       <div className="space-y-2">
@@ -213,6 +209,27 @@ export default function Progress() {
 
       <SessionDetailSheet session={detailSession} open={!!detailSession} onOpenChange={(o) => !o && setDetailSession(null)} />
     </div>
+  );
+}
+
+function PersonalRecordRow({ record, trend }) {
+  const showTrend = trend.length >= 3;
+  return (
+    <Card className="rounded-xl border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium truncate">{record.exercise_name}</span>
+        <span className="text-sm font-semibold shrink-0">{record.max_weight}kg</span>
+      </div>
+      {showTrend && (
+        <div className="h-10 -ml-1 mt-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={trend}>
+              <Line type="monotone" dataKey="weight" stroke="hsl(var(--brand))" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
   );
 }
 
