@@ -15,7 +15,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock, Play } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
@@ -58,6 +58,7 @@ export default function WorkoutExecution() {
   const [plan, setPlan] = useState(null);
   const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
+  const [timerStarted, setTimerStarted] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
   const [conflictSession, setConflictSession] = useState(null);
   const [endingConflict, setEndingConflict] = useState(false);
@@ -101,12 +102,16 @@ export default function WorkoutExecution() {
 
   const pendingLoadRef = useRef(null);
 
-  const finishLoadingWorkout = async (sess, w, plans, active) => {
+  const finishLoadingWorkout = async (sess, w, plans, active, isResumed) => {
     sessionIdRef.current = sess.id;
     setSession(sess);
-    const startMs = sess.start_timestamp ? new Date(sess.start_timestamp).getTime() : Date.now();
-    sessionStartMsRef.current = startMs;
-    setSessionStartMs(startMs);
+    if (isResumed) {
+      // The user already started this session earlier — keep the clock running across the resume.
+      const startMs = sess.start_timestamp ? new Date(sess.start_timestamp).getTime() : Date.now();
+      sessionStartMsRef.current = startMs;
+      setSessionStartMs(startMs);
+      setTimerStarted(true);
+    }
     enterTimeRef.current = Date.now();
 
     // Load any already-saved exercise sessions for hydration, in parallel with the workout's blocks
@@ -203,16 +208,16 @@ export default function WorkoutExecution() {
           return;
         }
 
+        const wasAlreadyStarted = !!sess?.start_timestamp;
         if (!sess) {
           const { data: created } = await supabase.from('workout_sessions').insert({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
             date: targetDate, status: 'in_progress',
-            start_timestamp: new Date().toISOString(),
           }).select().single();
           sess = created;
         }
         if (!active() || !sess) return;
-        await finishLoadingWorkout(sess, w, plans, active);
+        await finishLoadingWorkout(sess, w, plans, active, wasAlreadyStarted);
       } catch {
         if (active()) setLoading(false);
       }
@@ -229,12 +234,11 @@ export default function WorkoutExecution() {
       const { data: created } = await supabase.from('workout_sessions').insert({
         user_id: user.id, workout_id: workoutId, workout_name: w?.name,
         date: targetDate, status: 'in_progress',
-        start_timestamp: new Date().toISOString(),
       }).select().single();
       setConflictSession(null);
       pendingLoadRef.current = null;
       setLoading(true);
-      await finishLoadingWorkout(created, w, plans, () => true);
+      await finishLoadingWorkout(created, w, plans, () => true, false);
     } finally {
       setEndingConflict(false);
     }
@@ -350,6 +354,18 @@ export default function WorkoutExecution() {
     displayExercise = currentBlockExercises[0] || current;
   }
 
+  const startTimer = async () => {
+    if (timerStarted) return;
+    const startMs = Date.now();
+    sessionStartMsRef.current = startMs;
+    setSessionStartMs(startMs);
+    setTimerStarted(true);
+    enterTimeRef.current = startMs;
+    if (sessionIdRef.current) {
+      await supabase.from('workout_sessions').update({ start_timestamp: new Date(startMs).toISOString() }).eq('id', sessionIdRef.current);
+    }
+  };
+
   const updateLog = (key, patch) => {
     setLogs((l) => ({ ...l, [key]: { ...(l[key] || {}), ...patch } }));
     scheduleSave(key);
@@ -441,6 +457,7 @@ export default function WorkoutExecution() {
     const startMs = new Date(s.start_timestamp).getTime();
     sessionStartMsRef.current = startMs;
     setSessionStartMs(startMs);
+    setTimerStarted(true);
     enterTimeRef.current = Date.now();
   };
 
@@ -616,10 +633,17 @@ export default function WorkoutExecution() {
             <p className="text-xs text-muted-foreground">Exercise {index + 1} of {exercises.length}</p>
             <h1 className="font-semibold truncate">{workout.name}</h1>
           </div>
-          <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground tabular-nums">
-            <Clock className="h-3.5 w-3.5" />
-            {formatDuration(totalElapsed)}
-          </div>
+          {timerStarted ? (
+            <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground tabular-nums">
+              <Clock className="h-3.5 w-3.5" />
+              {formatDuration(totalElapsed)}
+            </div>
+          ) : (
+            <button onClick={startTimer} className="flex items-center gap-1 text-xs font-semibold text-brand tabular-nums">
+              <Play className="h-3.5 w-3.5" />
+              Start
+            </button>
+          )}
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
         </div>
         <div className="flex gap-1 mt-2">
