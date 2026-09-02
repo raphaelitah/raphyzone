@@ -269,7 +269,7 @@ export default function Library() {
                     <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setEditing(selected); }}>
                       <Pencil className="h-4 w-4" /> Edit
                     </Button>
-                    <Button variant="outline" className="flex-1 rounded-xl text-destructive hover:text-destructive" onClick={() => setDeleting(selected)}>
+                    <Button variant="outline" className="flex-1 rounded-xl hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleting(selected)}>
                       <Trash2 className="h-4 w-4" /> Delete
                     </Button>
                   </div>

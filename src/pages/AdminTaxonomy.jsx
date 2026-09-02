@@ -207,11 +207,11 @@ export default function AdminTaxonomy() {
                           )}
                         </div>
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditing(term); setEditValue(term.value); setEditLabel(term.label || ''); setEditGroup(term.group || ''); }} className="p-1.5 rounded-lg hover:bg-muted">
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          <button onClick={() => { setEditing(term); setEditValue(term.value); setEditLabel(term.label || ''); setEditGroup(term.group || ''); }} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
-                          <button onClick={() => startDelete(term)} className="p-1.5 rounded-lg hover:bg-muted">
-                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          <button onClick={() => startDelete(term)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </div>

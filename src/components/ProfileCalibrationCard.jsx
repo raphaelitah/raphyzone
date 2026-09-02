@@ -158,7 +158,7 @@ export default function ProfileCalibrationCard({ profile }) {
                   <p className="text-sm font-semibold">{formatWeight(c.weight_kg, unit)}</p>
                   <p className="text-[11px] text-muted-foreground">×{c.reps} reps</p>
                 </div>
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-muted-foreground" />
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
             </button>
           );
