@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Play, Calendar, CalendarClock, Flame, Trophy, Sparkles, ChevronRight, CheckCircle2, Dumbbell, Clock, Route, Moon, RefreshCw, ArrowLeftRight, Loader2, Plus } from 'lucide-react';
+import { Play, Calendar, CalendarClock, Flame, Trophy, Sparkles, ChevronRight, CheckCircle2, Dumbbell, Clock, Route, Moon, RefreshCw, ArrowLeftRight, Loader2, Plus, Trash2 } from 'lucide-react';
 import { mondayOf, fmtISO, fmtDate, parseDate, sameDay } from '@/lib/fitness';
 import { formatWeight } from '@/lib/units';
 import { buildBlocksByWorkout, buildBlockExercisesByBlock, countWorkoutExercises, roundToFive } from '@/lib/workoutStructure';
@@ -77,6 +77,7 @@ export default function Home() {
   const [restAiLoading, setRestAiLoading] = useState(false);
   const [restAiAlternatives, setRestAiAlternatives] = useState([]);
   const [searchFor, setSearchFor] = useState(null);
+  const [extraFor, setExtraFor] = useState(null);
   const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('home');
 
   useEffect(() => {
@@ -255,9 +256,11 @@ export default function Home() {
 
   const pickAlternative = (alt) => applySwapToSlot(alt, swapFor);
 
+  const genId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `m_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
   const assignWorkoutToSlot = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
-    const updated = plan.workouts.map((w) => w.day === slot.day
+    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual)
       ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false }
       : w);
     setPlan({ ...plan, workouts: updated });
@@ -291,7 +294,7 @@ export default function Home() {
 
   const makeRest = async (slot) => {
     if (!slot) return;
-    const updated = plan.workouts.map((w) => w.day === slot.day ? {
+    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
       ...w,
       slot_type: 'rest',
       workout_id: undefined,
@@ -325,7 +328,7 @@ export default function Home() {
 
   const assignWorkoutToRestDay = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
-    const updated = plan.workouts.map((w) => w.day === slot.day ? {
+    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
       ...w,
       slot_type: 'train',
       workout_id: workoutId,
@@ -340,6 +343,37 @@ export default function Home() {
         if (wo) await ensureWorkoutLoaded(wo);
       } catch { /* ignore */ }
     }
+  };
+
+  const addManualWorkout = async (wo, slot) => {
+    if (!slot || !wo || !plan) return;
+    const newEntry = {
+      id: genId(),
+      day: slot.day,
+      date: slot.date,
+      slot_type: 'train',
+      workout_id: wo.id,
+      workout_name: wo.name,
+      reason: 'Manually added',
+      manual: true,
+      locked: false,
+    };
+    const idx = plan.workouts.findIndex((w) => w === slot);
+    const updated = [...plan.workouts];
+    updated.splice(idx + 1, 0, newEntry);
+    await persistPlan(updated);
+    await ensureWorkoutLoaded(wo);
+  };
+
+  const removeSlot = async (slot) => {
+    if (!slot || !plan) return;
+    const updated = plan.workouts.filter((w) => w !== slot);
+    await persistPlan(updated);
+  };
+
+  const pickExtraFromSearch = async (wo, slot) => {
+    setExtraFor(null);
+    await addManualWorkout(wo, slot);
   };
 
   const aiSuggestForRest = async (slot) => {
@@ -559,6 +593,8 @@ export default function Home() {
               const done = !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
               const scheduledForDay = (profile?.scheduled_activities || []).filter((a) => a.day === slot.day);
               const hasScheduled = scheduledForDay.length > 0;
+              const siblingManual = !slot.manual && plan.workouts.some((w) => w.day === slot.day && w.manual);
+              const dateLabel = `${slot.day.slice(0, 3)} · ${fmtDate(parseDate(slot.date), 'd MMM')}${isToday ? ' · Today' : ''}${slot.manual ? ' · Extra' : ''}`;
 
               const scheduledCards = scheduledForDay.map((sa, j) => (
                 <Card key={`sched-${i}-${j}`} className="rounded-2xl border border-violet-200/60 bg-violet-50/40 p-4">
@@ -588,23 +624,30 @@ export default function Home() {
               if (slot.slot_type === 'activity' && !slot.workout_id) {
                 return wrap(
                   <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isToday ? 'border-amber-300 bg-amber-50/50' : 'border-amber-200/60 bg-amber-50/30')}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate capitalize flex items-center gap-1.5">
-                          <Route className="h-4 w-4 text-amber-600 shrink-0" />
-                          {slot.activity || 'Activity'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{slot.day.slice(0, 3)} · {fmtDate(parseDate(slot.date), 'd MMM')}{isToday && ' · Today'}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => setExtraFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        {siblingManual ? (
+                          <button onClick={() => removeSlot(slot)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
                           <button onClick={() => setRestConfirmFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
                             <Moon className="h-3.5 w-3.5" />
                           </button>
-                          <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
-                        </div>
+                        )}
+                        <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
                       </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate capitalize flex items-center gap-1.5">
+                        <Route className="h-4 w-4 text-amber-600 shrink-0" />
+                        {slot.activity || 'Activity'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Activity day</p>
                     </div>
                     {(slot.suggested_workout_ids?.length > 0) && (
                       <button onClick={() => setSuggestFor(slot)} className="mt-3 text-xs font-medium text-amber-700 flex items-center gap-1">
@@ -616,20 +659,21 @@ export default function Home() {
               }
 
               if (slot.slot_type === 'rest') {
+                const isPast = slot.date < todayISO;
                 return wrap(
-                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4 bg-muted/30', isToday ? 'border-border' : 'border-border/60')}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <Moon className="h-4 w-4" />
-                        <p className="font-medium">Rest</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{slot.day.slice(0, 3)} · {fmtDate(parseDate(slot.date), 'd MMM')}{isToday && ' · Today'}</span>
+                  <Card key={hasScheduled ? undefined : i} className={cn('rounded-2xl border p-4', isPast ? 'border-brand/30 bg-brand/5' : 'bg-muted/30', !isPast && (isToday ? 'border-border' : 'border-border/60'))}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
+                      <div className="flex items-center gap-1 shrink-0">
                         <button onClick={() => setRestChoiceFor(slot)} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add workout">
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                         <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
                       </div>
+                    </div>
+                    <div className={cn('flex items-center gap-1.5', isPast ? 'text-brand' : 'text-muted-foreground')}>
+                      <Moon className="h-4 w-4" />
+                      <p className="font-medium">Rest</p>
                     </div>
                   </Card>
                 );
@@ -642,6 +686,31 @@ export default function Home() {
               return wrap(
                 <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
                   <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{dateLabel}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!slot.manual && (
+                          <button onClick={(e) => { e.stopPropagation(); setExtraFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Add extra workout">
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {!done && !slot.manual && !siblingManual && (
+                          <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
+                            <ArrowLeftRight className="h-3 w-3" />
+                          </button>
+                        )}
+                        {(slot.manual || siblingManual) ? (
+                          <button onClick={(e) => { e.stopPropagation(); removeSlot(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title={done ? 'Completed workouts can\'t become rest days' : 'Make rest day'}>
+                            <Moon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={done} />
+                      </div>
+                    </div>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -652,21 +721,7 @@ export default function Home() {
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{slot.modality || wo?.format_label || 'Workout'}</p>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">{slot.day.slice(0, 3)} · {fmtDate(parseDate(slot.date), 'd MMM')}{isToday && ' · Today'}</span>
-                          {!done && (
-                            <button onClick={(e) => { e.stopPropagation(); findAlternative(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors">
-                              <ArrowLeftRight className="h-3 w-3" />
-                            </button>
-                          )}
-                          <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
-                            <Moon className="h-3.5 w-3.5" />
-                          </button>
-                          <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} />
-                        </div>
-                        {done ? <CheckCircle2 className="h-4 w-4 text-brand" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand" /> : null}
-                      </div>
+                      {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
                     </div>
                     <div className="flex items-center justify-between mt-3">
                       <div className="flex items-center gap-4 text-xs text-muted-foreground min-w-0">
@@ -774,6 +829,13 @@ export default function Home() {
         onOpenChange={(o) => { if (!o) setSearchFor(null); }}
         onPick={(wo) => pickFromSearch(wo, searchFor)}
         dayLabel={searchFor?.day}
+      />
+
+      <WorkoutSearchSheet
+        open={!!extraFor}
+        onOpenChange={(o) => { if (!o) setExtraFor(null); }}
+        onPick={(wo) => pickExtraFromSearch(wo, extraFor)}
+        dayLabel={extraFor?.day}
       />
 
       <AlertDialog open={!!restConfirmFor} onOpenChange={(o) => { if (!o) setRestConfirmFor(null); }}>
