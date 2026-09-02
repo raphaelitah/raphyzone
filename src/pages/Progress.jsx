@@ -182,24 +182,7 @@ export default function Progress() {
         <PersonalRecordsSection prs={prs} trendByExercise={trendByExercise} />
       </div>
 
-      <h2 className="font-semibold mb-2">Recent workouts</h2>
-      <div className="space-y-2">
-        {completed.slice(0, 10).map((s) => (
-          <button key={s.id} onClick={() => setDetailSession(s)} className="w-full text-left">
-            <Card className="rounded-xl border-border p-3 flex items-center justify-between hover:border-foreground/20 transition-colors">
-              <div className="min-w-0 flex items-center gap-1.5">
-                {runningWorkoutIds.has(s.workout_id) && <Footprints className="h-3.5 w-3.5 text-brand shrink-0" />}
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{s.workout_name}</p>
-                  <p className="text-xs text-muted-foreground">{s.date ? fmtDate(parseDate(s.date), 'd MMM') : ''}</p>
-                </div>
-              </div>
-              {s.overall_difficulty && <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[s.overall_difficulty]?.color)}>{DIFFICULTY_META[s.overall_difficulty]?.label}</span>}
-            </Card>
-          </button>
-        ))}
-        {completed.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No workouts logged yet.</p>}
-      </div>
+      <RecentWorkoutsSection completed={completed} runningWorkoutIds={runningWorkoutIds} onSelect={setDetailSession} />
 
       <SessionDetailSheet
         session={detailSession}
@@ -239,6 +222,47 @@ function PersonalRecordsSection({ prs, trendByExercise }) {
         {prs.length ? visible.map((p) => (
           <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
         )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
+      </div>
+    </div>
+  );
+}
+
+function RecentWorkoutsSection({ completed, runningWorkoutIds, onSelect }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? completed.slice(0, 10) : completed.slice(0, 3);
+  const canToggle = completed.length > 3;
+  return (
+    <div>
+      <button
+        onClick={() => canToggle && setExpanded((e) => !e)}
+        className={cn('w-full flex items-center justify-between mb-2', canToggle && 'cursor-pointer group')}
+        data-state={expanded ? 'open' : 'closed'}
+        disabled={!canToggle}
+      >
+        <h2 className="font-semibold">Recent workouts</h2>
+        {canToggle && (
+          <span className="flex items-center gap-1 text-xs font-medium text-brand">
+            {expanded ? 'See less' : `See more (${Math.min(completed.length, 10) - 3})`}
+            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+          </span>
+        )}
+      </button>
+      <div className="space-y-2">
+        {visible.map((s) => (
+          <button key={s.id} onClick={() => onSelect(s)} className="w-full text-left">
+            <Card className="rounded-xl border-border p-3 flex items-center justify-between hover:border-foreground/20 transition-colors">
+              <div className="min-w-0 flex items-center gap-1.5">
+                {runningWorkoutIds.has(s.workout_id) && <Footprints className="h-3.5 w-3.5 text-brand shrink-0" />}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{s.workout_name}</p>
+                  <p className="text-xs text-muted-foreground">{s.date ? fmtDate(parseDate(s.date), 'd MMM') : ''}</p>
+                </div>
+              </div>
+              {s.overall_difficulty && <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[s.overall_difficulty]?.color)}>{DIFFICULTY_META[s.overall_difficulty]?.label}</span>}
+            </Card>
+          </button>
+        ))}
+        {completed.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No workouts logged yet.</p>}
       </div>
     </div>
   );
