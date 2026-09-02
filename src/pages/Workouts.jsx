@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -348,15 +348,15 @@ export default function Workouts() {
             <>
               <SheetHeader className="px-5 pt-5">
                 <SheetTitle className="text-xl text-left">{selected.name}</SheetTitle>
+                <SheetDescription className="text-left">
+                  {(() => {
+                    const emomBlock = (blocksByWorkout[selected.workout_id] || []).find((b) => isEMOMBlock(b));
+                    const base = selected.format_label;
+                    return emomBlock ? `${base} x ${emomBlock.rounds} mins` : base;
+                  })()}
+                </SheetDescription>
               </SheetHeader>
               <div className="px-5 pb-8 space-y-4">
-                {(() => {
-                  const emomBlock = (blocksByWorkout[selected.workout_id] || []).find((b) => isEMOMBlock(b));
-                  const base = selected.format_label;
-                  return emomBlock
-                    ? <p className="text-sm text-muted-foreground">{base} x {emomBlock.rounds} mins</p>
-                    : <p className="text-sm text-muted-foreground">{base}</p>;
-                })()}
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Tag>{WORKOUT_DIFFICULTY_META[selected.difficulty]?.label}</Tag>
                   <Tag>{getDuration(selected)} min</Tag>

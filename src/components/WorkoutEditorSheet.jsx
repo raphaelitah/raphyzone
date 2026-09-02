@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -233,7 +233,7 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
             <>
               <SheetHeader className="px-5 pt-5">
                 <SheetTitle className="text-xl text-left">Edit workout</SheetTitle>
-                <p className="text-sm text-muted-foreground text-left">{workout.name}</p>
+                <SheetDescription className="text-left">{workout.name}</SheetDescription>
               </SheetHeader>
               <div className="px-5 pb-8 space-y-4">
                 {loading ? (
