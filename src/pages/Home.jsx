@@ -79,6 +79,7 @@ export default function Home() {
   const [searchFor, setSearchFor] = useState(null);
   const [extraFor, setExtraFor] = useState(null);
   const [removeConfirmFor, setRemoveConfirmFor] = useState(null);
+  const [reorderConfirmFor, setReorderConfirmFor] = useState(null);
   const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('home');
 
   useEffect(() => {
@@ -462,6 +463,7 @@ export default function Home() {
   };
 
   const restConfirmDone = !!restConfirmFor?.workout_id && weekSessions.some((s) => s.workout_id === restConfirmFor.workout_id && sameDay(parseDate(s.date), parseDate(restConfirmFor.date)));
+  const removeConfirmDone = !!removeConfirmFor?.workout_id && weekSessions.some((s) => s.workout_id === removeConfirmFor.workout_id && sameDay(parseDate(s.date), parseDate(removeConfirmFor.date)));
 
   const selectFromDetail = () => {
     if (!selectedSlot || !selectedWorkout) return;
@@ -558,7 +560,14 @@ export default function Home() {
     const isGuidedActivity = slot.slot_type === 'activity';
     const doneSession = done ? weekSessions.find((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date))) : null;
     return wrap(
-      <button key={hasScheduled ? undefined : i} onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }} className="w-full text-left">
+      <div
+        key={hasScheduled ? undefined : i}
+        role="button"
+        tabIndex={0}
+        onClick={() => { if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (doneSession) { setSessionDetail(doneSession); } else { setSelectedWorkout(wo || null); setSelectedSlot(slot); } } }}
+        className="w-full text-left cursor-pointer"
+      >
         <Card className={cn('rounded-2xl border p-4 transition-colors', done ? 'border-brand/30 bg-brand/5' : isToday ? 'border-brand' : isGuidedActivity ? 'border-amber-200/60 bg-amber-50/30 hover:border-amber-300' : 'border-border hover:border-foreground/20')}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -581,15 +590,20 @@ export default function Home() {
                   </button>
                 )}
                 {hasSibling ? (
-                  <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title="Remove">
+                  <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" title="Remove">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 ) : (
-                  <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} disabled={done} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 disabled:opacity-30 disabled:pointer-events-none transition-colors" title={done ? 'Completed workouts can\'t become rest days' : 'Make rest day'}>
+                  <button onClick={(e) => { e.stopPropagation(); setRestConfirmFor(slot); }} className="p-1 rounded-md text-muted-foreground hover:text-brand hover:bg-brand/5 transition-colors" title="Make rest day">
                     <Moon className="h-3.5 w-3.5" />
                   </button>
                 )}
-                <ReorderArrows index={i} length={plan.workouts.length} onUp={() => moveSlot(i, -1)} onDown={() => moveSlot(i, 1)} disabled={done} />
+                <ReorderArrows
+                  index={i}
+                  length={plan.workouts.length}
+                  onUp={() => (done ? setReorderConfirmFor({ index: i, dir: -1, slot }) : moveSlot(i, -1))}
+                  onDown={() => (done ? setReorderConfirmFor({ index: i, dir: 1, slot }) : moveSlot(i, 1))}
+                />
               </div>
               {done ? <CheckCircle2 className="h-4 w-4 text-brand shrink-0" /> : isToday ? <span className="h-2 w-2 rounded-full bg-brand shrink-0" /> : null}
             </div>
@@ -603,7 +617,7 @@ export default function Home() {
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </div>
         </Card>
-      </button>
+      </div>
     );
   };
 
@@ -917,13 +931,32 @@ export default function Home() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this workout?</AlertDialogTitle>
             <AlertDialogDescription>
-              {removeConfirmFor?.workout_name ? `"${removeConfirmFor.workout_name}" on ` : 'This workout on '}{removeConfirmFor?.day} will be removed from your plan.
+              {removeConfirmDone
+                ? `You've already logged "${removeConfirmFor?.workout_name}" for ${removeConfirmFor?.day}. Removing it from your plan won't delete the logged session, but it will no longer count toward this week's plan.`
+                : <>{removeConfirmFor?.workout_name ? `"${removeConfirmFor.workout_name}" on ` : 'This workout on '}{removeConfirmFor?.day} will be removed from your plan.</>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => { removeSlot(removeConfirmFor); setRemoveConfirmFor(null); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!reorderConfirmFor} onOpenChange={(o) => { if (!o) setReorderConfirmFor(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move this workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You've already logged "{reorderConfirmFor?.slot?.workout_name}" for {reorderConfirmFor?.slot?.day}. The logged session stays recorded on its original date — moving it here only changes where it sits in your plan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { moveSlot(reorderConfirmFor.index, reorderConfirmFor.dir); setReorderConfirmFor(null); }} className="bg-brand text-brand-foreground hover:bg-brand/90">
+              Move
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
