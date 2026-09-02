@@ -122,7 +122,8 @@ export default function Login() {
         </div>
         <Button
           type="submit"
-          className="w-full h-12 font-medium bg-[#5048e5] hover:bg-[#443dc9] text-white"
+          variant="brand"
+          className="w-full h-12 font-medium"
           disabled={loading}
         >
           {loading ? (

@@ -5,7 +5,7 @@ export default function AuthLayout({ title, subtitle = null, footer = null, chil
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#5048e5] mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand mb-4">
             <svg viewBox="0 0 100 100" className="w-7 h-7" aria-hidden="true">
               <g fill="currentColor" className="text-white">
                 <rect x="14" y="42" width="8" height="16" rx="3" />
