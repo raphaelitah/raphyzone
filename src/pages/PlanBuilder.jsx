@@ -117,8 +117,8 @@ export default function PlanBuilder() {
           setPhase('review');
           const ids = new Set(existing[0].workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
           if (ids.size) {
-            const { data: ws } = await supabase.from('workouts').select('*');
-            setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+            const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
+            setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
           }
         }
       }
@@ -143,8 +143,8 @@ export default function PlanBuilder() {
       setSummary(res.data.summary || '');
       const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
       if (ids.size) {
-        const { data: ws } = await supabase.from('workouts').select('*');
-        setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
+        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
       }
       try {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
@@ -170,8 +170,8 @@ export default function PlanBuilder() {
       setSummary(res.data.summary || '');
       const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
       if (ids.size) {
-        const { data: ws } = await supabase.from('workouts').select('*');
-        setWorkouts(Object.fromEntries((ws || []).filter((w) => ids.has(w.id)).map((w) => [w.id, w])));
+        const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
+        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
       }
       try {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });

@@ -261,7 +261,7 @@ export default function Workouts() {
     if (!deletingBe) return;
     const sets = setsByBlockExercise[deletingBe.block_exercise_id] || [];
     if (sets.length) {
-      await Promise.all(sets.map((s) => supabase.from('prescribed_sets').delete().eq('id', s.id)));
+      await supabase.from('prescribed_sets').delete().in('id', sets.map((s) => s.id));
     }
     await supabase.from('block_exercises').delete().eq('id', deletingBe.id);
     setBlockExercisesByBlock((prev) => {
