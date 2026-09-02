@@ -22,6 +22,10 @@ function fmtDuration(sec) {
   const ss = s % 60;
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
 }
+function sessionDurationSeconds(exerciseSessions) {
+  const total = (exerciseSessions || []).reduce((sum, es) => sum + (es.duration_seconds ?? es.elapsed_seconds ?? 0), 0);
+  return total > 0 ? total : null;
+}
 function modeDifficulty(arr) {
   const count = {};
   arr.forEach((d) => { if (d) count[d] = (count[d] || 0) + 1; });
@@ -107,8 +111,9 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
 
         const exerciseMap = {};
         allEs.forEach((es) => {
-          if (!exerciseMap[es.exercise_id]) exerciseMap[es.exercise_id] = { id: es.exercise_id, name: es.exercise_name, loaded: false };
-          if (es.max_weight > 0) exerciseMap[es.exercise_id].loaded = true;
+          if (!exerciseMap[es.exercise_id]) exerciseMap[es.exercise_id] = { id: es.exercise_id, name: es.exercise_name, metric: 'time' };
+          if (es.max_weight > 0) exerciseMap[es.exercise_id].metric = 'weight';
+          else if (es.distance_km > 0 && exerciseMap[es.exercise_id].metric !== 'weight') exerciseMap[es.exercise_id].metric = 'distance';
         });
         const keys = Object.values(exerciseMap);
         setChartKeys(keys);
@@ -118,7 +123,10 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
           const sessEs = esBySession[s.id] || [];
           keys.forEach((k) => {
             const es = sessEs.find((e) => e.exercise_id === k.id);
-            if (es) row[k.name] = k.loaded ? (es.max_weight || 0) : Math.round(((es.duration_seconds ?? es.elapsed_seconds ?? 0) / 60) * 10) / 10;
+            if (!es) return;
+            if (k.metric === 'weight') row[k.name] = es.max_weight || 0;
+            else if (k.metric === 'distance') row[k.name] = es.distance_km || 0;
+            else row[k.name] = Math.round(((es.duration_seconds ?? es.elapsed_seconds ?? 0) / 60) * 10) / 10;
           });
           return row;
         });
@@ -243,7 +251,9 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                         contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', fontSize: 12 }}
                         formatter={(value, name) => {
                           const k = chartKeys.find((ck) => ck.name === name);
-                          return k?.loaded ? value : `${value} min`;
+                          if (k?.metric === 'distance') return `${value} km`;
+                          if (k?.metric === 'time') return `${value} min`;
+                          return value;
                         }}
                       />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
@@ -262,7 +272,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                       <p className="text-[10px] text-muted-foreground">{h.exerciseSessions.length} exercises</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {h.session.elapsed_seconds != null && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(h.session.elapsed_seconds)}</span>}
+                      {sessionDurationSeconds(h.exerciseSessions) != null && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{fmtDuration(sessionDurationSeconds(h.exerciseSessions))}</span>}
                       {h.session.overall_difficulty && <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[h.session.overall_difficulty]?.color)}>{DIFFICULTY_META[h.session.overall_difficulty]?.label}</span>}
                     </div>
                   </Card>
