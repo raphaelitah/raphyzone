@@ -59,7 +59,7 @@ export default function AddToPlanSheet({ workout, open, onOpenChange }) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl p-0 max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-3xl p-0 max-h-[85dvh] overflow-y-auto">
         <SheetHeader className="px-5 pt-5 pb-3">
           <SheetTitle className="text-left">Add to weekly plan</SheetTitle>
           <SheetDescription className="text-left">

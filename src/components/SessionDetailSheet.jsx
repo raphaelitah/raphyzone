@@ -201,7 +201,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto">
         <SheetHeader className="px-5 pt-5 pr-12">
           <div className="flex items-start justify-between gap-2">
             <div>

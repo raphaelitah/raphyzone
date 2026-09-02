@@ -48,7 +48,7 @@ export default function ExerciseNotifications() {
         )}
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="rounded-t-3xl h-[80vh] flex flex-col p-0">
+        <SheetContent side="bottom" className="rounded-t-3xl h-[80dvh] flex flex-col p-0">
           <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
             <div className="flex items-center justify-between pr-8">
               <SheetTitle className="text-left">Notifications</SheetTitle>

@@ -196,7 +196,7 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl h-[90vh] flex flex-col p-0">
+      <SheetContent side="bottom" className="rounded-t-3xl h-[90dvh] flex flex-col p-0">
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur px-5 pt-5 pb-3 border-b border-border rounded-t-3xl">
           <SheetHeader className="space-y-0 p-0">
             <div className="flex items-center justify-between pr-8">

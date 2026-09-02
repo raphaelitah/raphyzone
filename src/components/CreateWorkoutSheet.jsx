@@ -161,7 +161,7 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-        <SheetContent side="bottom" className="rounded-t-3xl h-[90vh] flex flex-col p-0">
+        <SheetContent side="bottom" className="rounded-t-3xl h-[90dvh] flex flex-col p-0">
           <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
             <SheetTitle className="text-left">New workout</SheetTitle>
           </SheetHeader>

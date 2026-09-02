@@ -140,7 +140,7 @@ export default function AddExerciseSheet({ open, onOpenChange, onSubmitted = und
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl h-[90vh] flex flex-col p-0">
+      <SheetContent side="bottom" className="rounded-t-3xl h-[90dvh] flex flex-col p-0">
         <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
           <SheetTitle className="text-left">Add new exercise</SheetTitle>
         </SheetHeader>

@@ -228,7 +228,7 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => { if (!o) { onChanged(); onOpenChange(false); } }}>
-        <SheetContent side="bottom" className="rounded-t-3xl max-h-[92vh] overflow-y-auto">
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[90dvh] overflow-y-auto">
           {workout && (
             <>
               <SheetHeader className="px-5 pt-5">
