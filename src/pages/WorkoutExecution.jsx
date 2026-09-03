@@ -766,77 +766,20 @@ export default function WorkoutExecution() {
             onStartTimer={startTimer}
           />
         ) : isBlockActive ? (
-          <>
-            <WorkoutTimerPanel
-              key={current.block_id}
-              blockLabel={blockLabel}
-              defaultConfig={timerDefaultConfig}
-              armed={timerArmed}
-              timer={timerArmed ? timer : null}
-              onStart={handleStartBlockTimer}
-              onSkipBlock={handleSkipBlock}
-            />
-            {isEmomFamily && !isAlternatingEmom ? (
-              currentBlockExercises.length <= 1 ? (
-                <>
-                  <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
-                  <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
-                    {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
-                    {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
-                  </div>
-                  {displayExercise?.details?.video_url && (
-                    <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
-                  )}
-                  <ExerciseSpecRow exercise={displayExercise} />
-                </>
-              ) : (
-                <div className="space-y-3">
-                  {currentBlockExercises.map((e) => (
-                    <div key={e.key} className="rounded-xl border border-border p-3">
-                      <p className="font-medium text-sm mb-2">{e.exercise_name}</p>
-                      {e.details?.video_url && (
-                        <YouTubeVideo url={e.details.video_url} title={e.exercise_name} className="mb-3" />
-                      )}
-                      <ExerciseSpecRow exercise={e} />
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : (
-              <>
-                {currentBlockExercises.length > 1 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {currentBlockExercises.map((e) => (
-                      <span
-                        key={e.key}
-                        className={cn(
-                          'text-[10px] font-medium px-2 py-0.5 rounded-full border',
-                          e.key === displayExercise?.key ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground'
-                        )}
-                      >
-                        {e.exercise_name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {isPreviewExercise && (
-                  <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground mb-2">Next up</span>
-                )}
-                <h2 className="text-xl font-semibold tracking-tight">{displayExercise?.exercise_name}</h2>
-                <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
-                  {displayExercise?.details?.movement_pattern && <span className="capitalize">{displayExercise.details.movement_pattern}</span>}
-                  {displayExercise?.details?.equipment && <><span>·</span><span>{displayExercise.details.equipment}</span></>}
-                </div>
-                {displayExercise?.details?.video_url && (
-                  <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
-                )}
-                {nextUpName && (
-                  <p className="text-xs font-medium text-muted-foreground -mt-2 mb-4">Next up: {nextUpName}</p>
-                )}
-                <ExerciseSpecRow exercise={displayExercise} />
-              </>
-            )}
-          </>
+          <WorkoutTimerPanel
+            key={current.block_id}
+            blockLabel={blockLabel}
+            defaultConfig={timerDefaultConfig}
+            armed={timerArmed}
+            timer={timerArmed ? timer : null}
+            onStart={handleStartBlockTimer}
+            onSkipBlock={handleSkipBlock}
+            exercises={currentBlockExercises}
+            displayExercise={displayExercise}
+            isRotatingBlock={isRotatingBlock}
+            isPreviewExercise={isPreviewExercise}
+            nextUpName={nextUpName}
+          />
         ) : (
           <>
             <h2 className="text-xl font-semibold tracking-tight">{current.exercise_name}</h2>

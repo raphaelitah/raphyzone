@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Check, SkipForward } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Play, Check } from 'lucide-react';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
+import BlockPanel from '@/components/BlockPanel';
 
 function formatClock(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -103,12 +103,14 @@ export default function SupersetPanel({
   };
 
   return (
-    <div className="rounded-2xl border border-border p-4 mb-4 bg-card">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold">Superset</p>
-        <p className="text-xs text-muted-foreground">Round {round} of {rounds}</p>
-      </div>
-
+    <BlockPanel
+      label="Superset"
+      roundLabel={`Round ${round} of ${rounds}`}
+      exercises={exercises}
+      activeKey={current?.key}
+      onSkip={onSkip}
+      skipLabel="Skip superset"
+    >
       {phase === 'resting' ? (
         <div className="flex flex-col items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Rest</span>
@@ -118,19 +120,6 @@ export default function SupersetPanel({
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 w-full">
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {exercises.map((e, i) => (
-              <span
-                key={e.key}
-                className={cn(
-                  'text-[10px] font-medium px-2 py-0.5 rounded-full border',
-                  i === exIndex ? 'bg-brand text-brand-foreground border-brand' : i < exIndex ? 'border-border text-muted-foreground line-through' : 'border-border text-muted-foreground'
-                )}
-              >
-                {e.exercise_name}
-              </span>
-            ))}
-          </div>
           <p className="text-lg font-semibold text-center">{current?.exercise_name}</p>
           {current?.details?.video_url && (
             <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
@@ -153,10 +142,6 @@ export default function SupersetPanel({
           <p className="text-xs text-muted-foreground">Round {round} total: {formatClock(roundTotal)}</p>
         </div>
       )}
-
-      <button onClick={onSkip} className="w-full text-center mt-3 text-xs text-muted-foreground underline flex items-center justify-center gap-1">
-        <SkipForward className="h-3 w-3" /> Skip superset
-      </button>
-    </div>
+    </BlockPanel>
   );
 }
