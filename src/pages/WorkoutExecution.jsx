@@ -368,6 +368,16 @@ export default function WorkoutExecution() {
 
   // Moves past every exercise in a finished/skipped block in one step, landing
   // on whatever comes next in the workout (not back into the block itself).
+  // Returns true when advancing past this block would land past the end of
+  // the workout, i.e. it's the last block/exercise — the caller should
+  // finish() instead of calling advancePastBlock (which clamps back onto
+  // the same index and would otherwise strand the athlete on it forever).
+  const isLastBlock = (blockId) => {
+    let lastIdx = -1;
+    exercises.forEach((e, i) => { if (e.block_id === blockId) lastIdx = i; });
+    return lastIdx === exercises.length - 1;
+  };
+
   const advancePastBlock = (blockId) => {
     setCompletedBlockTimers((prev) => {
       if (prev.has(blockId)) return prev;
@@ -471,7 +481,12 @@ export default function WorkoutExecution() {
 
   const handleSupersetSkip = () => {
     if (!current) return;
-    advancePastBlock(current.block_id);
+    if (isLastBlock(current.block_id)) {
+      setCompletedBlockTimers((prev) => new Set(prev).add(current.block_id));
+      finish();
+    } else {
+      advancePastBlock(current.block_id);
+    }
   };
 
   // A standalone exercise is tracked the same way as a one-exercise block:
@@ -511,7 +526,12 @@ export default function WorkoutExecution() {
     setBlockLogEntries({});
     setLogPrompt(null);
     if (blockId) {
-      advancePastBlock(blockId);
+      if (isLastBlock(blockId)) {
+        setCompletedBlockTimers((prev) => new Set(prev).add(blockId));
+        finish();
+      } else {
+        advancePastBlock(blockId);
+      }
     } else if (isLast) {
       finish();
     } else {
