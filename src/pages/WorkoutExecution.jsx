@@ -105,6 +105,24 @@ export default function WorkoutExecution() {
 
   const pendingLoadRef = useRef(null);
 
+  // A unique index on workout_sessions(user_id) where status='in_progress' is the
+  // real guard against two in-progress sessions (the app-level checks above can
+  // both pass in a race — e.g. two tabs starting a workout at once). If our insert
+  // loses that race, fetch whichever session won: if it's for the same workout+date
+  // we were starting, just adopt it; otherwise surface it as the usual conflict.
+  const insertInProgressSession = async (payload) => {
+    const { data, error } = await supabase.from('workout_sessions').insert(payload).select().single();
+    if (!error) return { session: data, conflict: null };
+    if (error.code === '23505') {
+      const { data: winner } = await supabase.from('workout_sessions').select('*').eq('user_id', payload.user_id).eq('status', 'in_progress').maybeSingle();
+      if (winner && winner.workout_id === payload.workout_id && winner.date === payload.date) {
+        return { session: winner, conflict: null };
+      }
+      return { session: null, conflict: winner || null };
+    }
+    throw error;
+  };
+
   const finishLoadingWorkout = async (sess, w, plans, active, isResumed) => {
     sessionIdRef.current = sess.id;
     setSession(sess);
@@ -220,13 +238,21 @@ export default function WorkoutExecution() {
           return;
         }
 
-        const wasAlreadyStarted = !!sess?.start_timestamp;
+        let wasAlreadyStarted = !!sess?.start_timestamp;
         if (!sess) {
-          const { data: created } = await supabase.from('workout_sessions').insert({
+          const { session, conflict } = await insertInProgressSession({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
             date: targetDate, status: 'in_progress',
-          }).select().single();
-          sess = created;
+          });
+          if (conflict) {
+            if (!active()) return;
+            pendingLoadRef.current = { w, plans };
+            setLoading(false);
+            setConflictSession(conflict);
+            return;
+          }
+          sess = session;
+          wasAlreadyStarted = !!sess?.start_timestamp;
         }
         if (!active() || !sess) return;
         await finishLoadingWorkout(sess, w, plans, active, wasAlreadyStarted);
@@ -244,13 +270,19 @@ export default function WorkoutExecution() {
       await supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', conflictSession.id);
       const { w, plans, sess: existingSess } = pendingLoadRef.current || {};
       let sess = existingSess;
-      const wasAlreadyStarted = !!sess?.start_timestamp;
+      let wasAlreadyStarted = !!sess?.start_timestamp;
       if (!sess) {
-        const { data: created } = await supabase.from('workout_sessions').insert({
+        const { session, conflict } = await insertInProgressSession({
           user_id: user.id, workout_id: workoutId, workout_name: w?.name,
           date: targetDate, status: 'in_progress',
-        }).select().single();
-        sess = created;
+        });
+        if (conflict) {
+          // Lost the race to yet another session started elsewhere — show that one instead.
+          setConflictSession(conflict);
+          return;
+        }
+        sess = session;
+        wasAlreadyStarted = !!sess?.start_timestamp;
       }
       setConflictSession(null);
       pendingLoadRef.current = null;
