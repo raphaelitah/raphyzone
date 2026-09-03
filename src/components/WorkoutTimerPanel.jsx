@@ -109,6 +109,12 @@ export default function WorkoutTimerPanel({
               </span>
             )}
             <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(timer.remainingSec)}</p>
+            {timer.phase === 'rest' && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => timer.adjustRest(-15)} className="text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">-15s</button>
+                <button onClick={() => timer.adjustRest(15)} className="text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">+15s</button>
+              </div>
+            )}
             <Progress value={progressPct} className="w-full" />
             <div className="flex items-center gap-2 w-full">
               <button onClick={timer.restart} className="flex items-center justify-center w-11 h-11 rounded-xl border border-border text-muted-foreground">

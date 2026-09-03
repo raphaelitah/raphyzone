@@ -139,6 +139,27 @@ export default function useIntervalTimer(config) {
     }
   }, [reset]);
 
+  // Adjusts the current rest phase's remaining time and, so the user doesn't
+  // have to repeat it every round, bumps every later rest phase in the
+  // sequence by the same amount too (mutated in place — safe since the
+  // sequence array reference is stable for as long as config doesn't change).
+  const adjustRest = useCallback((delta) => {
+    const seq = sequenceRef.current;
+    const idx = phaseIndexRef.current;
+    for (let i = idx; i < seq.length; i++) {
+      if (seq[i].phase === 'rest') {
+        seq[i] = { ...seq[i], durationSec: Math.max(0, seq[i].durationSec + delta) };
+      }
+    }
+    if (seq[idx]?.phase !== 'rest') return;
+    if (statusRef.current === 'running' && phaseEndAtRef.current != null) {
+      phaseEndAtRef.current = Math.max(Date.now(), phaseEndAtRef.current + delta * 1000);
+    } else if (remainingMsRef.current != null) {
+      remainingMsRef.current = Math.max(0, remainingMsRef.current + delta * 1000);
+    }
+    setTick((t) => t + 1);
+  }, []);
+
   const current = sequence[phaseIndex] || sequence[0];
   const next = sequence[phaseIndex + 1] || null;
   const remainingMs = status === 'running' && phaseEndAtRef.current != null
@@ -161,5 +182,6 @@ export default function useIntervalTimer(config) {
     reset,
     restart,
     skipPhase,
+    adjustRest,
   };
 }
