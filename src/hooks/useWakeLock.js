@@ -11,6 +11,7 @@ export function useWakeLock() {
     let cancelled = false;
 
     const requestWakeLock = async () => {
+      if (wakeLockRef.current) return;
       try {
         const lock = await navigator.wakeLock.request('screen');
         if (cancelled) {
@@ -18,8 +19,14 @@ export function useWakeLock() {
           return;
         }
         wakeLockRef.current = lock;
-      } catch {
-        // Wake lock request can fail (e.g. low battery, permissions) - safe to ignore.
+        lock.addEventListener('release', () => {
+          if (wakeLockRef.current === lock) wakeLockRef.current = null;
+        });
+      } catch (err) {
+        // iOS WebKit rejects a wake lock request made without a recent user
+        // gesture (e.g. on page load), so the click/touch listener below
+        // retries once the visitor actually interacts with the page.
+        console.warn('Wake lock request failed:', err);
       }
     };
 
@@ -32,10 +39,14 @@ export function useWakeLock() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('click', requestWakeLock);
+    document.addEventListener('touchstart', requestWakeLock);
 
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('click', requestWakeLock);
+      document.removeEventListener('touchstart', requestWakeLock);
       wakeLockRef.current?.release();
       wakeLockRef.current = null;
     };
