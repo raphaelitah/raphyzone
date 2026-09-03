@@ -110,7 +110,7 @@ export default function AddExerciseSheet({ open, onOpenChange, onSubmitted = und
       const { data: exercise, error } = await supabase.from('exercises').insert({
         ...form,
         equipment: form.equipment.join(', '),
-        requires_load: form.equipment.some(e => e !== 'Bodyweight'),
+        requires_load: form.equipment.some(e => e !== 'Bodyweight' && e !== 'Resistance Bands'),
         author_id: user.id,
         author_name: user.full_name || user.email,
         submission_status: 'pending',

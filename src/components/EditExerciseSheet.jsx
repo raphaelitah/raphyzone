@@ -112,7 +112,7 @@ export default function EditExerciseSheet({ exercise, open, onOpenChange, onSave
       const { error } = await supabase.from('exercises').update({
         ...form,
         equipment: form.equipment.join(', '),
-        requires_load: form.equipment.some(e => e !== 'Bodyweight'),
+        requires_load: form.equipment.some(e => e !== 'Bodyweight' && e !== 'Resistance Bands'),
       }).eq('id', exercise.id);
       if (error) throw error;
       toast({ title: 'Exercise updated' });
