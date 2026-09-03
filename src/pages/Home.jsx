@@ -265,10 +265,21 @@ export default function Home() {
 
   const genId = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `m_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
+  const fetchWarmup = async (workoutId) => {
+    try {
+      const res = await supabase.functions.invoke('getWarmup', { body: { workout_id: workoutId } });
+      if (res.error) return null;
+      return res.data?.warmup ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const assignWorkoutToSlot = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
+    const warmup = await fetchWarmup(workoutId);
     const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual)
-      ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false }
+      ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false, warmup }
       : w);
     setPlan({ ...plan, workouts: updated });
     try {
@@ -361,6 +372,7 @@ export default function Home() {
 
   const assignWorkoutToRestDay = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
+    const warmup = await fetchWarmup(workoutId);
     const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
       ...w,
       slot_type: 'train',
@@ -368,6 +380,7 @@ export default function Home() {
       workout_name: workoutName,
       reason: reason || 'Your pick',
       locked: false,
+      warmup,
     } : w);
     await persistPlan(updated);
     if (!workouts[workoutId]) {
@@ -380,6 +393,7 @@ export default function Home() {
 
   const addManualWorkout = async (wo, slot) => {
     if (!slot || !wo || !plan) return;
+    const warmup = await fetchWarmup(wo.id);
     const newEntry = {
       id: genId(),
       day: slot.day,
@@ -390,6 +404,7 @@ export default function Home() {
       reason: 'Manually added',
       manual: true,
       locked: false,
+      warmup,
     };
     const idx = plan.workouts.findIndex((w) => w === slot);
     const updated = [...plan.workouts];
