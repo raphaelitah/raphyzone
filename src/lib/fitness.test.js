@@ -136,8 +136,12 @@ describe('isRunningWorkout / isRunningExercise', () => {
   it('matches on the exact modality / movement_pattern strings', () => {
     expect(isRunningWorkout({ modality: 'Cyclical / Monostructural' })).toBe(true);
     expect(isRunningWorkout({ modality: 'Strength' })).toBe(false);
-    expect(isRunningExercise({ movement_pattern: 'Locomotion / Cardio' })).toBe(true);
-    expect(isRunningExercise({ movement_pattern: 'Push' })).toBe(false);
+    expect(isRunningExercise({ movement_pattern: 'Locomotion / Cardio', modality: 'Cyclical / Monostructural' })).toBe(true);
+    expect(isRunningExercise({ movement_pattern: 'Push', modality: 'Cyclical / Monostructural' })).toBe(false);
+  });
+
+  it('does not match bodyweight/calisthenics exercises mistagged with the cardio movement pattern', () => {
+    expect(isRunningExercise({ movement_pattern: 'Locomotion / Cardio', modality: 'Strength / Muscular Endurance' })).toBe(false);
   });
 
   it('handles a nullish workout/exercise without throwing', () => {
