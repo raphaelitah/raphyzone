@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Pause, RotateCcw, SkipForward } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
@@ -31,6 +31,7 @@ export default function WorkoutTimerPanel({
   isRotatingBlock,
   isPreviewExercise,
   nextUpName,
+  onSwap,
 }) {
   const [workSec, setWorkSec] = useState(defaultConfig?.workSec?.toString() || '20');
   const [restSec, setRestSec] = useState(defaultConfig?.restSec?.toString() || '10');
@@ -45,7 +46,7 @@ export default function WorkoutTimerPanel({
     ? `Round ${timer.round} of ${timer.totalRounds}`
     : `Round 1 of ${Math.max(1, parseInt(rounds, 10) || 1)}`;
 
-  const exerciseInfo = (exercise) => (
+  const exerciseInfo = (exercise, allowSwap) => (
     <>
       <p className="text-lg font-semibold text-center">{exercise?.exercise_name}</p>
       {exercise?.details?.video_url && (
@@ -54,6 +55,11 @@ export default function WorkoutTimerPanel({
       <div className="w-full">
         <ExerciseSpecRow exercise={exercise} />
       </div>
+      {onSwap && allowSwap && (
+        <button onClick={() => onSwap(exercise)} className="flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-border text-muted-foreground">
+          <RefreshCw className="h-3 w-3" /> Swap
+        </button>
+      )}
     </>
   );
 
@@ -139,7 +145,7 @@ export default function WorkoutTimerPanel({
             {isPreviewExercise && (
               <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground">Next up</span>
             )}
-            {exerciseInfo(displayExercise)}
+            {exerciseInfo(displayExercise, !isPreviewExercise)}
             {nextUpName && (
               <p className="text-xs font-medium text-muted-foreground -mt-2">Next up: {nextUpName}</p>
             )}
@@ -148,7 +154,7 @@ export default function WorkoutTimerPanel({
           <div className="w-full space-y-3">
             {(exercises || []).map((e) => (
               <div key={e.key} className="rounded-xl border border-border p-3 flex flex-col items-center gap-3">
-                {exerciseInfo(e)}
+                {exerciseInfo(e, true)}
               </div>
             ))}
           </div>

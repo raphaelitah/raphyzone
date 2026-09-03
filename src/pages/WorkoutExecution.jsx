@@ -5,6 +5,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Input } from '@/components/ui/input';
+import YouTubeVideo from '@/components/YouTubeVideo';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -15,7 +17,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
@@ -55,6 +57,14 @@ export default function WorkoutExecution() {
   const [subSheet, setSubSheet] = useState(false);
   const [alternatives, setAlternatives] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
+  const [subTarget, setSubTarget] = useState(null); // the exercise (with .key) currently being swapped
+  const [manualQuery, setManualQuery] = useState('');
+  const [debouncedManualQuery, setDebouncedManualQuery] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedManualQuery(manualQuery.trim()), 250);
+    return () => clearTimeout(t);
+  }, [manualQuery]);
   const [plan, setPlan] = useState(null);
   const [, setSession] = useState(null);
   const [sessionStartMs, setSessionStartMs] = useState(null);
@@ -657,14 +667,16 @@ export default function WorkoutExecution() {
     window.history.length > 1 ? navigate(-1) : navigate('/');
   };
 
-  const requestSubstitute = async () => {
+  const requestSubstitute = async (target) => {
+    const targetExercise = target || current;
+    setSubTarget(targetExercise);
     setSubSheet(true); setLoadingSubs(true); setAlternatives([]);
     try {
-      const ex = current.details;
+      const ex = targetExercise?.details;
       if (!ex) { setLoadingSubs(false); return; }
       if (!fullExerciseMapRef.current) {
         const { data: allExs } = await supabase.from('exercises')
-          .select('id, exercise_code, name, movement_pattern, primary_muscle_group, secondary_muscle_group, technical_difficulty, equipment')
+          .select('id, exercise_code, name, movement_pattern, primary_muscle_group, secondary_muscle_group, technical_difficulty, equipment, video_url')
           .order('created_date', { ascending: false })
           .limit(3000);
         fullExerciseMapRef.current = buildExerciseMapByCode(allExs || []);
@@ -702,7 +714,8 @@ export default function WorkoutExecution() {
       const withIds = (res?.alternatives || []).map((a) => {
         const match = ranked.find((x) => x.c.name === a.name);
         return { ...a, exercise: match?.c };
-      }).filter((a) => a.exercise);
+      }).filter((a) => a.exercise)
+        .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
       setAlternatives(withIds);
     } catch { setAlternatives([]); }
     setLoadingSubs(false);
@@ -738,21 +751,49 @@ export default function WorkoutExecution() {
   };
 
   const applySubstitute = async (alt) => {
+    const targetKey = subTarget?.key ?? current.key;
+    const targetIdx = exercises.findIndex((e) => e.key === targetKey);
+    if (targetIdx === -1) { setSubSheet(false); return; }
     const newId = alt.exercise.exercise_code || alt.exercise.id;
     const next = [...exercises];
-    next[index] = { ...next[index], exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + index, target_weight: null };
+    next[targetIdx] = { ...next[targetIdx], exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + targetIdx, target_weight: null };
     setExercises(next);
-    setLogs((l) => { const c = { ...l }; delete c[current.key]; return c; });
+    setLogs((l) => { const c = { ...l }; delete c[targetKey]; return c; });
     setSubSheet(false);
+    setSubTarget(null);
     try {
       const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: [alt.exercise.exercise_code].filter(Boolean) } });
       const ew = res.data?.exercise_weights || {};
       if (ew[newId] != null) {
-        setExercises((prev) => prev.map((e, i) => i === index ? { ...e, target_weight: ew[newId] } : e));
+        setExercises((prev) => prev.map((e, i) => i === targetIdx ? { ...e, target_weight: ew[newId] } : e));
         persistWeight(newId, ew[newId]);
       }
     } catch { /* silent */ }
   };
+
+  // Shared card for both AI-suggested and manually-searched substitute candidates,
+  // so the two lists in the swap sheet read as one consistent UI.
+  const renderSubstituteCard = (exercise, { key, confidence, reason, onUse }) => (
+    <Card key={key} className="rounded-2xl border-border p-4">
+      <div className="flex items-center gap-3 mb-1">
+        <div className="h-9 w-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+          {isRunningExercise(exercise) ? <Footprints className="h-4 w-4 text-brand" /> : <Dumbbell className="h-4 w-4 text-brand" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium truncate">{exercise.name}</p>
+          <p className="text-xs text-muted-foreground capitalize truncate">{exercise.movement_pattern || 'n/a'} · {exercise.equipment || 'n/a'}</p>
+        </div>
+        {confidence != null && (
+          <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0', confidence >= 75 ? 'bg-emerald-50 text-emerald-600' : confidence >= 50 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600')}>{confidence}% match</span>
+        )}
+      </div>
+      {reason && <p className="text-xs text-muted-foreground mb-3">{reason}</p>}
+      {exercise.video_url && (
+        <YouTubeVideo url={exercise.video_url} title={exercise.name} className={cn(reason ? '' : 'mt-3', 'mb-3')} />
+      )}
+      <Button onClick={onUse} size="sm" className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">Use this</Button>
+    </Card>
+  );
 
   const finish = async () => {
     setSaving(true);
@@ -824,6 +865,12 @@ export default function WorkoutExecution() {
   const showLogPrompt = logPrompt != null && logPrompt.keys.includes(current.key);
   const blockLogExercises = showLogPrompt ? exercises.filter((e) => logPrompt.keys.includes(e.key)) : [];
   const soloRounds = Math.max(1, (current.rounds > 1 ? current.effective_sets : current.sets) || 1);
+  const isManualSearchPending = manualQuery.trim() !== debouncedManualQuery;
+  const manualResults = debouncedManualQuery && fullExerciseMapRef.current
+    ? Object.values(fullExerciseMapRef.current)
+        .filter((c) => c.id !== subTarget?.details?.id && c.name?.toLowerCase().includes(debouncedManualQuery.toLowerCase()))
+        .slice(0, 20)
+    : [];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -934,6 +981,7 @@ export default function WorkoutExecution() {
             onSkip={handleSupersetSkip}
             onStartTimer={startTimer}
             onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
+            onSwap={requestSubstitute}
           />
         ) : isBlockActive ? (
           <WorkoutTimerPanel
@@ -949,6 +997,7 @@ export default function WorkoutExecution() {
             isRotatingBlock={isRotatingBlock}
             isPreviewExercise={isPreviewExercise}
             nextUpName={nextUpName}
+            onSwap={requestSubstitute}
           />
         ) : (
           <SupersetPanel
@@ -978,30 +1027,44 @@ export default function WorkoutExecution() {
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <div className="flex items-center gap-2">
             <button onClick={handleSoloSkip} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /> Skip</button>
-            <button onClick={requestSubstitute} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
+            <button onClick={() => requestSubstitute()} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
           </div>
         </div>
       )}
       </div>
 
-      <Sheet open={subSheet} onOpenChange={setSubSheet}>
+      <Sheet open={subSheet} onOpenChange={(o) => { setSubSheet(o); if (!o) { setManualQuery(''); setSubTarget(null); } }}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[80vh] overflow-y-auto">
           <SheetHeader className="px-5 pt-5"><SheetTitle className="text-left">Substitute exercise</SheetTitle></SheetHeader>
           <div className="px-5 pb-8 space-y-3">
             {loadingSubs ? (
               <div className="flex justify-center py-10"><Loader2 className="h-7 w-7 text-brand animate-spin" /></div>
             ) : alternatives.length ? (
-              alternatives.map((a, i) => (
-                <Card key={i} className="rounded-2xl border-border p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium">{a.exercise.name}</p>
-                    <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', a.confidence >= 75 ? 'bg-emerald-50 text-emerald-600' : a.confidence >= 50 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600')}>{a.confidence}% match</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">{a.reason}</p>
-                  <Button onClick={() => applySubstitute(a)} size="sm" className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">Use this</Button>
-                </Card>
-              ))
+              alternatives.map((a, i) => renderSubstituteCard(a.exercise, {
+                key: i,
+                confidence: a.confidence,
+                reason: a.reason,
+                onUse: () => applySubstitute(a),
+              }))
             ) : <p className="text-center text-sm text-muted-foreground py-8">No suitable alternatives found.</p>}
+
+            <div className="pt-3 border-t border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Or pick manually</p>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input value={manualQuery} onChange={(e) => setManualQuery(e.target.value)} placeholder="Search exercise library…" className="pl-9 pr-9 rounded-xl h-11" />
+                {isManualSearchPending && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {debouncedManualQuery && !isManualSearchPending && (
+                <div className="space-y-3 mt-3">
+                  {manualResults.length
+                    ? manualResults.map((c) => renderSubstituteCard(c, { key: c.id, onUse: () => applySubstitute({ exercise: c }) }))
+                    : <p className="text-xs text-muted-foreground text-center py-4">No matches.</p>}
+                </div>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 // with the active one highlighted, caller-supplied body (the part that
 // actually differs between block types — tap-to-start vs. countdown timer),
 // and an optional "skip this block" link.
-export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSkip, skipLabel, children }) {
+export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSelectExercise, onSkip, skipLabel, children }) {
   return (
     <div className="rounded-2xl border border-border p-4 mb-4 bg-card">
       {(label || roundLabel) && (
@@ -19,15 +19,19 @@ export default function BlockPanel({ label, roundLabel, exercises, activeKey, on
       {exercises && exercises.length > 1 && (
         <div className="flex flex-wrap justify-center gap-1.5 mb-3">
           {exercises.map((e) => (
-            <span
+            <button
               key={e.key}
+              type="button"
+              disabled={!onSelectExercise}
+              onClick={() => onSelectExercise?.(e.key)}
               className={cn(
                 'text-[10px] font-medium px-2 py-0.5 rounded-full border',
-                e.key === activeKey ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground'
+                e.key === activeKey ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground',
+                onSelectExercise && 'cursor-pointer'
               )}
             >
               {e.exercise_name}
-            </span>
+            </button>
           ))}
         </div>
       )}

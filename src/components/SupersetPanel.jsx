@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Check } from 'lucide-react';
+import { Play, Check, RefreshCw } from 'lucide-react';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import BlockPanel from '@/components/BlockPanel';
@@ -24,6 +24,7 @@ export default function SupersetPanel({
   onSkip,
   onStartTimer,
   onAdjustRest,
+  onSwap,
   label = 'Superset',
   unitLabel = 'Round',
   weightLoading,
@@ -106,6 +107,12 @@ export default function SupersetPanel({
     onAdjustRest?.(delta);
   };
 
+  const selectExercise = (key) => {
+    if (phase !== 'ready') return; // don't disrupt a running set or rest countdown
+    const idx = exercises.findIndex((e) => e.key === key);
+    if (idx !== -1) setExIndex(idx);
+  };
+
   const skipRest = () => {
     restEndAtRef.current = null;
     setRound((r) => r + 1);
@@ -120,6 +127,7 @@ export default function SupersetPanel({
       roundLabel={`${unitLabel} ${round} of ${rounds}`}
       exercises={exercises}
       activeKey={current?.key}
+      onSelectExercise={phase === 'ready' ? selectExercise : undefined}
       onSkip={onSkip}
       skipLabel={`Skip ${(label || 'exercise').toLowerCase()}`}
     >
@@ -153,9 +161,16 @@ export default function SupersetPanel({
               </Button>
             </>
           ) : (
-            <Button onClick={startSet} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
-              <Play className="h-5 w-5 mr-2" /> Start set
-            </Button>
+            <div className="flex items-center gap-2 w-full">
+              <Button onClick={startSet} className="flex-1 rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
+                <Play className="h-5 w-5 mr-2" /> Start set
+              </Button>
+              {onSwap && (
+                <button onClick={() => onSwap(current)} className="flex items-center justify-center w-14 h-14 rounded-xl border border-border text-muted-foreground shrink-0">
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           )}
           <p className="text-xs text-muted-foreground">{unitLabel} {round} total: {formatClock(roundTotal)}</p>
         </div>
