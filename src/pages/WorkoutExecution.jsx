@@ -818,6 +818,7 @@ export default function WorkoutExecution() {
                 {nextUpName && (
                   <p className="text-xs font-medium text-muted-foreground -mt-2 mb-4">Next up: {nextUpName}</p>
                 )}
+                <ExerciseSpecRow exercise={displayExercise} />
               </>
             )}
           </>
