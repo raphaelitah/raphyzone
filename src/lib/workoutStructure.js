@@ -211,28 +211,29 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
   }
 
   if (isEMOMBlock(block)) {
-    const isAlternatingEmom = isAlternatingEmomBlock(block);
     // EMOM is "every N minutes" generalized: the interval length is the block's
     // total time cap divided by its round count (defaulting to a classic 60s
-    // minute when time_cap_sec isn't set). By default every round covers the
-    // block's full set of exercises together; an "alternating" EMOM instead
-    // rotates a single exercise per round, like Tabata without a rest phase.
+    // minute when time_cap_sec isn't set). Any EMOM with more than one
+    // exercise rotates a single exercise per round — the classic "minute 1:
+    // A, minute 2: B, minute 3: C, repeat" pattern — same as an explicitly
+    // tagged "alternating" EMOM; a single-exercise block just has one round
+    // per turn. The stored "rounds" is the total number of individual turns
+    // (e.g. "EMOM x 15" cycling 3 exercises = 15 turns = 5 cycles), not
+    // cycles through the whole group — divide it back down since the timer
+    // engine multiplies rounds × exerciseCount itself.
+    const rotates = isAlternatingEmomBlock(block) || count > 1;
     const rawRounds = block.rounds ?? 1;
     const intervalSec = block.time_cap_sec ? Math.round(block.time_cap_sec / rawRounds) : 60;
     const blockLabel = (intervalSec > 0 && intervalSec % 60 === 0 && intervalSec !== 60)
       ? `E${intervalSec / 60}MOM`
       : 'EMOM';
-    // For an alternating EMOM, the stored "rounds" is the total number of
-    // individual turns (e.g. "Alternating EMOM x9" cycling 3 exercises =
-    // 9 turns), not cycles through the whole group — divide it back down
-    // since the timer engine multiplies rounds × exerciseCount itself.
-    const groupRounds = isAlternatingEmom
+    const groupRounds = rotates
       ? Math.max(1, Math.round(rawRounds / count))
       : rawRounds;
     return {
       blockLabel,
       isEmomFamily: true,
-      isAlternatingEmom,
+      isAlternatingEmom: rotates,
       timerDefaultConfig: { workSec: intervalSec, restSec: 0, rounds: groupRounds },
     };
   }
