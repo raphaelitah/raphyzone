@@ -884,8 +884,8 @@ export default function Home() {
         selectMode={selectMode}
         onSelect={selectFromDetail}
         warmup={selectedSlot?.warmup}
-        startDate={inProgressSession?.workout_id === selectedWorkout?.id ? inProgressSession.date : null}
-        resuming={inProgressSession?.workout_id === selectedWorkout?.id}
+        startDate={inProgressSession && selectedWorkout && inProgressSession.workout_id === selectedWorkout.id ? inProgressSession.date : null}
+        resuming={!!inProgressSession && !!selectedWorkout && inProgressSession.workout_id === selectedWorkout.id}
       />
 
       <SessionDetailSheet
