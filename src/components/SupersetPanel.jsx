@@ -12,6 +12,10 @@ function formatClock(sec) {
   return `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
+// Lead-in given before the block's very first set, so the user has time to
+// put the phone down before the clock actually starts running.
+const LEAD_IN_SEC = 10;
+
 // Inline card for running a superset block: exercises are done back to back
 // (tap to start/stop each one, tracking its own time), then a rest period
 // after every full round through the group, repeated for the block's round count.
@@ -32,16 +36,29 @@ export default function SupersetPanel({
 }) {
   const [round, setRound] = useState(1);
   const [exIndex, setExIndex] = useState(0);
-  const [phase, setPhase] = useState('ready'); // ready | running | resting
+  const [phase, setPhase] = useState('ready'); // ready | leadin | running | resting
   const [, setTick] = useState(0);
 
   const startAtRef = useRef(null);
   const roundElapsedRef = useRef(0);
   const restEndAtRef = useRef(null);
+  const leadInEndAtRef = useRef(null);
+  const hasStartedBlockRef = useRef(false);
+
+  const startSetActual = () => {
+    onStartTimer?.();
+    startAtRef.current = Date.now();
+    setPhase('running');
+  };
 
   useEffect(() => {
-    if (phase !== 'running' && phase !== 'resting') return;
+    if (phase !== 'running' && phase !== 'resting' && phase !== 'leadin') return;
     const id = setInterval(() => {
+      if (phase === 'leadin' && leadInEndAtRef.current != null && Date.now() >= leadInEndAtRef.current) {
+        leadInEndAtRef.current = null;
+        startSetActual();
+        return;
+      }
       if (phase === 'resting' && restEndAtRef.current != null && Date.now() >= restEndAtRef.current) {
         restEndAtRef.current = null;
         setRound((r) => r + 1);
@@ -67,11 +84,18 @@ export default function SupersetPanel({
   const restRemaining = phase === 'resting' && restEndAtRef.current != null
     ? Math.max(0, (restEndAtRef.current - Date.now()) / 1000)
     : 0;
+  const leadInRemaining = phase === 'leadin' && leadInEndAtRef.current != null
+    ? Math.max(0, (leadInEndAtRef.current - Date.now()) / 1000)
+    : 0;
 
   const startSet = () => {
-    onStartTimer?.();
-    startAtRef.current = Date.now();
-    setPhase('running');
+    if (!hasStartedBlockRef.current) {
+      hasStartedBlockRef.current = true;
+      leadInEndAtRef.current = Date.now() + LEAD_IN_SEC * 1000;
+      setPhase('leadin');
+      return;
+    }
+    startSetActual();
   };
 
   const finishSet = () => {
@@ -131,7 +155,13 @@ export default function SupersetPanel({
       onSkip={onSkip}
       skipLabel={`Skip ${(label || 'exercise').toLowerCase()}`}
     >
-      {phase === 'resting' ? (
+      {phase === 'leadin' ? (
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Get ready</span>
+          <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(leadInRemaining)}</p>
+          <p className="text-xs text-muted-foreground">{current?.exercise_name}</p>
+        </div>
+      ) : phase === 'resting' ? (
         <div className="flex flex-col items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Rest</span>
           <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(restRemaining)}</p>
