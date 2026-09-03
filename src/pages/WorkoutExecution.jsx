@@ -15,12 +15,10 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, Check, RefreshCw, Loader2, RotateCcw, Clock, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
-import YouTubeVideo from '@/components/YouTubeVideo';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
-import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import {
@@ -66,7 +64,7 @@ export default function WorkoutExecution() {
   const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
-  const [blockLogPrompt, setBlockLogPrompt] = useState(null);
+  const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
   const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
 
@@ -273,7 +271,7 @@ export default function WorkoutExecution() {
   const isAlternatingEmom = blockTimerMeta?.isAlternatingEmom ?? false;
   const isSuperset = blockTimerMeta?.isSuperset ?? false;
   const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
-  const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && blockLogPrompt !== current.block_id);
+  const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && !(logPrompt && logPrompt.keys.includes(current.key)));
   const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
 
   const timer = useIntervalTimer(armedTimerConfig || { mode: 'countdown', durationSec: 0 });
@@ -304,7 +302,7 @@ export default function WorkoutExecution() {
     const blockId = armedTimerConfig.blockId;
     timer.reset(); // otherwise the next block's timer starts already "done"
     setArmedTimerConfig(null);
-    openBlockLogPrompt(blockId);
+    openLogPrompt(exercises.filter((e) => e.block_id === blockId).map((e) => e.key), blockId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer.status, armedTimerConfig]);
 
@@ -339,23 +337,25 @@ export default function WorkoutExecution() {
     scheduleSave(key);
   };
 
-  // Seeds one editable entry per exercise in the block so the completion
-  // screen can capture max weight/difficulty/note per exercise, same as a
-  // standalone exercise.
-  const openBlockLogPrompt = (blockId) => {
-    const blockExercises = exercises.filter((e) => e.block_id === blockId);
+  // Seeds one editable entry per exercise so the completion screen can
+  // capture max weight/distance-time/difficulty/note per exercise — for a
+  // real block (blockId set) that's every exercise in it; for a solo
+  // exercise it's just the one.
+  const openLogPrompt = (keys, blockId = null) => {
     const entries = {};
-    blockExercises.forEach((e) => {
-      const existing = logs[e.key] || {};
-      entries[e.key] = {
+    keys.forEach((key) => {
+      const existing = logs[key] || {};
+      entries[key] = {
         difficulty: existing.difficulty || null,
         note: existing.note || '',
         max_weight: existing.max_weight ?? null,
         bodyweight: !!existing.bodyweight,
+        distance_km: existing.distance_km ?? null,
+        duration_seconds: existing.duration_seconds ?? null,
       };
     });
     setBlockLogEntries(entries);
-    setBlockLogPrompt(blockId);
+    setLogPrompt({ keys, blockId });
   };
 
   const updateBlockLogEntry = (key, patch) => {
@@ -364,7 +364,7 @@ export default function WorkoutExecution() {
 
   const handleSupersetFinish = () => {
     if (!current) return;
-    openBlockLogPrompt(current.block_id);
+    openLogPrompt(exercises.filter((e) => e.block_id === current.block_id).map((e) => e.key), current.block_id);
   };
 
   const handleSupersetSkip = () => {
@@ -372,21 +372,44 @@ export default function WorkoutExecution() {
     advancePastBlock(current.block_id);
   };
 
-  const handleSaveBlockLog = () => {
-    if (!blockLogPrompt) return;
-    const blockId = blockLogPrompt;
-    exercises.filter((e) => e.block_id === blockId).forEach((e) => {
-      const entry = blockLogEntries[e.key] || {};
-      updateLog(e.key, {
+  // A standalone exercise is tracked the same way as a one-exercise block:
+  // tap-to-start/stop each set with rest in between, then log max weight (or
+  // distance/time) once all sets are done.
+  const handleSoloFinish = () => {
+    if (!current) return;
+    openLogPrompt([current.key], null);
+  };
+
+  const handleSoloSkip = () => {
+    if (!current) return;
+    flushCurrentTime();
+    updateLog(current.key, { skipped: true });
+    if (isLast) finish(); else goNext();
+  };
+
+  const handleSaveLogPrompt = () => {
+    if (!logPrompt || saving) return;
+    const { keys, blockId } = logPrompt;
+    keys.forEach((key) => {
+      const entry = blockLogEntries[key] || {};
+      updateLog(key, {
         difficulty: entry.difficulty || 'normal',
         note: entry.note || '',
         max_weight: entry.bodyweight ? 0 : (entry.max_weight ?? null),
         bodyweight: !!entry.bodyweight,
+        distance_km: entry.distance_km ?? null,
+        duration_seconds: entry.duration_seconds ?? null,
       });
     });
     setBlockLogEntries({});
-    setBlockLogPrompt(null);
-    advancePastBlock(blockId);
+    setLogPrompt(null);
+    if (blockId) {
+      advancePastBlock(blockId);
+    } else if (isLast) {
+      finish();
+    } else {
+      goNext();
+    }
   };
 
   // A block either rotates through its exercises one at a time (Tabata, and an
@@ -422,11 +445,13 @@ export default function WorkoutExecution() {
   };
 
   const updateLog = (key, patch) => {
-    setLogs((l) => ({ ...l, [key]: { ...(l[key] || {}), ...patch } }));
+    setLogs((l) => {
+      const next = { ...l, [key]: { ...(l[key] || {}), ...patch } };
+      logsRef.current = next; // keep in sync immediately — callers may flushSave() in the same tick
+      return next;
+    });
     scheduleSave(key);
   };
-  const getLog = (key) => logs[key] || {};
-
   const flushCurrentTime = () => {
     const cur = exercisesRef.current[indexRef.current];
     if (!cur) return;
@@ -582,6 +607,7 @@ export default function WorkoutExecution() {
   };
 
   const calcWeight = async () => {
+    const requiresWeight = current && !isRunningExercise(current.details) && current.details?.requires_load !== false;
     if (!current?.exercise_id || !requiresWeight) return;
     setWeightLoading(true);
     try {
@@ -673,19 +699,15 @@ export default function WorkoutExecution() {
     </div>
   );
 
-  const log = getLog(current.key);
   const isLast = index === exercises.length - 1;
-  const isRunning = isRunningExercise(current.details);
-  const requiresWeight = !isRunning && current.details?.requires_load !== false;
-  const done = log.skipped
-    || (isRunning ? (log.distance_km != null && log.duration_seconds != null) : (!requiresWeight || log.max_weight != null || log.bodyweight));
   const back = () => {
     const sid = sessionIdRef.current;
     if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});
     window.history.length > 1 ? navigate(-1) : navigate('/');
   };
-  const showBlockLogPrompt = blockLogPrompt != null && current.block_id === blockLogPrompt;
-  const blockLogExercises = showBlockLogPrompt ? exercises.filter((e) => e.block_id === blockLogPrompt) : [];
+  const showLogPrompt = logPrompt != null && logPrompt.keys.includes(current.key);
+  const blockLogExercises = showLogPrompt ? exercises.filter((e) => logPrompt.keys.includes(e.key)) : [];
+  const soloRounds = Math.max(1, (current.rounds > 1 ? current.effective_sets : current.sets) || 1);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -717,19 +739,30 @@ export default function WorkoutExecution() {
       </header>
 
       <div className="flex-1 px-5 py-4 overflow-y-auto">
-        {showBlockLogPrompt ? (
+        {showLogPrompt ? (
           <>
-            <h2 className="text-xl font-semibold tracking-tight">{blockLabel} complete</h2>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">{blockLogExercises.map((e) => e.exercise_name).join(', ')}</p>
-            <div className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">{logPrompt.blockId ? `${blockLabel} complete` : `${blockLogExercises[0]?.exercise_name || 'Exercise'} complete`}</h2>
+            {logPrompt.blockId && <p className="text-sm text-muted-foreground mt-1 mb-4">{blockLogExercises.map((e) => e.exercise_name).join(', ')}</p>}
+            <div className={cn('space-y-4', !logPrompt.blockId && 'mt-4')}>
               {blockLogExercises.map((e) => {
                 const entry = blockLogEntries[e.key] || {};
                 const exRunning = isRunningExercise(e.details);
                 const exRequiresWeight = !exRunning && e.details?.requires_load !== false;
                 return (
                   <div key={e.key} className="rounded-2xl border border-border p-4">
-                    <p className="font-semibold text-sm mb-3">{e.exercise_name}</p>
-                    {exRequiresWeight && (
+                    {logPrompt.blockId && <p className="font-semibold text-sm mb-3">{e.exercise_name}</p>}
+                    {exRunning ? (
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
+                          <input type="number" inputMode="decimal" value={entry.distance_km ?? ''} onChange={(ev) => updateBlockLogEntry(e.key, { distance_km: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
+                          <input type="number" inputMode="decimal" value={entry.duration_seconds != null ? entry.duration_seconds / 60 : ''} onChange={(ev) => updateBlockLogEntry(e.key, { duration_seconds: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                        </div>
+                      </div>
+                    ) : exRequiresWeight && (
                       <div className="mb-3">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
@@ -781,80 +814,33 @@ export default function WorkoutExecution() {
             nextUpName={nextUpName}
           />
         ) : (
-          <>
-            <h2 className="text-xl font-semibold tracking-tight">{current.exercise_name}</h2>
-            <div className="flex flex-wrap gap-2 mt-1 mb-4 text-xs text-muted-foreground">
-              {current.details?.movement_pattern && <span className="capitalize">{current.details.movement_pattern}</span>}
-              {current.details?.equipment && <><span>·</span><span>{current.details.equipment}</span></>}
-            </div>
-
-            {current.details?.video_url && (
-              <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="mb-4" />
-            )}
-
-            <ExerciseSpecRow exercise={current} isRunning={isRunning} distanceKm={log.distance_km} durationSeconds={log.duration_seconds} weightLoading={weightLoading} onWeightClick={calcWeight} />
-
-            {current.coach_note && <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 mb-4">Coach note: {current.coach_note}</p>}
-            {current.details?.notes && <p className="text-sm leading-relaxed text-muted-foreground mb-5">{current.details.notes}</p>}
-
-            {log.skipped ? (
-              <Card className="rounded-2xl border-border p-4 text-center text-sm text-muted-foreground">Exercise skipped</Card>
-            ) : (
-              <div className="space-y-4">
-                {isRunning && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
-                      <input type="number" inputMode="decimal" value={log.distance_km ?? ''} onChange={(e) => updateLog(current.key, { distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
-                      <input type="number" inputMode="decimal" value={log.duration_seconds != null ? log.duration_seconds / 60 : ''} onChange={(e) => updateLog(current.key, { duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                    </div>
-                  </div>
-                )}
-                {requiresWeight && (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
-                      <button type="button" onClick={() => updateLog(current.key, log.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors', log.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
-                    </div>
-                    {log.bodyweight ? (
-                      <div className="w-full mt-1 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-lg font-semibold text-brand text-center">Bodyweight</div>
-                    ) : (
-                      <input type="number" inputMode="decimal" value={log.max_weight ?? ''} onChange={(e) => updateLog(current.key, { max_weight: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder={current.target_weight ? String(current.target_weight) : '0'} className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
-                    )}
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
-                  <div className="grid grid-cols-4 gap-2 mt-1">
-                    {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
-                      <button key={val} onClick={() => updateLog(current.key, { difficulty: val })} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', log.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
-                    ))}
-                  </div>
-                </div>
-                <textarea value={log.note || ''} onChange={(e) => updateLog(current.key, { note: e.target.value })} placeholder="Optional note…" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
-              </div>
-            )}
-          </>
+          <SupersetPanel
+            key={current.key}
+            label={null}
+            unitLabel="Set"
+            exercises={[current]}
+            rounds={soloRounds}
+            restSec={current.rest_seconds || 0}
+            onExerciseElapsed={handleSupersetExerciseElapsed}
+            onFinish={handleSoloFinish}
+            onStartTimer={startTimer}
+            weightLoading={weightLoading}
+            onWeightClick={calcWeight}
+          />
         )}
       </div>
 
-      {showBlockLogPrompt ? (
+      {showLogPrompt ? (
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
-          <Button onClick={handleSaveBlockLog} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
-            Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" />
+          <Button onClick={handleSaveLogPrompt} disabled={saving} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" /></>}
           </Button>
         </div>
       ) : !isBlockActive && (
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <div className="flex items-center gap-2">
-            <button onClick={() => { flushCurrentTime(); updateLog(current.key, { skipped: true }); }} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /><span className="text-[10px]">Skip</span></button>
-            <button onClick={requestSubstitute} className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /><span className="text-[10px]">Swap</span></button>
-            <Button onClick={isLast ? finish : goNext} disabled={saving || !done} className="flex-1 rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
-              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : isLast ? <><Check className="h-5 w-5 mr-2" /> Finish workout</> : <>Next <ChevronRight className="h-5 w-5 ml-1" /></>}
-            </Button>
+            <button onClick={handleSoloSkip} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /> Skip</button>
+            <button onClick={requestSubstitute} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
           </div>
         </div>
       )}

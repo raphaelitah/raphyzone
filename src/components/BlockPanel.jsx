@@ -9,10 +9,12 @@ import { cn } from '@/lib/utils';
 export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSkip, skipLabel, children }) {
   return (
     <div className="rounded-2xl border border-border p-4 mb-4 bg-card">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold">{label}</p>
-        {roundLabel && <p className="text-xs text-muted-foreground">{roundLabel}</p>}
-      </div>
+      {(label || roundLabel) && (
+        <div className={cn('flex items-center mb-3', label ? 'justify-between' : 'justify-end')}>
+          {label && <p className="text-sm font-semibold">{label}</p>}
+          {roundLabel && <p className="text-xs text-muted-foreground">{roundLabel}</p>}
+        </div>
+      )}
 
       {exercises && exercises.length > 1 && (
         <div className="flex flex-wrap justify-center gap-1.5 mb-3">

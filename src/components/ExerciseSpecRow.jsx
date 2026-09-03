@@ -1,5 +1,6 @@
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isRunningExercise } from '@/lib/fitness';
 
 export function Spec({ label, value, subtext = null, loading = false, onClick = null }) {
   return (
@@ -18,8 +19,9 @@ export function Spec({ label, value, subtext = null, loading = false, onClick = 
 
 // Sets/Reps/Weight/Rest tile row shared by standalone exercises and block
 // (superset/EMOM/Tabata) exercises so the tracking experience is consistent.
-export default function ExerciseSpecRow({ exercise, isRunning, distanceKm, durationSeconds, weightLoading, onWeightClick }) {
+export default function ExerciseSpecRow({ exercise, distanceKm, durationSeconds, weightLoading, onWeightClick }) {
   if (!exercise) return null;
+  const isRunning = isRunningExercise(exercise.details);
   const setsValue = exercise.rounds > 1 ? exercise.effective_sets : exercise.sets;
   const setsSubtext = exercise.rounds > 1 ? `${exercise.rounds} rounds` : null;
   const requiresWeight = !isRunning && exercise.details?.requires_load !== false;

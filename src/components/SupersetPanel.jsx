@@ -23,6 +23,10 @@ export default function SupersetPanel({
   onFinish,
   onSkip,
   onStartTimer,
+  label = 'Superset',
+  unitLabel = 'Round',
+  weightLoading,
+  onWeightClick,
 }) {
   const [round, setRound] = useState(1);
   const [exIndex, setExIndex] = useState(0);
@@ -104,18 +108,18 @@ export default function SupersetPanel({
 
   return (
     <BlockPanel
-      label="Superset"
-      roundLabel={`Round ${round} of ${rounds}`}
+      label={label}
+      roundLabel={`${unitLabel} ${round} of ${rounds}`}
       exercises={exercises}
       activeKey={current?.key}
       onSkip={onSkip}
-      skipLabel="Skip superset"
+      skipLabel={`Skip ${(label || 'exercise').toLowerCase()}`}
     >
       {phase === 'resting' ? (
         <div className="flex flex-col items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Rest</span>
           <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(restRemaining)}</p>
-          <p className="text-xs text-muted-foreground">Round {round} total: {formatClock(roundTotal)}</p>
+          <p className="text-xs text-muted-foreground">{unitLabel} {round} total: {formatClock(roundTotal)}</p>
           <button onClick={skipRest} className="text-xs text-muted-foreground underline">Skip rest</button>
         </div>
       ) : (
@@ -125,7 +129,7 @@ export default function SupersetPanel({
             <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
           )}
           <div className="w-full">
-            <ExerciseSpecRow exercise={current} />
+            <ExerciseSpecRow exercise={current} weightLoading={weightLoading} onWeightClick={onWeightClick} />
           </div>
           {phase === 'running' ? (
             <>
@@ -139,7 +143,7 @@ export default function SupersetPanel({
               <Play className="h-5 w-5 mr-2" /> Start set
             </Button>
           )}
-          <p className="text-xs text-muted-foreground">Round {round} total: {formatClock(roundTotal)}</p>
+          <p className="text-xs text-muted-foreground">{unitLabel} {round} total: {formatClock(roundTotal)}</p>
         </div>
       )}
     </BlockPanel>
