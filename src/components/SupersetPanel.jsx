@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Check, SkipForward } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import YouTubeVideo from '@/components/YouTubeVideo';
+import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 
 function formatClock(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -20,6 +22,7 @@ export default function SupersetPanel({
   onExerciseElapsed,
   onFinish,
   onSkip,
+  onStartTimer,
 }) {
   const [round, setRound] = useState(1);
   const [exIndex, setExIndex] = useState(0);
@@ -60,6 +63,7 @@ export default function SupersetPanel({
     : 0;
 
   const startSet = () => {
+    onStartTimer?.();
     startAtRef.current = Date.now();
     setPhase('running');
   };
@@ -113,7 +117,7 @@ export default function SupersetPanel({
           <button onClick={skipRest} className="text-xs text-muted-foreground underline">Skip rest</button>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3 w-full">
           <div className="flex flex-wrap justify-center gap-1.5">
             {exercises.map((e, i) => (
               <span
@@ -128,6 +132,12 @@ export default function SupersetPanel({
             ))}
           </div>
           <p className="text-lg font-semibold text-center">{current?.exercise_name}</p>
+          {current?.details?.video_url && (
+            <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
+          )}
+          <div className="w-full">
+            <ExerciseSpecRow exercise={current} />
+          </div>
           {phase === 'running' ? (
             <>
               <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(runningElapsed)}</p>

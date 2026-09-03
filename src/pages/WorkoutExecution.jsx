@@ -20,6 +20,7 @@ import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from 
 import YouTubeVideo from '@/components/YouTubeVideo';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
+import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import {
@@ -66,9 +67,7 @@ export default function WorkoutExecution() {
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
   const [blockLogPrompt, setBlockLogPrompt] = useState(null);
-  const [blockLogDifficulty, setBlockLogDifficulty] = useState(null);
-  const [blockLogNote, setBlockLogNote] = useState('');
-  const [expandedVideoKey, setExpandedVideoKey] = useState(null);
+  const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
 
   const fullExerciseMapRef = useRef(null);
@@ -305,14 +304,13 @@ export default function WorkoutExecution() {
     const blockId = armedTimerConfig.blockId;
     timer.reset(); // otherwise the next block's timer starts already "done"
     setArmedTimerConfig(null);
-    setBlockLogDifficulty(null);
-    setBlockLogNote('');
-    setBlockLogPrompt(blockId);
+    openBlockLogPrompt(blockId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer.status, armedTimerConfig]);
 
   const handleStartBlockTimer = (values) => {
     if (!current || !blockLabel) return;
+    startTimer();
     setArmedTimerConfig({
       mode: 'interval',
       workSec: values.workSec,
@@ -341,11 +339,32 @@ export default function WorkoutExecution() {
     scheduleSave(key);
   };
 
+  // Seeds one editable entry per exercise in the block so the completion
+  // screen can capture max weight/difficulty/note per exercise, same as a
+  // standalone exercise.
+  const openBlockLogPrompt = (blockId) => {
+    const blockExercises = exercises.filter((e) => e.block_id === blockId);
+    const entries = {};
+    blockExercises.forEach((e) => {
+      const existing = logs[e.key] || {};
+      entries[e.key] = {
+        difficulty: existing.difficulty || null,
+        note: existing.note || '',
+        max_weight: existing.max_weight ?? null,
+        bodyweight: !!existing.bodyweight,
+      };
+    });
+    setBlockLogEntries(entries);
+    setBlockLogPrompt(blockId);
+  };
+
+  const updateBlockLogEntry = (key, patch) => {
+    setBlockLogEntries((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
+  };
+
   const handleSupersetFinish = () => {
     if (!current) return;
-    setBlockLogDifficulty(null);
-    setBlockLogNote('');
-    setBlockLogPrompt(current.block_id);
+    openBlockLogPrompt(current.block_id);
   };
 
   const handleSupersetSkip = () => {
@@ -357,8 +376,15 @@ export default function WorkoutExecution() {
     if (!blockLogPrompt) return;
     const blockId = blockLogPrompt;
     exercises.filter((e) => e.block_id === blockId).forEach((e) => {
-      updateLog(e.key, { difficulty: blockLogDifficulty || 'normal', note: blockLogNote });
+      const entry = blockLogEntries[e.key] || {};
+      updateLog(e.key, {
+        difficulty: entry.difficulty || 'normal',
+        note: entry.note || '',
+        max_weight: entry.bodyweight ? 0 : (entry.max_weight ?? null),
+        bodyweight: !!entry.bodyweight,
+      });
     });
+    setBlockLogEntries({});
     setBlockLogPrompt(null);
     advancePastBlock(blockId);
   };
@@ -653,8 +679,6 @@ export default function WorkoutExecution() {
   const requiresWeight = !isRunning && current.details?.requires_load !== false;
   const done = log.skipped
     || (isRunning ? (log.distance_km != null && log.duration_seconds != null) : (!requiresWeight || log.max_weight != null || log.bodyweight));
-  const setsValue = current.rounds > 1 ? current.effective_sets : current.sets;
-  const setsSubtext = current.rounds > 1 ? `${current.rounds} rounds` : null;
   const back = () => {
     const sid = sessionIdRef.current;
     if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});
@@ -697,15 +721,38 @@ export default function WorkoutExecution() {
           <>
             <h2 className="text-xl font-semibold tracking-tight">{blockLabel} complete</h2>
             <p className="text-sm text-muted-foreground mt-1 mb-4">{blockLogExercises.map((e) => e.exercise_name).join(', ')}</p>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
-              <div className="grid grid-cols-4 gap-2 mt-1">
-                {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
-                  <button key={val} onClick={() => setBlockLogDifficulty(val)} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', blockLogDifficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
-                ))}
-              </div>
+            <div className="space-y-4">
+              {blockLogExercises.map((e) => {
+                const entry = blockLogEntries[e.key] || {};
+                const exRunning = isRunningExercise(e.details);
+                const exRequiresWeight = !exRunning && e.details?.requires_load !== false;
+                return (
+                  <div key={e.key} className="rounded-2xl border border-border p-4">
+                    <p className="font-semibold text-sm mb-3">{e.exercise_name}</p>
+                    {exRequiresWeight && (
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
+                          <button type="button" onClick={() => updateBlockLogEntry(e.key, entry.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors', entry.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
+                        </div>
+                        {entry.bodyweight ? (
+                          <div className="w-full mt-1 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-lg font-semibold text-brand text-center">Bodyweight</div>
+                        ) : (
+                          <input type="number" inputMode="decimal" value={entry.max_weight ?? ''} onChange={(ev) => updateBlockLogEntry(e.key, { max_weight: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) })} placeholder={e.target_weight ? String(e.target_weight) : '0'} className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                        )}
+                      </div>
+                    )}
+                    <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
+                    <div className="grid grid-cols-4 gap-2 mt-1 mb-3">
+                      {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
+                        <button key={val} onClick={() => updateBlockLogEntry(e.key, { difficulty: val })} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', entry.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
+                      ))}
+                    </div>
+                    <textarea value={entry.note || ''} onChange={(ev) => updateBlockLogEntry(e.key, { note: ev.target.value })} placeholder="Optional note…" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
+                  </div>
+                );
+              })}
             </div>
-            <textarea value={blockLogNote} onChange={(e) => setBlockLogNote(e.target.value)} placeholder="Optional note…" className="w-full mt-4 rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
           </>
         ) : isBlockActive && isSuperset ? (
           <SupersetPanel
@@ -716,6 +763,7 @@ export default function WorkoutExecution() {
             onExerciseElapsed={handleSupersetExerciseElapsed}
             onFinish={handleSupersetFinish}
             onSkip={handleSupersetSkip}
+            onStartTimer={startTimer}
           />
         ) : isBlockActive ? (
           <>
@@ -739,32 +787,17 @@ export default function WorkoutExecution() {
                   {displayExercise?.details?.video_url && (
                     <YouTubeVideo url={displayExercise.details.video_url} title={displayExercise.exercise_name} className="mb-4" />
                   )}
+                  <ExerciseSpecRow exercise={displayExercise} />
                 </>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {currentBlockExercises.map((e) => (
                     <div key={e.key} className="rounded-xl border border-border p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-sm">{e.exercise_name}</p>
-                          <p className="text-xs text-muted-foreground">{e.reps ? `${e.reps} reps` : null}{e.details?.equipment ? ` · ${e.details.equipment}` : ''}</p>
-                        </div>
-                        {e.details?.video_url && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedVideoKey((k) => (k === e.key ? null : e.key))}
-                            className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground"
-                            aria-label={`Watch ${e.exercise_name} video`}
-                          >
-                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 ml-0.5 fill-current">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                      {expandedVideoKey === e.key && e.details?.video_url && (
-                        <YouTubeVideo url={e.details.video_url} title={e.exercise_name} className="mt-3" />
+                      <p className="font-medium text-sm mb-2">{e.exercise_name}</p>
+                      {e.details?.video_url && (
+                        <YouTubeVideo url={e.details.video_url} title={e.exercise_name} className="mb-3" />
                       )}
+                      <ExerciseSpecRow exercise={e} />
                     </div>
                   ))}
                 </div>
@@ -800,16 +833,7 @@ export default function WorkoutExecution() {
               <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="mb-4" />
             )}
 
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
-              <Spec label="Reps" value={current.reps} />
-              {isRunning ? (
-                <Spec label="Pace" value={log.distance_km && log.duration_seconds ? `${(log.duration_seconds / 60 / log.distance_km).toFixed(1)}/km` : '—'} />
-              ) : (
-                <Spec label="Weight" value={current.target_weight ? current.target_weight + 'kg' : '—'} loading={weightLoading} onClick={requiresWeight && !current.target_weight ? calcWeight : null} />
-              )}
-              <Spec label="Rest" value={current.rest_seconds ? current.rest_seconds + 's' : '—'} />
-            </div>
+            <ExerciseSpecRow exercise={current} isRunning={isRunning} distanceKm={log.distance_km} durationSeconds={log.duration_seconds} weightLoading={weightLoading} onWeightClick={calcWeight} />
 
             {current.coach_note && <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 mb-4">Coach note: {current.coach_note}</p>}
             {current.details?.notes && <p className="text-sm leading-relaxed text-muted-foreground mb-5">{current.details.notes}</p>}
@@ -914,21 +938,6 @@ export default function WorkoutExecution() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function Spec({ label, value, subtext = null, loading = false, onClick = null }) {
-  return (
-    <div className={cn('rounded-xl bg-muted/50 p-3 text-center', onClick && 'cursor-pointer hover:bg-muted transition-colors')} onClick={onClick || undefined}>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center justify-center gap-1">
-        {label}
-        {onClick && !loading && <RefreshCw className="h-2.5 w-2.5" />}
-      </p>
-      <p className="font-semibold text-sm mt-0.5 flex items-center justify-center gap-1">
-        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : value}
-      </p>
-      {subtext && <p className="text-[9px] text-muted-foreground mt-0.5 leading-none">{subtext}</p>}
     </div>
   );
 }
