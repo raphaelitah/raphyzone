@@ -245,7 +245,7 @@ export default function WorkoutExecution() {
         if (!sess) {
           const { session, conflict } = await insertInProgressSession({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
-            date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
+            date: targetDate, status: 'in_progress',
           });
           if (conflict) {
             if (!active()) return;
@@ -277,7 +277,7 @@ export default function WorkoutExecution() {
       if (!sess) {
         const { session, conflict } = await insertInProgressSession({
           user_id: user.id, workout_id: workoutId, workout_name: w?.name,
-          date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
+          date: targetDate, status: 'in_progress',
         });
         if (conflict) {
           // Lost the race to yet another session started elsewhere — show that one instead.
