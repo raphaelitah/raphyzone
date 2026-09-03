@@ -5,7 +5,11 @@ import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendar
 export const RUNNING_MODALITY = 'Cyclical / Monostructural';
 export const RUNNING_MOVEMENT_PATTERN = 'Locomotion / Cardio';
 export const isRunningWorkout = (workout) => workout?.modality === RUNNING_MODALITY;
-export const isRunningExercise = (exercise) => exercise?.movement_pattern === RUNNING_MOVEMENT_PATTERN;
+// movement_pattern alone over-matches: ~120 bodyweight/calisthenics exercises
+// (Bear Crawl, Duck Walk, Hollow Body Wall Walk, etc.) are also tagged
+// 'Locomotion / Cardio' despite being reps/time-under-tension moves, not
+// distance-trackable cardio. Require the cardio modality too.
+export const isRunningExercise = (exercise) => exercise?.movement_pattern === RUNNING_MOVEMENT_PATTERN && exercise?.modality === RUNNING_MODALITY;
 
 export const EQUIPMENT_GROUPS = [
   { label: 'Free Weights', items: ['Barbell', 'EZ Bar', 'Dumbbells', 'Adjustable Dumbbells', 'Kettlebell', 'Weight Plates'] },
