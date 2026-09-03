@@ -21,6 +21,10 @@ function buildSequence(config) {
   return seq.length ? seq : [{ round: 1, exerciseIndex: 0, phase: 'work', durationSec: 0 }];
 }
 
+// Lead-in given before the first phase of a freshly-armed block, so the user
+// has time to put the phone down before the clock actually starts running.
+const LEAD_IN_SEC = 10;
+
 // Wall-clock based timer: stores an absolute phaseEndAt timestamp rather than
 // decrementing a counter, so it stays accurate across setInterval throttling
 // or the tab/screen being backgrounded (matches the pattern used for the
@@ -30,7 +34,7 @@ export default function useIntervalTimer(config) {
     config.mode, config.durationSec, config.rounds, config.exerciseCount, config.workSec, config.restSec,
   ]);
 
-  const [status, setStatus] = useState('idle'); // idle | running | paused | done
+  const [status, setStatus] = useState('idle'); // idle | leadin | running | pausedLeadin | paused | done
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [, setTick] = useState(0);
 
@@ -47,6 +51,15 @@ export default function useIntervalTimer(config) {
   // Advances phaseIndex as many times as needed to catch up with elapsed wall-clock
   // time (e.g. after the phone was locked through one or more phases).
   const catchUp = useCallback(() => {
+    if (statusRef.current === 'leadin') {
+      if (phaseEndAtRef.current != null && Date.now() >= phaseEndAtRef.current) {
+        const seq = sequenceRef.current;
+        phaseEndAtRef.current = Date.now() + (seq[0]?.durationSec || 0) * 1000;
+        statusRef.current = 'running';
+        setStatus('running');
+      }
+      return;
+    }
     if (statusRef.current !== 'running') return;
     let idx = phaseIndexRef.current;
     let endAt = phaseEndAtRef.current;
@@ -69,7 +82,7 @@ export default function useIntervalTimer(config) {
   }, []);
 
   useEffect(() => {
-    if (status !== 'running') return;
+    if (status !== 'running' && status !== 'leadin') return;
     const id = setInterval(() => { catchUp(); setTick((t) => t + 1); }, 1000);
     return () => clearInterval(id);
   }, [status, catchUp]);
@@ -80,25 +93,28 @@ export default function useIntervalTimer(config) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [catchUp]);
 
+  // Starts a block's timer with a 10s lead-in first, so the user has time to
+  // set the phone down before the first phase actually starts counting down.
   const start = useCallback(() => {
-    const seq = sequenceRef.current;
     phaseIndexRef.current = 0;
-    phaseEndAtRef.current = Date.now() + (seq[0]?.durationSec || 0) * 1000;
+    phaseEndAtRef.current = Date.now() + LEAD_IN_SEC * 1000;
     remainingMsRef.current = null;
     setPhaseIndex(0);
-    setStatus('running');
+    setStatus('leadin');
   }, []);
 
   const pause = useCallback(() => {
-    if (statusRef.current !== 'running' || phaseEndAtRef.current == null) return;
+    const current = statusRef.current;
+    if ((current !== 'running' && current !== 'leadin') || phaseEndAtRef.current == null) return;
     remainingMsRef.current = Math.max(0, phaseEndAtRef.current - Date.now());
-    setStatus('paused');
+    setStatus(current === 'leadin' ? 'pausedLeadin' : 'paused');
   }, []);
 
   const resume = useCallback(() => {
-    if (statusRef.current !== 'paused') return;
+    const current = statusRef.current;
+    if (current !== 'paused' && current !== 'pausedLeadin') return;
     phaseEndAtRef.current = Date.now() + (remainingMsRef.current || 0);
-    setStatus('running');
+    setStatus(current === 'pausedLeadin' ? 'leadin' : 'running');
   }, []);
 
   const reset = useCallback(() => {
@@ -122,6 +138,12 @@ export default function useIntervalTimer(config) {
   }, []);
 
   const skipPhase = useCallback(() => {
+    if (statusRef.current === 'leadin' || statusRef.current === 'pausedLeadin') {
+      const seq = sequenceRef.current;
+      phaseEndAtRef.current = Date.now() + (seq[0]?.durationSec || 0) * 1000;
+      setStatus('running');
+      return;
+    }
     const seq = sequenceRef.current;
     const idx = phaseIndexRef.current;
     if (idx >= seq.length - 1) {
@@ -160,22 +182,23 @@ export default function useIntervalTimer(config) {
     setTick((t) => t + 1);
   }, []);
 
+  const isLeadIn = status === 'leadin' || status === 'pausedLeadin';
   const current = sequence[phaseIndex] || sequence[0];
   const next = sequence[phaseIndex + 1] || null;
-  const remainingMs = status === 'running' && phaseEndAtRef.current != null
+  const remainingMs = (status === 'running' || status === 'leadin') && phaseEndAtRef.current != null
     ? Math.max(0, phaseEndAtRef.current - Date.now())
     : (remainingMsRef.current ?? (current?.durationSec || 0) * 1000);
 
   return {
     status,
-    phase: current?.phase ?? null,
+    phase: isLeadIn ? 'leadin' : (current?.phase ?? null),
     round: current?.round ?? 1,
     exerciseIndex: current?.exerciseIndex ?? 0,
     nextExerciseIndex: next?.exerciseIndex ?? null,
     nextRound: next?.round ?? null,
     totalRounds: config.mode === 'interval' ? Math.max(1, config.rounds || 1) : 1,
     remainingSec: remainingMs / 1000,
-    phaseDurationSec: current?.durationSec || 0,
+    phaseDurationSec: isLeadIn ? LEAD_IN_SEC : (current?.durationSec || 0),
     start,
     pause,
     resume,

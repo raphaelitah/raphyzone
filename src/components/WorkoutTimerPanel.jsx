@@ -111,7 +111,7 @@ export default function WorkoutTimerPanel({
                 'text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full',
                 timer.phase === 'work' ? 'bg-brand/10 text-brand' : 'bg-muted text-muted-foreground'
               )}>
-                {timer.status === 'done' ? 'Done' : timer.phase}
+                {timer.status === 'done' ? 'Done' : (timer.phase === 'leadin' ? 'Get ready' : timer.phase)}
               </span>
             )}
             <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(timer.remainingSec)}</p>
@@ -127,11 +127,11 @@ export default function WorkoutTimerPanel({
                 <RotateCcw className="h-4 w-4" />
               </button>
               <Button
-                onClick={timer.status === 'running' ? timer.pause : timer.resume}
+                onClick={(timer.status === 'running' || timer.status === 'leadin') ? timer.pause : timer.resume}
                 disabled={timer.status === 'done'}
                 className="flex-1 rounded-xl h-11 bg-brand text-brand-foreground hover:bg-brand/90"
               >
-                {timer.status === 'running' ? <><Pause className="h-4 w-4 mr-2" /> Pause</> : <><Play className="h-4 w-4 mr-2" /> Resume</>}
+                {(timer.status === 'running' || timer.status === 'leadin') ? <><Pause className="h-4 w-4 mr-2" /> Pause</> : <><Play className="h-4 w-4 mr-2" /> Resume</>}
               </Button>
               <button onClick={timer.skipPhase} disabled={timer.status === 'done'} className="flex items-center justify-center w-11 h-11 rounded-xl border border-border text-muted-foreground disabled:opacity-30">
                 <SkipForward className="h-4 w-4" />

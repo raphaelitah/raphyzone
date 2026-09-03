@@ -355,13 +355,13 @@ export default function WorkoutExecution() {
         sessionStartMsRef.current += pausedMs;
         setSessionStartMs(sessionStartMsRef.current);
       }
-      if (blockTimerWasRunningRef.current && timer.status === 'paused') timer.resume();
+      if (blockTimerWasRunningRef.current && (timer.status === 'paused' || timer.status === 'pausedLeadin')) timer.resume();
       blockTimerWasRunningRef.current = false;
       setWorkoutPaused(false);
     } else {
       pausedAtRef.current = Date.now();
-      blockTimerWasRunningRef.current = timer.status === 'running';
-      if (timer.status === 'running') timer.pause();
+      blockTimerWasRunningRef.current = timer.status === 'running' || timer.status === 'leadin';
+      if (timer.status === 'running' || timer.status === 'leadin') timer.pause();
       setWorkoutPaused(true);
     }
   };
