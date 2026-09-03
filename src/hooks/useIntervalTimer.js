@@ -109,6 +109,18 @@ export default function useIntervalTimer(config) {
     setStatus('idle');
   }, []);
 
+  // Rewinds to the start of the sequence but leaves it paused (not idle), so
+  // the Resume control keeps working — unlike reset(), which is used
+  // internally to prep an armed-but-not-yet-started timer for the next block.
+  const restart = useCallback(() => {
+    const seq = sequenceRef.current;
+    phaseIndexRef.current = 0;
+    phaseEndAtRef.current = null;
+    remainingMsRef.current = (seq[0]?.durationSec || 0) * 1000;
+    setPhaseIndex(0);
+    setStatus('paused');
+  }, []);
+
   const skipPhase = useCallback(() => {
     const seq = sequenceRef.current;
     const idx = phaseIndexRef.current;
@@ -147,6 +159,7 @@ export default function useIntervalTimer(config) {
     pause,
     resume,
     reset,
+    restart,
     skipPhase,
   };
 }

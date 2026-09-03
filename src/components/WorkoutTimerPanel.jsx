@@ -79,7 +79,7 @@ export default function WorkoutTimerPanel({
           <p className="text-xs text-muted-foreground">Round {timer.round} of {timer.totalRounds}</p>
           <Progress value={progressPct} className="w-full" />
           <div className="flex items-center gap-2 w-full">
-            <button onClick={timer.reset} className="flex items-center justify-center w-11 h-11 rounded-xl border border-border text-muted-foreground">
+            <button onClick={timer.restart} className="flex items-center justify-center w-11 h-11 rounded-xl border border-border text-muted-foreground">
               <RotateCcw className="h-4 w-4" />
             </button>
             <Button
