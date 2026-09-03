@@ -804,6 +804,21 @@ export default function WorkoutExecution() {
               )
             ) : (
               <>
+                {currentBlockExercises.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {currentBlockExercises.map((e) => (
+                      <span
+                        key={e.key}
+                        className={cn(
+                          'text-[10px] font-medium px-2 py-0.5 rounded-full border',
+                          e.key === displayExercise?.key ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground'
+                        )}
+                      >
+                        {e.exercise_name}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {isPreviewExercise && (
                   <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground mb-2">Next up</span>
                 )}
