@@ -23,6 +23,7 @@ export default function SupersetPanel({
   onFinish,
   onSkip,
   onStartTimer,
+  onAdjustRest,
   label = 'Superset',
   unitLabel = 'Round',
   weightLoading,
@@ -98,6 +99,13 @@ export default function SupersetPanel({
     }
   };
 
+  const adjustRest = (delta) => {
+    if (restEndAtRef.current != null) {
+      restEndAtRef.current = Math.max(Date.now(), restEndAtRef.current + delta * 1000);
+    }
+    onAdjustRest?.(delta);
+  };
+
   const skipRest = () => {
     restEndAtRef.current = null;
     setRound((r) => r + 1);
@@ -119,6 +127,12 @@ export default function SupersetPanel({
         <div className="flex flex-col items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Rest</span>
           <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(restRemaining)}</p>
+          {onAdjustRest && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => adjustRest(-15)} className="text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">-15s</button>
+              <button onClick={() => adjustRest(15)} className="text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">+15s</button>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">{unitLabel} {round} total: {formatClock(roundTotal)}</p>
           <button onClick={skipRest} className="text-xs text-muted-foreground underline">Skip rest</button>
         </div>

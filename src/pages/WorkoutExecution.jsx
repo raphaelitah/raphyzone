@@ -65,6 +65,7 @@ export default function WorkoutExecution() {
   const [conflictSession, setConflictSession] = useState(null);
   const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
+  const [restOverrides, setRestOverrides] = useState({}); // block_id -> rest seconds, sticky for the rest of the session
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
   const [blockLogEntries, setBlockLogEntries] = useState({});
@@ -83,6 +84,7 @@ export default function WorkoutExecution() {
   const exerciseElapsedRef = useRef({});
   const enterTimeRef = useRef(Date.now());
   const sessionStartMsRef = useRef(null);
+  const sessionCreatedMsRef = useRef(null); // fallback for elapsed-time if the clock never got an explicit start
   const loadedExerciseSessionsRef = useRef([]);
   const pausedAtRef = useRef(null);
   const blockTimerWasRunningRef = useRef(false);
@@ -125,6 +127,7 @@ export default function WorkoutExecution() {
 
   const finishLoadingWorkout = async (sess, w, plans, active, isResumed) => {
     sessionIdRef.current = sess.id;
+    sessionCreatedMsRef.current = sess.created_date ? new Date(sess.created_date).getTime() : Date.now();
     setSession(sess);
     if (isResumed) {
       // The user already started this session earlier — keep the clock running across the resume.
@@ -242,7 +245,7 @@ export default function WorkoutExecution() {
         if (!sess) {
           const { session, conflict } = await insertInProgressSession({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
-            date: targetDate, status: 'in_progress',
+            date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
           });
           if (conflict) {
             if (!active()) return;
@@ -274,7 +277,7 @@ export default function WorkoutExecution() {
       if (!sess) {
         const { session, conflict } = await insertInProgressSession({
           user_id: user.id, workout_id: workoutId, workout_name: w?.name,
-          date: targetDate, status: 'in_progress',
+          date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
         });
         if (conflict) {
           // Lost the race to yet another session started elsewhere — show that one instead.
@@ -317,6 +320,9 @@ export default function WorkoutExecution() {
   const isAlternatingEmom = blockTimerMeta?.isAlternatingEmom ?? false;
   const isSuperset = blockTimerMeta?.isSuperset ?? false;
   const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
+  const adjustRest = (blockId, baseSec, delta) => {
+    setRestOverrides((prev) => ({ ...prev, [blockId]: Math.max(0, (prev[blockId] ?? baseSec) + delta) }));
+  };
   const isBlockActive = !!(current && blockLabel && !completedBlockTimers.has(current.block_id) && !(logPrompt && logPrompt.keys.includes(current.key)));
   const timerArmed = !!(armedTimerConfig && current && armedTimerConfig.blockId === current.block_id);
 
@@ -616,6 +622,7 @@ export default function WorkoutExecution() {
       }
     } catch { /* silent */ }
     setLogs({});
+    setRestOverrides({});
     exerciseSessionIdsRef.current = {};
     exerciseElapsedRef.current = {};
     setIndex(0);
@@ -625,6 +632,7 @@ export default function WorkoutExecution() {
       date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
     }).select().single();
     sessionIdRef.current = s.id;
+    sessionCreatedMsRef.current = new Date(s.created_date || s.start_timestamp).getTime();
     setSession(s);
     const startMs = new Date(s.start_timestamp).getTime();
     sessionStartMsRef.current = startMs;
@@ -754,7 +762,8 @@ export default function WorkoutExecution() {
       const sid = sessionIdRef.current;
       const completedExercises = exercises.filter((e) => logs[e.key] && !logs[e.key].skipped);
       const overallDiff = completedExercises.length ? modeDifficulty(completedExercises.map((e) => logs[e.key].difficulty)) : 'normal';
-      const total = sessionStartMsRef.current ? (Date.now() - sessionStartMsRef.current) / 1000 : 0;
+      const clockStartMs = sessionStartMsRef.current ?? sessionCreatedMsRef.current;
+      const total = clockStartMs ? (Date.now() - clockStartMs) / 1000 : 0;
       await supabase.from('workout_sessions').update({ status: 'completed', overall_difficulty: overallDiff, elapsed_seconds: Math.round(total) }).eq('id', sid);
       try { await supabase.functions.invoke('learnFromSessionFeedback', { body: { workout_session_id: sid } }); } catch {}
       navigate('/progress');
@@ -919,11 +928,12 @@ export default function WorkoutExecution() {
             key={current.block_id}
             exercises={currentBlockExercises}
             rounds={timerDefaultConfig?.rounds || 1}
-            restSec={timerDefaultConfig?.restSec ?? 0}
+            restSec={restOverrides[current.block_id] ?? (timerDefaultConfig?.restSec ?? 0)}
             onExerciseElapsed={handleSupersetExerciseElapsed}
             onFinish={handleSupersetFinish}
             onSkip={handleSupersetSkip}
             onStartTimer={startTimer}
+            onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
           />
         ) : isBlockActive ? (
           <WorkoutTimerPanel
@@ -947,10 +957,11 @@ export default function WorkoutExecution() {
             unitLabel="Set"
             exercises={[current]}
             rounds={soloRounds}
-            restSec={current.rest_seconds || 0}
+            restSec={restOverrides[current.block_id] ?? (current.rest_seconds || 0)}
             onExerciseElapsed={handleSupersetExerciseElapsed}
             onFinish={handleSoloFinish}
             onStartTimer={startTimer}
+            onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
             weightLoading={weightLoading}
             onWeightClick={calcWeight}
           />

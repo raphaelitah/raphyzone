@@ -205,7 +205,7 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
       isSuperset: true,
       timerDefaultConfig: {
         rounds: block.rounds ?? 1,
-        restSec: block.rest_seconds ?? 60,
+        restSec: block.rest_seconds ?? 90,
       },
     };
   }
