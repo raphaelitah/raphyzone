@@ -1,7 +1,8 @@
 // Integration coverage for each workout "type" the app supports (Tabata, EMOM,
-// standalone, circuit, AMRAP) plus real combination workouts from the catalog
-// (40-20 Workout: multi-superset/interval; Balthazar: superset + standalone;
-// 50x Workout: circuit + standalone), exercising the full pipeline of
+// standalone, circuit, AMRAP) plus real workouts from the catalog: 2007 (a
+// pure circuit) and 1775 (a pure AMRAP), and three combination workouts —
+// 40-20 Workout (multi-superset/interval), Balthazar (superset + standalone),
+// and 50x Workout (circuit + standalone). Exercises the full pipeline of
 // workoutStructure.js helpers the way WorkoutExecution/WorkoutTimerPanel do:
 // buildBlocksByWorkout -> buildBlockExercisesByBlock -> buildSetsByBlockExercise
 // -> buildFlatExerciseList / deriveBlockTimerConfig / getWorkoutMetaLine.
@@ -116,50 +117,64 @@ describe('Standalone workout (sequential straight sets)', () => {
   });
 });
 
-describe('Circuit workout (multiple exercises, fixed rounds)', () => {
-  const workout = { workout_id: 'w-circuit' };
+describe('"2007" (Circuit workout: row + pull-ups + push jerk, for time)', () => {
+  const workout = { workout_id: 'a5f24c7e4cceee4193f8f4f6', name: '2007' };
   const blocks = [
-    { block_id: 'b1', workout_id: 'w-circuit', order_index: 1, block_type: 'circuit', workout_format: 'for_time', rounds: 4 },
+    { block_id: 'BLK00384', workout_id: workout.workout_id, order_index: 1, block_label: 'A', block_type: 'circuit', workout_format: 'for_time' },
   ];
   const blockExercises = [
-    { block_exercise_id: 'be1', block_id: 'b1', order_in_block: 1, step_type: 'exercise', exercise_id: 'EX01858', exercise_title_raw: 'Reverse Lunge' },
-    { block_exercise_id: 'be2', block_id: 'b1', order_in_block: 2, step_type: 'exercise', exercise_id: 'EX00432', exercise_title_raw: 'Burpee' },
+    { block_exercise_id: 'BE00972', block_id: 'BLK00384', order_in_block: 1, step_type: 'exercise', exercise_id: 'EX01910', exercise_title_raw: 'Row', prescription_type: 'distance', prescription_value: '1,000m', notes: 'For Time' },
+    { block_exercise_id: 'BE00973', block_id: 'BLK00384', order_in_block: 2, step_type: 'exercise', exercise_id: 'EX02554', exercise_title_raw: 'Strict Pronated Pull-up', prescription_type: 'reps', prescription_value: '25', notes: 'Then, 5 rounds of' },
+    { block_exercise_id: 'BE00974', block_id: 'BLK00384', order_in_block: 3, step_type: 'exercise', exercise_id: 'EX01802', exercise_title_raw: 'Push Jerk', prescription_type: 'reps', prescription_value: '7', notes: 'Then, 5 rounds of - 135/85 lb' },
   ];
 
-  it('is not treated as a rotating/interval timer block', () => {
-    expect(deriveBlockTimerConfig(blocks[0], 2)).toBeNull();
+  it('is not treated as a rotating/interval timer block (for-time, paced by the athlete)', () => {
+    expect(deriveBlockTimerConfig(blocks[0], 3)).toBeNull();
   });
 
-  it('every exercise in the circuit shares the block round count', () => {
+  it('flattens the 3 exercises in order, each defaulting to a single round (no block.rounds set)', () => {
     const { blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap } =
       buildWorkoutFixture({ workout, blocks, blockExercises });
     const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
-    expect(list.map((e) => e.rounds)).toEqual([4, 4]);
+    expect(list.map((e) => e.exercise_name)).toEqual(['Row', 'Strict Pronated Pull-up', 'Push Jerk']);
+    expect(list.map((e) => e.reps)).toEqual(['1,000m', '25', '7']);
+    expect(list.every((e) => e.rounds === 1)).toBe(true);
+  });
+
+  it('summarizes with all 3 exercises', () => {
+    const { blocksByWorkout, blockExercisesByBlock } = buildWorkoutFixture({ workout, blocks, blockExercises });
+    expect(getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlock)).toBe('3 Exercises');
   });
 });
 
-describe('AMRAP workout (self-paced, time-capped)', () => {
-  const workout = { workout_id: 'w-amrap' };
-  // "12-min AMRAP" style block: no fixed round count, just a time cap.
+describe('"1775" (AMRAP workout: self-paced, 60-minute time cap)', () => {
+  const workout = { workout_id: '264f33ca51aef9c2a9f66d13', name: '1775' };
   const blocks = [
-    { block_id: 'b1', workout_id: 'w-amrap', order_index: 1, block_type: 'circuit', workout_format: 'amrap', time_cap_sec: 720 },
+    { block_id: 'BLK00345', workout_id: workout.workout_id, order_index: 1, block_label: 'A', block_type: 'superset', workout_format: 'amrap', time_cap_sec: 3600 },
   ];
   const blockExercises = [
-    { block_exercise_id: 'be1', block_id: 'b1', order_in_block: 1, step_type: 'exercise', exercise_id: 'EX01858', exercise_title_raw: 'Reverse Lunge' },
-    { block_exercise_id: 'be2', block_id: 'b1', order_in_block: 2, step_type: 'exercise', exercise_id: 'EX00432', exercise_title_raw: 'Burpee' },
+    { block_exercise_id: 'BE00812', block_id: 'BLK00345', order_in_block: 1, step_type: 'exercise', exercise_id: 'EX00796', exercise_title_raw: 'Dumbbell Power Clean', prescription_type: 'reps', prescription_value: '17', notes: 'AMRAP in 60 minutes - 135/95 lb' },
+    { block_exercise_id: 'BE00813', block_id: 'BLK00345', order_in_block: 2, step_type: 'exercise', exercise_id: 'EX00059', exercise_title_raw: 'Air Squat', prescription_type: 'reps', prescription_value: '75', notes: 'AMRAP in 60 minutes' },
   ];
 
-  it('is not treated as a rotating/interval timer block (self-paced against the clock)', () => {
-    expect(deriveBlockTimerConfig(blocks[0], 2)).toBeNull();
+  it('derives a Superset timer config, defaulting to 1 round since no block.rounds is set', () => {
+    expect(deriveBlockTimerConfig(blocks[0], 2)).toEqual({
+      blockLabel: 'Superset',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      isSuperset: true,
+      timerDefaultConfig: { rounds: 1, restSec: 90 },
+    });
   });
 
-  it('has no fixed round count, so exercises default to a single pass', () => {
+  it('has no fixed round count, so exercises default to a single pass through the couplet', () => {
     expect(getEffectiveRounds(blocks[0], 2)).toBe(1);
     const { blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap } =
       buildWorkoutFixture({ workout, blocks, blockExercises });
     const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
+    expect(list.map((e) => e.exercise_name)).toEqual(['Dumbbell Power Clean', 'Air Squat']);
     expect(list.map((e) => e.rounds)).toEqual([1, 1]);
-    expect(list.map((e) => e.time_cap_sec)).toEqual([720, 720]);
+    expect(list.map((e) => e.time_cap_sec)).toEqual([3600, 3600]);
   });
 });
 
