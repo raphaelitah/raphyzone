@@ -15,7 +15,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
@@ -60,6 +60,8 @@ export default function WorkoutExecution() {
   const [sessionStartMs, setSessionStartMs] = useState(null);
   const [timerStarted, setTimerStarted] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [conflictSession, setConflictSession] = useState(null);
   const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
@@ -67,6 +69,7 @@ export default function WorkoutExecution() {
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
   const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
+  const [workoutPaused, setWorkoutPaused] = useState(false);
 
   const fullExerciseMapRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -81,6 +84,8 @@ export default function WorkoutExecution() {
   const enterTimeRef = useRef(Date.now());
   const sessionStartMsRef = useRef(null);
   const loadedExerciseSessionsRef = useRef([]);
+  const pausedAtRef = useRef(null);
+  const blockTimerWasRunningRef = useRef(false);
 
   useEffect(() => { logsRef.current = logs; }, [logs]);
   useEffect(() => { exercisesRef.current = exercises; }, [exercises]);
@@ -205,9 +210,11 @@ export default function WorkoutExecution() {
         let sess = sessions.find((s) => s.workout_id === workoutId && s.date === targetDate);
         const other = sessions.find((s) => s.id !== sess?.id);
 
-        if (!sess && other) {
-          // Another workout is already in progress — hold off starting a new one until the user decides.
-          pendingLoadRef.current = { w, plans };
+        if (other) {
+          // Another workout is already in progress — hold off (even if this one already
+          // has its own matching session to resume) until the user decides, so there's
+          // never more than one in-progress session at a time.
+          pendingLoadRef.current = { w, plans, sess };
           setLoading(false);
           setConflictSession(other);
           return;
@@ -235,22 +242,29 @@ export default function WorkoutExecution() {
     setEndingConflict(true);
     try {
       await supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', conflictSession.id);
-      const { w, plans } = pendingLoadRef.current || {};
-      const { data: created } = await supabase.from('workout_sessions').insert({
-        user_id: user.id, workout_id: workoutId, workout_name: w?.name,
-        date: targetDate, status: 'in_progress',
-      }).select().single();
+      const { w, plans, sess: existingSess } = pendingLoadRef.current || {};
+      let sess = existingSess;
+      const wasAlreadyStarted = !!sess?.start_timestamp;
+      if (!sess) {
+        const { data: created } = await supabase.from('workout_sessions').insert({
+          user_id: user.id, workout_id: workoutId, workout_name: w?.name,
+          date: targetDate, status: 'in_progress',
+        }).select().single();
+        sess = created;
+      }
       setConflictSession(null);
       pendingLoadRef.current = null;
       setLoading(true);
-      await finishLoadingWorkout(created, w, plans, () => true, false);
+      await finishLoadingWorkout(sess, w, plans, () => true, wasAlreadyStarted);
     } finally {
       setEndingConflict(false);
     }
   };
 
   const current = exercises[index];
-  const totalElapsed = sessionStartMs ? (Date.now() - sessionStartMs) / 1000 : 0;
+  const totalElapsed = sessionStartMs
+    ? ((workoutPaused && pausedAtRef.current ? pausedAtRef.current : Date.now()) - sessionStartMs) / 1000
+    : 0;
 
   const currentBlockExercises = current ? exercises.filter((e) => e.block_id === current.block_id) : [];
   const blockTimerMeta = current
@@ -280,6 +294,29 @@ export default function WorkoutExecution() {
     if (armedTimerConfig && timer.status === 'idle') timer.start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [armedTimerConfig]);
+
+  // Pausing freezes the session stopwatch (by shifting sessionStartMs forward
+  // by however long the pause lasted, once resumed) and, if a block timer
+  // (EMOM/Tabata/interval) is mid-run, pauses that too so it doesn't keep
+  // counting down behind the overlay.
+  const togglePause = () => {
+    if (workoutPaused) {
+      const pausedMs = pausedAtRef.current ? Date.now() - pausedAtRef.current : 0;
+      pausedAtRef.current = null;
+      if (sessionStartMsRef.current != null) {
+        sessionStartMsRef.current += pausedMs;
+        setSessionStartMs(sessionStartMsRef.current);
+      }
+      if (blockTimerWasRunningRef.current && timer.status === 'paused') timer.resume();
+      blockTimerWasRunningRef.current = false;
+      setWorkoutPaused(false);
+    } else {
+      pausedAtRef.current = Date.now();
+      blockTimerWasRunningRef.current = timer.status === 'running';
+      if (timer.status === 'running') timer.pause();
+      setWorkoutPaused(true);
+    }
+  };
 
   // Moves past every exercise in a finished/skipped block in one step, landing
   // on whatever comes next in the workout (not back into the block itself).
@@ -341,7 +378,7 @@ export default function WorkoutExecution() {
   // capture max weight/distance-time/difficulty/note per exercise — for a
   // real block (blockId set) that's every exercise in it; for a solo
   // exercise it's just the one.
-  const openLogPrompt = (keys, blockId = null) => {
+  const openLogPrompt = (keys, blockId = null, review = false) => {
     const entries = {};
     keys.forEach((key) => {
       const existing = logs[key] || {};
@@ -355,7 +392,24 @@ export default function WorkoutExecution() {
       };
     });
     setBlockLogEntries(entries);
-    setLogPrompt({ keys, blockId });
+    setLogPrompt({ keys, blockId, review });
+  };
+
+  // Jumping to an exercise (or a member of a block) that's already been
+  // logged opens it straight on the completion/edit screen instead of
+  // making the athlete redo the sets — completed means completed.
+  const goToExercise = (i) => {
+    flushCurrentTime();
+    setIndex(i);
+    const target = exercises[i];
+    if (!target) { setLogPrompt(null); return; }
+    if (target.block_id && completedBlockTimers.has(target.block_id)) {
+      openLogPrompt(exercises.filter((e) => e.block_id === target.block_id).map((e) => e.key), target.block_id, true);
+    } else if (logs[target.key] && !logs[target.key].skipped) {
+      openLogPrompt([target.key], null, true);
+    } else {
+      setLogPrompt(null);
+    }
   };
 
   const updateBlockLogEntry = (key, patch) => {
@@ -389,7 +443,7 @@ export default function WorkoutExecution() {
 
   const handleSaveLogPrompt = () => {
     if (!logPrompt || saving) return;
-    const { keys, blockId } = logPrompt;
+    const { keys, blockId, review } = logPrompt;
     keys.forEach((key) => {
       const entry = blockLogEntries[key] || {};
       updateLog(key, {
@@ -401,6 +455,11 @@ export default function WorkoutExecution() {
         duration_seconds: entry.duration_seconds ?? null,
       });
     });
+    // Editing something already completed: keep the same edit screen open
+    // (with what was just saved) instead of clearing it — landing back here
+    // is driven by completion state, not this one-shot prompt, so clearing
+    // it would just fall through to a fresh "Set 1" panel.
+    if (review) return;
     setBlockLogEntries({});
     setLogPrompt(null);
     if (blockId) {
@@ -540,6 +599,22 @@ export default function WorkoutExecution() {
     setSessionStartMs(startMs);
     setTimerStarted(true);
     enterTimeRef.current = Date.now();
+  };
+
+  // Unlike restart (which deletes and immediately begins a fresh session),
+  // stop deletes all progress for this session and leaves the workout —
+  // there is no replacement session to keep the clock/index in sync with.
+  const stopWorkout = async () => {
+    setStopping(true);
+    try {
+      if (sessionIdRef.current) {
+        await supabase.from('exercise_sessions').delete().eq('workout_session_id', sessionIdRef.current);
+        await supabase.from('workout_sessions').delete().eq('id', sessionIdRef.current);
+      }
+    } catch { /* silent */ }
+    setStopping(false);
+    setStopOpen(false);
+    window.history.length > 1 ? navigate(-1) : navigate('/');
   };
 
   const requestSubstitute = async () => {
@@ -729,19 +804,39 @@ export default function WorkoutExecution() {
               Start
             </button>
           )}
+          {timerStarted && (
+            <button onClick={togglePause} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted">
+              {workoutPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </button>
+          )}
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
+          <button onClick={() => setStopOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><XCircle className="h-4 w-4" /></button>
         </div>
         <div className="flex gap-1 mt-2">
           {exercises.map((e, i) => (
-            <button key={e.key} onClick={() => { flushCurrentTime(); setIndex(i); }} className={cn('h-1 flex-1 rounded-full transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
+            <button key={e.key} onClick={() => goToExercise(i)} className={cn('h-1 flex-1 rounded-full transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
           ))}
         </div>
       </header>
 
+      <div className="relative flex-1 flex flex-col min-h-0">
+      {workoutPaused && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/95 backdrop-blur-sm">
+          <Pause className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm font-medium text-muted-foreground">Workout paused</p>
+          <Button onClick={togglePause} className="rounded-xl h-12 px-8 bg-brand text-brand-foreground hover:bg-brand/90">
+            <Play className="h-4 w-4 mr-2" /> Resume
+          </Button>
+        </div>
+      )}
       <div className="flex-1 px-5 py-4 overflow-y-auto">
         {showLogPrompt ? (
           <>
-            <h2 className="text-xl font-semibold tracking-tight">{logPrompt.blockId ? `${blockLabel} complete` : `${blockLogExercises[0]?.exercise_name || 'Exercise'} complete`}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">
+              {logPrompt.review ? 'Edit ' : ''}
+              {logPrompt.blockId ? blockLabel : (blockLogExercises[0]?.exercise_name || 'Exercise')}
+              {logPrompt.review ? '' : ' complete'}
+            </h2>
             {logPrompt.blockId && <p className="text-sm text-muted-foreground mt-1 mb-4">{blockLogExercises.map((e) => e.exercise_name).join(', ')}</p>}
             <div className={cn('space-y-4', !logPrompt.blockId && 'mt-4')}>
               {blockLogExercises.map((e) => {
@@ -833,7 +928,7 @@ export default function WorkoutExecution() {
       {showLogPrompt ? (
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <Button onClick={handleSaveLogPrompt} disabled={saving} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
-            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" /></>}
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : logPrompt.review ? 'Save' : <>Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" /></>}
           </Button>
         </div>
       ) : !isBlockActive && (
@@ -844,6 +939,7 @@ export default function WorkoutExecution() {
           </div>
         </div>
       )}
+      </div>
 
       <Sheet open={subSheet} onOpenChange={setSubSheet}>
         <SheetContent side="bottom" className="rounded-t-3xl max-h-[80vh] overflow-y-auto">
@@ -879,6 +975,23 @@ export default function WorkoutExecution() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={restartWorkout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Restart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={stopOpen} onOpenChange={setStopOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop workout?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all progress and time logged for this workout and take you back. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={stopping} onClick={stopWorkout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {stopping ? 'Stopping…' : 'Stop workout'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

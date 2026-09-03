@@ -143,6 +143,12 @@ export default function Home() {
   const todayISO = fmtISO(today);
   const weekSessions = sessions.filter((s) => s.date && mondayOf(parseDate(s.date))?.getTime() === mondayOf(today).getTime() && s.status === 'completed');
 
+  // Same "stale" definition WorkoutExecution.jsx uses for its own conflict check —
+  // an in-progress session abandoned (tab closed, crash, etc.) over 6h ago is
+  // treated as if it never happened, so it doesn't linger as a dead "Continue" link.
+  const STALE_MS = 6 * 60 * 60 * 1000;
+  const inProgressSession = sessions.find((s) => s.status === 'in_progress' && Date.now() - new Date(s.created_date).getTime() <= STALE_MS) || null;
+
   const sessionDates = new Set(sessions.filter((s) => s.status === 'completed' && s.date).map((s) => s.date));
   let streak = 0;
   let cursor = new Date(today);
@@ -661,27 +667,47 @@ export default function Home() {
         </Card>
       )}
 
-      {todayWorkoutSlot && (
-        <Card className="rounded-2xl overflow-hidden mb-5 border-border">
-          <div className="bg-brand p-5 text-brand-foreground">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wide opacity-80">{todayWorkoutSlot.slot_type === 'activity' ? "Today's activity" : "Today's workout"}</span>
-              <span className="text-xs opacity-80">{roundToFive(todayWorkout?.est_duration_min) || '~45'} min</span>
+      {todayWorkoutSlot && (() => {
+        const resumingToday = inProgressSession?.workout_id === todayWorkoutSlot.workout_id;
+        const todayHref = resumingToday
+          ? `/workout/${todayWorkoutSlot.workout_id}?date=${inProgressSession.date}`
+          : `/workout/${todayWorkoutSlot.workout_id}`;
+        return (
+          <Card className="rounded-2xl overflow-hidden mb-5 border-border">
+            <div className="bg-brand p-5 text-brand-foreground">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium uppercase tracking-wide opacity-80">{todayWorkoutSlot.slot_type === 'activity' ? "Today's activity" : "Today's workout"}</span>
+                <span className="text-xs opacity-80">{roundToFive(todayWorkout?.est_duration_min) || '~45'} min</span>
+              </div>
+              <h2 className="text-xl font-semibold mt-1.5">{todayWorkout?.name || todayWorkoutSlot.workout_name}</h2>
+              {todayWorkoutSlot.slot_type === 'activity' && (
+                <p className="text-xs opacity-80 mt-1 capitalize flex items-center gap-1"><Route className="h-3 w-3" /> {todayWorkoutSlot.activity}</p>
+              )}
+              {todayWorkout && (
+                <p className="text-xs opacity-80 mt-1">
+                  {todayWorkoutSlot.modality ? todayWorkoutSlot.modality + ' · ' : ''}{countWorkoutExercises(todayWorkout, blocksByWorkout, blockExercisesByBlock)} exercises · {todayWorkout.split || todayWorkout.goal}
+                </p>
+              )}
             </div>
-            <h2 className="text-xl font-semibold mt-1.5">{todayWorkout?.name || todayWorkoutSlot.workout_name}</h2>
-            {todayWorkoutSlot.slot_type === 'activity' && (
-              <p className="text-xs opacity-80 mt-1 capitalize flex items-center gap-1"><Route className="h-3 w-3" /> {todayWorkoutSlot.activity}</p>
-            )}
-            {todayWorkout && (
-              <p className="text-xs opacity-80 mt-1">
-                {todayWorkoutSlot.modality ? todayWorkoutSlot.modality + ' · ' : ''}{countWorkoutExercises(todayWorkout, blocksByWorkout, blockExercisesByBlock)} exercises · {todayWorkout.split || todayWorkout.goal}
-              </p>
-            )}
-          </div>
-          <div className="p-4">
-            {todayWorkoutSlot.reason && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{todayWorkoutSlot.reason}</p>}
-            <Button asChild className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-              <Link to={`/workout/${todayWorkoutSlot.workout_id}`}><Play className="h-4 w-4 mr-2" /> Start workout</Link>
+            <div className="p-4">
+              {todayWorkoutSlot.reason && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{todayWorkoutSlot.reason}</p>}
+              <Button asChild className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
+                <Link to={todayHref}><Play className="h-4 w-4 mr-2" /> {resumingToday ? 'Continue workout' : 'Start workout'}</Link>
+              </Button>
+            </div>
+          </Card>
+        );
+      })()}
+
+      {inProgressSession && inProgressSession.workout_id !== todayWorkoutSlot?.workout_id && (
+        <Card className="rounded-2xl border border-brand/30 bg-brand/5 p-4 mb-5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-brand uppercase tracking-wide">Workout in progress</p>
+              <p className="font-semibold truncate mt-0.5">{workouts[inProgressSession.workout_id]?.name || inProgressSession.workout_name}</p>
+            </div>
+            <Button asChild className="rounded-xl h-10 px-4 bg-brand text-brand-foreground hover:bg-brand/90 shrink-0">
+              <Link to={`/workout/${inProgressSession.workout_id}?date=${inProgressSession.date}`}><Play className="h-3.5 w-3.5 mr-1.5" /> Continue</Link>
             </Button>
           </div>
         </Card>
@@ -858,6 +884,8 @@ export default function Home() {
         selectMode={selectMode}
         onSelect={selectFromDetail}
         warmup={selectedSlot?.warmup}
+        startDate={inProgressSession?.workout_id === selectedWorkout?.id ? inProgressSession.date : null}
+        resuming={inProgressSession?.workout_id === selectedWorkout?.id}
       />
 
       <SessionDetailSheet
