@@ -36,6 +36,13 @@ export default function WorkoutTimerPanel({
   const [workSec, setWorkSec] = useState(defaultConfig?.workSec?.toString() || '20');
   const [restSec, setRestSec] = useState(defaultConfig?.restSec?.toString() || '10');
   const [rounds, setRounds] = useState(defaultConfig?.rounds?.toString() || '8');
+  // Before the block timer is armed, tapping a pill just previews that
+  // exercise's details — it doesn't start anything.
+  const [previewKey, setPreviewKey] = useState(null);
+
+  const previewExercise = !armed && isRotatingBlock
+    ? (exercises || []).find((e) => e.key === previewKey) || displayExercise
+    : displayExercise;
 
   const isEmom = /^E\d*MOM$/.test(blockLabel || '');
   const progressPct = armed && timer?.phaseDurationSec > 0
@@ -68,7 +75,8 @@ export default function WorkoutTimerPanel({
       label={blockLabel}
       roundLabel={roundLabel}
       exercises={isRotatingBlock ? exercises : null}
-      activeKey={isRotatingBlock ? displayExercise?.key : null}
+      activeKey={isRotatingBlock ? previewExercise?.key : null}
+      onSelectExercise={!armed && isRotatingBlock ? setPreviewKey : null}
       onSkip={armed ? onSkipBlock : null}
       skipLabel={`Skip ${(blockLabel || '').toLowerCase()}`}
     >
@@ -145,7 +153,7 @@ export default function WorkoutTimerPanel({
             {isPreviewExercise && (
               <span className="inline-block text-xs font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-muted text-muted-foreground">Next up</span>
             )}
-            {exerciseInfo(displayExercise, !isPreviewExercise)}
+            {exerciseInfo(previewExercise, !isPreviewExercise)}
             {nextUpName && (
               <p className="text-xs font-medium text-muted-foreground -mt-2">Next up: {nextUpName}</p>
             )}
