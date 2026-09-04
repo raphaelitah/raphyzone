@@ -4,9 +4,16 @@
 // response_json_schema })`, which handled the provider/API key transparently —
 // here you own that choice.
 //
-// Backed by Groq (free tier, OpenAI-compatible chat completions API), via forced
-// tool-use for structured JSON output. Requires the GROQ_API_KEY secret:
+// Backed by two free-tier providers, tried in order, via forced tool-use for
+// structured JSON output:
+//   1. Groq   (OpenAI-compatible) — GROQ_API_KEY
+//   2. Gemini (OpenAI-compatible endpoint) — GEMINI_API_KEY
+// Each provider has its own independent rate-limit budget, so when Groq's
+// shared 8000 TPM cap is exhausted, calls fall over to Gemini instead of
+// queuing/retrying against the same exhausted quota. Set the secrets with:
 //   supabase secrets set GROQ_API_KEY=gsk_... --project-ref <ref>
+//   supabase secrets set GEMINI_API_KEY=AIza... --project-ref <ref>
+// A provider with no key set is skipped rather than failing the request.
 
 import { getServiceClient } from './supabaseAdmin.ts';
 
@@ -16,7 +23,12 @@ export interface LLMSchema {
   required?: string[];
 }
 
-const GROQ_MODEL = 'openai/gpt-oss-120b';
+interface Provider {
+  name: string;
+  envKey: string;
+  baseUrl: string;
+  model: string;
+}
 
 // This account's Groq org caps every available model — 120b, 20b, qwen3.6-27b —
 // at the same 8,000 tokens/minute (TPM) on the free "on_demand" tier (confirmed
@@ -24,14 +36,30 @@ const GROQ_MODEL = 'openai/gpt-oss-120b';
 // smaller/faster model buys nothing here; the fix for oversized prompts (e.g.
 // generateWeeklyPlan's catalog-heavy selection call) is cutting the prompt
 // itself — see filterCatalogForSelection and the trimmed buildWorkoutCatalog in
-// planContext.ts.
+// planContext.ts. That's also why a second provider (Gemini) with its own
+// separate quota is worth having, rather than just retrying Groq harder.
+const PROVIDERS: Provider[] = [
+  {
+    name: 'groq',
+    envKey: 'GROQ_API_KEY',
+    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    model: 'openai/gpt-oss-120b',
+  },
+  {
+    name: 'gemini',
+    envKey: 'GEMINI_API_KEY',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    model: 'gemini-2.0-flash',
+  },
+];
 
 // Groq's tool-call validator rejects `null` for a property whose declared type is
 // a plain string like "string" — even when that property isn't in `required`, and
 // even though models routinely emit null for "not applicable here". Every schema
 // in this directory has optional fields for exactly that reason (e.g. `focus` only
 // applies to strength-modality days), so widen every non-required property's type
-// to accept null too, recursively, rather than special-casing each caller.
+// to accept null too, recursively, rather than special-casing each caller. Gemini's
+// OpenAI-compat layer is more lenient but tolerates the same widened schema fine.
 function allowNullOnOptionalFields(node: any, required: string[] = []): any {
   if (Array.isArray(node)) return node.map((n) => allowNullOnOptionalFields(n));
   if (node == null || typeof node !== 'object') return node;
@@ -56,7 +84,7 @@ function allowNullOnOptionalFields(node: any, required: string[] = []): any {
 
 // Fire-and-forget insert into llm_call_logs (public.llm_call_logs, admin-only
 // read via is_admin() RLS) so the AdminAlerts page can surface provider errors
-// and Groq's rate-limit headroom without adding latency to the caller's request.
+// and rate-limit headroom without adding latency to the caller's request.
 function logLLMCall(row: {
   functionName: string;
   model: string;
@@ -94,22 +122,22 @@ function numOrNull(v: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function callLLMOnce({ prompt, schema, model, functionName, attempt }: { prompt: string; schema: LLMSchema; model?: string; functionName: string; attempt: number }): Promise<any> {
-  const apiKey = Deno.env.get('GROQ_API_KEY');
+async function callProviderOnce({ provider, prompt, schema, functionName, attempt }: { provider: Provider; prompt: string; schema: LLMSchema; functionName: string; attempt: number }): Promise<any> {
+  const apiKey = Deno.env.get(provider.envKey);
   if (!apiKey) {
-    throw new Error('GROQ_API_KEY is not set. Run `supabase secrets set GROQ_API_KEY=...` before deploying AI-driven functions.');
+    throw new Error(`${provider.envKey} is not set`);
   }
 
-  const usedModel = model || GROQ_MODEL;
+  const loggedModel = `${provider.name}/${provider.model}`;
   const startedAt = Date.now();
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch(provider.baseUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: usedModel,
+      model: provider.model,
       messages: [{ role: 'user', content: prompt }],
       tools: [{
         type: 'function',
@@ -122,34 +150,38 @@ async function callLLMOnce({ prompt, schema, model, functionName, attempt }: { p
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    logLLMCall({ functionName, model: usedModel, status: 'error', attempt, latencyMs, errorMessage: `${res.status}: ${text}`.slice(0, 2000), rateLimitHeaders: res.headers });
-    throw new Error(`Groq API error ${res.status}: ${text}`);
+    logLLMCall({ functionName, model: loggedModel, status: 'error', attempt, latencyMs, errorMessage: `${res.status}: ${text}`.slice(0, 2000), rateLimitHeaders: res.headers });
+    throw new Error(`${provider.name} API error ${res.status}: ${text}`);
   }
 
   const data = await res.json();
   const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
   if (!toolCall?.function?.arguments || toolCall.function.name !== 'respond') {
-    const message = `Groq response had no valid 'respond' tool call (got ${toolCall?.function?.name ?? 'none'}).`;
-    logLLMCall({ functionName, model: usedModel, status: 'error', attempt, latencyMs, errorMessage: message, rateLimitHeaders: res.headers });
+    const message = `${provider.name} response had no valid 'respond' tool call (got ${toolCall?.function?.name ?? 'none'}).`;
+    logLLMCall({ functionName, model: loggedModel, status: 'error', attempt, latencyMs, errorMessage: message, rateLimitHeaders: res.headers });
     throw new Error(message);
   }
-  logLLMCall({ functionName, model: usedModel, status: 'ok', attempt, latencyMs, rateLimitHeaders: res.headers });
+  logLLMCall({ functionName, model: loggedModel, status: 'ok', attempt, latencyMs, rateLimitHeaders: res.headers });
   return JSON.parse(toolCall.function.arguments);
 }
 
-// Groq occasionally hallucinates a different tool name (seen: 'json' instead of
-// the forced 'respond'), which the API rejects with a 400 tool_use_failed, or
-// returns rate-limit 429s under load — both transient, not systemic, so retry a
-// couple of times before giving up. Auth/config errors (missing key, 401/403)
-// are not retried — those won't fix themselves.
-const RETRYABLE_STATUS = /Groq API error (400|429|5\d\d)/;
+// Both providers occasionally hallucinate a different tool name (seen on Groq:
+// 'json' instead of the forced 'respond'), which the API rejects with a 400
+// tool_use_failed, or return rate-limit 429s under load — both transient, not
+// systemic, so retry a couple of times before falling over to the next
+// provider. Auth/config errors (missing key, 401/403) are not retried — those
+// won't fix themselves within the same provider, so we move on immediately.
+const RETRYABLE_STATUS = /API error (400|429|5\d\d)/;
+const AUTH_STATUS = /API error (401|403)/;
 
 // On our free "on_demand" tier the shared 8000 TPM budget gets exhausted for
 // minutes at a stretch (see llm_call_logs), and Groq's 429 body tells us
 // exactly how long until it resets, e.g. "Please try again in 51.42s." A flat
 // short backoff never survives that wait, so parse it and sleep the requested
 // amount (plus a small buffer for clock drift) instead of guessing. Capped so
-// one stuck call can't stall the request indefinitely.
+// one stuck call can't stall the request indefinitely. If a provider is this
+// rate-limited we also skip straight to the next provider rather than
+// waiting it out — see callLLM.
 const RETRY_AFTER_RE = /try again in ([\d.]+)s/i;
 const MAX_RATE_LIMIT_WAIT_MS = 60_000;
 
@@ -162,18 +194,40 @@ function backoffMsFor(message: string, attempt: number): number {
   return 400 * attempt;
 }
 
-export async function callLLM(args: { prompt: string; schema: LLMSchema; model?: string; functionName: string }): Promise<any> {
-  const maxAttempts = 3;
+async function callProviderWithRetry({ provider, prompt, schema, functionName }: { provider: Provider; prompt: string; schema: LLMSchema; functionName: string }): Promise<any> {
+  const maxAttempts = 2;
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await callLLMOnce({ ...args, attempt });
+      return await callProviderOnce({ provider, prompt, schema, functionName, attempt });
     } catch (err) {
       lastError = err;
       const message = (err as Error).message || '';
+      // A 429 (rate limit) means this provider's quota is exhausted right now —
+      // move to the next provider instead of burning the retry budget waiting
+      // on the same exhausted bucket.
+      if (message.includes('API error 429')) throw err;
       const retryable = RETRYABLE_STATUS.test(message) || message.includes("no valid 'respond' tool call");
       if (!retryable || attempt === maxAttempts) throw err;
       await new Promise((resolve) => setTimeout(resolve, backoffMsFor(message, attempt)));
+    }
+  }
+  throw lastError;
+}
+
+export async function callLLM(args: { prompt: string; schema: LLMSchema; functionName: string }): Promise<any> {
+  const available = PROVIDERS.filter((p) => Deno.env.get(p.envKey));
+  if (available.length === 0) {
+    throw new Error('No LLM provider configured. Set GROQ_API_KEY and/or GEMINI_API_KEY before deploying AI-driven functions.');
+  }
+
+  let lastError: unknown;
+  for (const provider of available) {
+    try {
+      return await callProviderWithRetry({ provider, ...args });
+    } catch (err) {
+      lastError = err;
+      console.error(`${provider.name} failed for ${args.functionName}, trying next provider:`, (err as Error).message);
     }
   }
   throw lastError;

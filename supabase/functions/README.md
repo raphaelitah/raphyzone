@@ -7,12 +7,12 @@ the remaining housekeeping (secrets, quality testing).
 
 | Function | Calls an LLM? | Status |
 |---|---|---|
-| `generateWeeklyPlan` | yes (2 calls + verify), via Groq | deployed, frontend repointed |
-| `swapWorkout` | yes (1 call + verify), via Groq | deployed, frontend repointed |
+| `generateWeeklyPlan` | yes (2 calls + verify), via Groq→Gemini | deployed, frontend repointed |
+| `swapWorkout` | yes (1 call + verify), via Groq→Gemini | deployed, frontend repointed |
 | `assignWorkoutWeights` | **no** — rewritten as a deterministic formula | deployed, frontend repointed |
 | `learnFromSessionFeedback` | **no** — rewritten as a deterministic threshold rule | deployed, frontend repointed |
 | `applySwap` | no | deployed, frontend repointed |
-| `suggestExerciseSubstitutes` | yes (1 call), via Groq | deployed, frontend repointed |
+| `suggestExerciseSubstitutes` | yes (1 call), via Groq→Gemini | deployed, frontend repointed |
 | `getWarmup` | no | deployed, frontend repointed |
 
 `assignWorkoutWeights` and `learnFromSessionFeedback` originally called an LLM, but
@@ -34,12 +34,17 @@ the others.
 
 ## What's left
 
-1. **Confirm the Groq API key secret is set** (free tier — [console.groq.com](https://console.groq.com)):
+1. **Confirm the Groq and Gemini API key secrets are set** (both free tier):
    ```bash
    supabase secrets set GROQ_API_KEY=gsk_... --project-ref tdxcdvalriekeddahkev
+   supabase secrets set GEMINI_API_KEY=AIza... --project-ref tdxcdvalriekeddahkev
    ```
-   (Already required for `generateWeeklyPlan`/`swapWorkout`, which are live — if
-   those work, `suggestExerciseSubstitutes` will too.)
+   Groq key: [console.groq.com](https://console.groq.com). Gemini key: create one at
+   [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (needs a Google
+   account; no billing/card required for the free tier). `_shared/llm.ts` tries Groq
+   first and falls over to Gemini on a 429/5xx/auth failure, so either key alone is
+   enough to keep things running, but having both roughly doubles free headroom
+   since they're separate quotas. A provider with no key set is skipped silently.
 2. **Test each function** against real data — `generateWeeklyPlan`, `swapWorkout`,
    and `suggestExerciseSubstitutes` are LLM-driven and worth checking output quality,
    not just that they don't error; the other three are deterministic and just need
