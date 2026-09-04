@@ -23,6 +23,7 @@ import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
+import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -81,6 +82,8 @@ export default function WorkoutExecution() {
   // wall-clock time so it keeps ticking through the log/tracking screen
   // instead of pausing while the athlete logs their performance.
   const [blockRestUntil, setBlockRestUntil] = useState(null);
+  const blockRestUntilRef = useRef(null);
+  useEffect(() => { blockRestUntilRef.current = blockRestUntil; }, [blockRestUntil]);
   const [blockRestFromId, setBlockRestFromId] = useState(null);
   const [pendingTabataStart, setPendingTabataStart] = useState(null); // Tabata start values held while confirming an early start during rest
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
@@ -115,7 +118,17 @@ export default function WorkoutExecution() {
   // Total timer: continue-across-break (wall-clock from first start)
   useEffect(() => {
     if (sessionStartMs == null) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    const id = setInterval(() => {
+      setTick((t) => t + 1);
+      const until = blockRestUntilRef.current;
+      if (until == null) return;
+      const remaining = Math.round((until - Date.now()) / 1000);
+      if (remaining <= 0) {
+        playGoBeep();
+      } else if (remaining === 3 || remaining === 2 || remaining === 1) {
+        playCountdownBeep();
+      }
+    }, 1000);
     return () => clearInterval(id);
   }, [sessionStartMs]);
 
@@ -1063,7 +1076,7 @@ export default function WorkoutExecution() {
           </Button>
         </div>
       )}
-      <div className="flex-1 px-5 py-4 overflow-y-auto">
+      <div className={cn('px-5 py-4 overflow-y-auto', showLogPrompt ? 'flex-none' : 'flex-1')}>
         {showLogPrompt ? (
           <>
             {restingOnLogPrompt && (
@@ -1124,6 +1137,12 @@ export default function WorkoutExecution() {
                 );
               })}
             </div>
+            {exercises[index + 1] && (
+              <div className="mt-6 rounded-2xl border border-dashed border-border p-4">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Up next</p>
+                <p className="font-semibold text-sm">{exercises[index + 1].exercise_name}</p>
+              </div>
+            )}
           </>
         ) : (
           <>

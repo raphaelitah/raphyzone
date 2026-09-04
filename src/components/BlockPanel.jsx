@@ -6,13 +6,16 @@ import { cn } from '@/lib/utils';
 // with the active one highlighted, caller-supplied body (the part that
 // actually differs between block types — tap-to-start vs. countdown timer),
 // and an optional "skip this block" link.
-export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSelectExercise = null, onSkip, skipLabel, children }) {
+export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSelectExercise = null, onSkip, skipLabel, headerRight = null, children }) {
   return (
     <div className="rounded-2xl border border-border p-4 mb-4 bg-card">
-      {(label || roundLabel) && (
+      {(label || roundLabel || headerRight) && (
         <div className={cn('flex items-center mb-3', label ? 'justify-between' : 'justify-end')}>
           {label && <p className="text-sm font-semibold">{label}</p>}
-          {roundLabel && <p className="text-xs text-muted-foreground">{roundLabel}</p>}
+          <div className="flex items-center gap-2">
+            {roundLabel && <p className="text-xs text-muted-foreground">{roundLabel}</p>}
+            {headerRight}
+          </div>
         </div>
       )}
 

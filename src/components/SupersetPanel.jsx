@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Check, RefreshCw } from 'lucide-react';
+import { Play, Check, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import BlockPanel from '@/components/BlockPanel';
+import {
+  isTimerAudioMuted,
+  setTimerAudioMuted,
+  playCountdownBeep,
+  playGoBeep,
+  primeTimerAudio,
+} from '@/lib/timerSounds';
 
 function formatClock(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -38,6 +45,13 @@ export default function SupersetPanel({
   const [exIndex, setExIndex] = useState(0);
   const [phase, setPhase] = useState('ready'); // ready | leadin | running | resting
   const [, setTick] = useState(0);
+  const [muted, setMuted] = useState(() => isTimerAudioMuted());
+
+  const toggleMuted = () => {
+    const next = !muted;
+    setTimerAudioMuted(next);
+    setMuted(next);
+  };
 
   const startAtRef = useRef(null);
   const roundElapsedRef = useRef(0);
@@ -54,17 +68,31 @@ export default function SupersetPanel({
   useEffect(() => {
     if (phase !== 'running' && phase !== 'resting' && phase !== 'leadin') return;
     const id = setInterval(() => {
-      if (phase === 'leadin' && leadInEndAtRef.current != null && Date.now() >= leadInEndAtRef.current) {
-        leadInEndAtRef.current = null;
-        startSetActual();
+      if (phase === 'leadin' && leadInEndAtRef.current != null) {
+        const remaining = Math.round((leadInEndAtRef.current - Date.now()) / 1000);
+        if (Date.now() >= leadInEndAtRef.current) {
+          leadInEndAtRef.current = null;
+          startSetActual();
+          playGoBeep();
+          return;
+        }
+        if (remaining === 3 || remaining === 2 || remaining === 1) playCountdownBeep();
+        setTick((t) => t + 1);
         return;
       }
-      if (phase === 'resting' && restEndAtRef.current != null && Date.now() >= restEndAtRef.current) {
-        restEndAtRef.current = null;
-        setRound((r) => r + 1);
-        setExIndex(0);
-        roundElapsedRef.current = 0;
-        setPhase('ready');
+      if (phase === 'resting' && restEndAtRef.current != null) {
+        const remaining = Math.round((restEndAtRef.current - Date.now()) / 1000);
+        if (Date.now() >= restEndAtRef.current) {
+          restEndAtRef.current = null;
+          setRound((r) => r + 1);
+          setExIndex(0);
+          roundElapsedRef.current = 0;
+          setPhase('ready');
+          playGoBeep();
+          return;
+        }
+        if (remaining === 3 || remaining === 2 || remaining === 1) playCountdownBeep();
+        setTick((t) => t + 1);
         return;
       }
       setTick((t) => t + 1);
@@ -89,6 +117,7 @@ export default function SupersetPanel({
     : 0;
 
   const startSet = () => {
+    primeTimerAudio();
     if (!hasStartedBlockRef.current) {
       hasStartedBlockRef.current = true;
       leadInEndAtRef.current = Date.now() + LEAD_IN_SEC * 1000;
@@ -154,6 +183,16 @@ export default function SupersetPanel({
       onSelectExercise={phase === 'ready' ? selectExercise : undefined}
       onSkip={onSkip}
       skipLabel={`Skip ${(label || 'exercise').toLowerCase()}`}
+      headerRight={(
+        <button
+          onClick={toggleMuted}
+          aria-label={muted ? 'Unmute timer beeps' : 'Mute timer beeps'}
+          aria-pressed={muted}
+          className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground"
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      )}
     >
       {phase === 'leadin' ? (
         <div className="flex flex-col items-center gap-3">
