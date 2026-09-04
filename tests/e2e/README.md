@@ -62,6 +62,13 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
   workout submission
 - `mobile-rendering.spec.js` — checks every main page for horizontal overflow at mobile
   viewport width and confirms bottom-nav tap targets and sheet dialogs stay usable on a phone
+- `profile.spec.js` — editing the display name, toggling auto-approve AI plans, and an
+  autosaved change in the training-profile editor sheet
+- `calibration.spec.js` — the strength-calibration wizard: skipping every pattern, and
+  entering a movement + weight for one pattern
+- `onboarding.spec.js` — the first-run wizard end to end; temporarily flips the seeded
+  athlete's `onboarded` flag to false to drive it (Layout redirects any route to
+  `/onboarding` while it's unset) and restores the original profile row afterward
 
 Add one spec file per flow area as coverage grows.
 
