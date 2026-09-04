@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -75,6 +75,14 @@ function useRotatingLoadingText(active) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// How often to poll a queued job, and how long to wait before offering the
+// "email me instead" fallback. Groq's shared token budget means concurrent
+// "build my week" clicks get paced ~25s apart (see supabase/functions/_shared/
+// planQueue.ts) — a few people queued ahead is a matter of a minute or two,
+// so the email offer only shows up once it's genuinely been a while.
+const POLL_INTERVAL_MS = 3000;
+const EMAIL_OFFER_AFTER_MS = 90_000;
+
 export default function PlanBuilder() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -88,6 +96,7 @@ export default function PlanBuilder() {
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const [regenerating, setRegenerating] = useState(false);
+  const [regenStatus, setRegenStatus] = useState('');
   const [buildingText, setBuildingText] = useRotatingLoadingText(phase === 'building');
   const [swapFor, setSwapFor] = useState(null);
   const [swapLoading, setSwapLoading] = useState(false);
@@ -101,8 +110,21 @@ export default function PlanBuilder() {
   const [detailAlt, setDetailAlt] = useState(null);
   const [restChoiceFor, setRestChoiceFor] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
+  const [queueJobId, setQueueJobId] = useState(null);
+  const [queuePosition, setQueuePosition] = useState(null);
+  const [queueWaitedLong, setQueueWaitedLong] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState(user?.email || '');
+  const [notifySent, setNotifySent] = useState(false);
+  const [notifyError, setNotifyError] = useState('');
+  const pollTimerRef = useRef(null);
+  const emailOfferTimerRef = useRef(null);
 
   const weekStart = fmtISO(mondayOf(new Date()));
+
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    if (emailOfferTimerRef.current) clearTimeout(emailOfferTimerRef.current);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -131,25 +153,100 @@ export default function PlanBuilder() {
     return () => clearTimeout(timer);
   }, [phase, navigate]);
 
+  // Applies a finished { plan, summary } result (whether it came back
+  // synchronously or from a queued job) — fetches the workouts it references
+  // and runs the weight-assignment pass, shared by generate/regenerate and
+  // both their queued and non-queued paths.
+  const finishGeneratedPlan = async (result) => {
+    setPlan({ workouts: result.plan.workouts, regenerations_used: result.plan.regenerations_used || 0 });
+    setPlanId(result.plan.id);
+    setSummary(result.summary || '');
+    const ids = new Set(result.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
+    if (ids.size) {
+      const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
+      setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
+    }
+    try {
+      const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: result.plan.id } });
+      if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || result.plan.regenerations_used || 0 });
+    } catch {}
+  };
+
+  const clearQueueTimers = () => {
+    if (pollTimerRef.current) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null; }
+    if (emailOfferTimerRef.current) { clearTimeout(emailOfferTimerRef.current); emailOfferTimerRef.current = null; }
+  };
+
+  // generateWeeklyPlan enqueues a job and tries to run it immediately — the
+  // common case (no contention) returns { plan, summary } synchronously, same
+  // as before there was a queue. It only returns { queued: true, job_id } when
+  // another generation started too recently to safely fit both within Groq's
+  // token budget (see supabase/functions/_shared/planQueue.ts), in which case
+  // we poll pollPlanJob — which both reports status and opportunistically
+  // drains the queue — until it resolves.
+  const pollQueuedJob = async (jobId) => {
+    try {
+      const res = await supabase.functions.invoke('pollPlanJob', { body: { job_id: jobId } });
+      if (res.error) throw res.error;
+      const data = res.data;
+      if (data.status === 'done') {
+        clearQueueTimers();
+        setPhase('building');
+        setBuildingText(BUILDING_FINAL_MESSAGE);
+        await finishGeneratedPlan(data);
+        await sleep(700);
+        setPhase(profile?.auto_approve_plans ? 'auto_approved' : 'review');
+        return;
+      }
+      if (data.status === 'failed') {
+        clearQueueTimers();
+        setError(data.error || 'Could not generate the plan. Please try again.');
+        setPhase('context');
+        return;
+      }
+      setQueuePosition(data.position || null);
+      pollTimerRef.current = setTimeout(() => pollQueuedJob(jobId), POLL_INTERVAL_MS);
+    } catch {
+      pollTimerRef.current = setTimeout(() => pollQueuedJob(jobId), POLL_INTERVAL_MS);
+    }
+  };
+
+  const beginQueuePolling = (jobId) => {
+    setPhase('queued');
+    setQueueJobId(jobId);
+    setQueuePosition(null);
+    setQueueWaitedLong(false);
+    setNotifySent(false);
+    setNotifyError('');
+    emailOfferTimerRef.current = setTimeout(() => setQueueWaitedLong(true), EMAIL_OFFER_AFTER_MS);
+    pollQueuedJob(jobId);
+  };
+
+  const sendNotifyEmail = async () => {
+    if (!queueJobId || !notifyEmail) return;
+    setNotifyError('');
+    try {
+      const res = await supabase.functions.invoke('setPlanJobEmail', { body: { job_id: queueJobId, email: notifyEmail } });
+      if (res.error) throw res.error;
+      setNotifySent(true);
+    } catch {
+      setNotifyError('Could not save that email. Please try again.');
+    }
+  };
+
   const generate = async () => {
     setPhase('building'); setError('');
+    clearQueueTimers(); setQueueJobId(null); setQueuePosition(null); setQueueWaitedLong(false); setNotifySent(false); setNotifyError('');
     try {
       const res = await supabase.functions.invoke('generateWeeklyPlan', {
         body: { week_start_date: weekStart, context_answer: context, context_notes: followup, setup_equipment: EQUIPMENT_CONTEXTS.has(context) ? setupEquipment : null },
       });
       if (res.error) throw res.error;
-      setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
-      setPlanId(res.data.plan.id);
-      setSummary(res.data.summary || '');
-      const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
-      if (ids.size) {
-        const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
-        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
+      if (res.data.queued) {
+        beginQueuePolling(res.data.job_id);
+        return;
       }
-      try {
-        const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
-        if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: wres.data.plan.regenerations_used || res.data.plan.regenerations_used || 0 });
-      } catch {}
+      await finishGeneratedPlan(res.data);
       setBuildingText(BUILDING_FINAL_MESSAGE);
       await sleep(700);
       setPhase(profile?.auto_approve_plans ? 'auto_approved' : 'review');
@@ -158,28 +255,43 @@ export default function PlanBuilder() {
     }
   };
 
+  // Regenerating happens from the review screen, which stays visible — if it
+  // queues, we show inline status by the "Rebuild plan" button rather than
+  // switching phase away from the plan the athlete is already looking at.
+  const pollRegenJob = (jobId) => new Promise((resolve) => {
+    const tick = async () => {
+      try {
+        const res = await supabase.functions.invoke('pollPlanJob', { body: { job_id: jobId } });
+        if (res.error) throw res.error;
+        const data = res.data;
+        if (data.status === 'done') { await finishGeneratedPlan(data); resolve(); return; }
+        if (data.status === 'failed') { setError(data.error || 'Regeneration failed.'); resolve(); return; }
+        setRegenStatus(data.position ? `Queued — position ${data.position}` : 'Queued…');
+        setTimeout(tick, POLL_INTERVAL_MS);
+      } catch {
+        setTimeout(tick, POLL_INTERVAL_MS);
+      }
+    };
+    tick();
+  });
+
   const regenerate = async () => {
     if ((plan?.regenerations_used || 0) >= 3) return;
-    setRegenerating(true); setError('');
+    setRegenerating(true); setError(''); setRegenStatus('');
     try {
       const res = await supabase.functions.invoke('generateWeeklyPlan', {
         body: { week_start_date: weekStart, context_answer: context, context_notes: followup, setup_equipment: EQUIPMENT_CONTEXTS.has(context) ? setupEquipment : null, regenerate: true },
       });
       if (res.error) throw res.error;
-      setPlan({ workouts: res.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
-      setSummary(res.data.summary || '');
-      const ids = new Set(res.data.plan.workouts.flatMap((w) => [w.workout_id, ...(w.suggested_workout_ids || [])]).filter(Boolean));
-      if (ids.size) {
-        const { data: ws } = await supabase.from('workouts').select('*').in('id', [...ids]);
-        setWorkouts(Object.fromEntries((ws || []).map((w) => [w.id, w])));
+      if (res.data.queued) {
+        await pollRegenJob(res.data.job_id);
+      } else {
+        await finishGeneratedPlan(res.data);
       }
-      try {
-        const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
-        if (wres.data?.plan?.workouts) setPlan({ workouts: wres.data.plan.workouts, regenerations_used: res.data.plan.regenerations_used || 0 });
-      } catch {}
     } catch {
       setError('Regeneration failed.');
     }
+    setRegenStatus('');
     setRegenerating(false);
   };
 
@@ -410,6 +522,40 @@ export default function PlanBuilder() {
         </div>
       )}
 
+      {phase === 'queued' && (
+        <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-300">
+          <Loader2 className="h-10 w-10 text-brand animate-spin mb-4" />
+          <p className="text-sm font-medium">Building your plan — you're in a short queue</p>
+          {queuePosition && <p className="text-xs text-muted-foreground mt-1">Position {queuePosition} in line</p>}
+          <p className="text-xs text-muted-foreground mt-1.5 max-w-xs leading-relaxed">
+            This can take a couple of minutes when a few people are generating plans at once.
+          </p>
+          {queueWaitedLong && !notifySent && (
+            <div className="mt-6 w-full max-w-xs">
+              <p className="text-xs text-muted-foreground mb-2">Taking longer than usual — want an email instead?</p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={notifyEmail}
+                  onChange={(e) => setNotifyEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                />
+                <Button onClick={sendNotifyEmail} disabled={!notifyEmail} className="rounded-lg h-10 px-3 bg-brand text-brand-foreground hover:bg-brand/90 text-xs">
+                  Notify me
+                </Button>
+              </div>
+              {notifyError && <p className="text-xs text-rose-600 mt-1.5">{notifyError}</p>}
+            </div>
+          )}
+          {notifySent && (
+            <p className="text-xs text-brand font-medium mt-6 max-w-xs">
+              We'll email {notifyEmail} when it's ready — you can close this page.
+            </p>
+          )}
+        </div>
+      )}
+
       {phase === 'auto_approved' && (
         <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in duration-300">
           <div className="h-14 w-14 rounded-full bg-brand/10 flex items-center justify-center mb-4">
@@ -498,7 +644,7 @@ export default function PlanBuilder() {
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
             <span>Regenerations: {plan.regenerations_used}/3</span>
             <button onClick={regenerate} disabled={plan.regenerations_used >= 3 || regenerating} className="flex items-center gap-1 font-medium text-brand disabled:opacity-40">
-              {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Rebuild plan
+              {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} {regenStatus || 'Rebuild plan'}
             </button>
           </div>
           <div className="fixed bottom-16 inset-x-0 z-50 max-w-md mx-auto px-5 py-4 bg-background border-t border-border">
