@@ -29,13 +29,23 @@ test.describe('Weekly plan builder (regression)', () => {
     // Generation moves through several transient loading phases (e.g. "building
     // your week", "cross-checking exercise history") too quickly to reliably
     // assert on any one of them, so just wait for completion. Generation hits a
-    // real LLM edge function — give it a generous window.
-    await expect(page.getByRole('button', { name: /done/i })).toBeVisible({ timeout: 150000 });
+    // real LLM edge function — give it a generous window. Completion lands on
+    // one of two phases depending on the athlete's "auto-approve plans" setting:
+    // a review screen with an "Approve plan" button, or an auto-approved
+    // confirmation that redirects to Home on its own after a few seconds.
+    const approveButton = page.getByRole('button', { name: /approve plan/i });
+    const autoApprovedHeading = page.getByText(/plan auto-approved/i);
+    await expect(approveButton.or(autoApprovedHeading)).toBeVisible({ timeout: 150000 });
 
-    // Seven days of the week should be laid out (train/rest/activity slots).
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    for (const day of days) {
-      await expect(page.getByText(new RegExp(`^${day} ·`)).first()).toBeVisible();
+    if (await approveButton.isVisible()) {
+      // Seven days of the week should be laid out (train/rest/activity slots).
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      for (const day of days) {
+        await expect(page.getByText(new RegExp(`^${day} ·`)).first()).toBeVisible();
+      }
+      await approveButton.click();
     }
+
+    await page.waitForURL('/', { timeout: 10000 });
   });
 });

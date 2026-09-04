@@ -92,10 +92,11 @@ describe('deriveBlockTimerConfig', () => {
     );
     expect(result.blockLabel).toBe('EMOM');
     expect(result.isEmomFamily).toBe(true);
-    expect(result.isAlternatingEmom).toBe(false);
-    // A default EMOM passes rounds straight through (the timer engine covers
-    // all exercises together every round).
-    expect(result.timerDefaultConfig).toEqual({ workSec: 60, restSec: 0, rounds: 5 });
+    // A multi-exercise EMOM rotates one exercise per round even without the
+    // explicit "emom_alternating" tag, so the stored rounds (turns) get
+    // divided back down to group cycles for the timer engine.
+    expect(result.isAlternatingEmom).toBe(true);
+    expect(result.timerDefaultConfig).toEqual({ workSec: 60, restSec: 0, rounds: 3 });
   });
 
   it('labels a non-60s interval as "E<n>MOM"', () => {
