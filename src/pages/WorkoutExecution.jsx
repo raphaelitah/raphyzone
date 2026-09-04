@@ -706,7 +706,7 @@ export default function WorkoutExecution() {
       const payload = {
         user_id: userRef.current.id, workout_session_id: sessionIdRef.current, exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
         max_weight: log.bodyweight ? 0 : (log.max_weight ?? null), difficulty: log.difficulty || 'normal', note: log.note || '',
-        sets: ex.effective_sets || ex.sets, reps: ex.reps, target_weight: ex.target_weight,
+        sets: ex.effective_sets ?? ex.sets, reps: ex.reps, target_weight: ex.target_weight,
         distance_km: log.distance_km ?? null, duration_seconds: log.duration_seconds ?? null,
         elapsed_seconds: Math.round(exerciseElapsedRef.current[key] || 0),
         order_index: ex.order ?? null,
@@ -760,11 +760,27 @@ export default function WorkoutExecution() {
     exerciseElapsedRef.current = {};
     setIndex(0);
     indexRef.current = 0;
-    const { data: s } = await supabase.from('workout_sessions').insert({
-      user_id: userRef.current.id, workout_id: workoutId, workout_name: workoutRef.current?.name,
-      date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
-      progress: { index: 0, completedBlockIds: [] },
-    }).select().single();
+    let s;
+    try {
+      const { session, conflict } = await insertInProgressSession({
+        user_id: userRef.current.id, workout_id: workoutId, workout_name: workoutRef.current?.name,
+        date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
+        progress: { index: 0, completedBlockIds: [] },
+      });
+      if (!session) {
+        // Lost the race to another in-progress session — surface the usual conflict dialog
+        // instead of crashing; the athlete's prior progress here is already gone, so send
+        // them back rather than leaving them on a sessionless screen.
+        setConflictSession(conflict);
+        sessionIdRef.current = null;
+        progressHydratedRef.current = false;
+        return;
+      }
+      s = session;
+    } catch {
+      window.history.length > 1 ? navigate(-1) : navigate('/');
+      return;
+    }
     sessionIdRef.current = s.id;
     progressHydratedRef.current = true;
     sessionCreatedMsRef.current = new Date(s.created_date || s.start_timestamp).getTime();

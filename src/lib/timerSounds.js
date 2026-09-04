@@ -32,7 +32,7 @@ export function setTimerAudioMuted(value) {
 
 function getContext() {
   if (typeof window === 'undefined') return null;
-  const AC = window.AudioContext || window.webkitAudioContext;
+  const AC = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
   if (!AC) return null;
   if (!audioCtx) audioCtx = new AC();
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});

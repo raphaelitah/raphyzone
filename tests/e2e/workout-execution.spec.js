@@ -111,4 +111,47 @@ test.describe('Running a workout (regression)', () => {
     await page.waitForURL(/\/workout\//, { timeout: 10000 });
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
   });
+
+  test('restarting mid-workout replaces the session instead of leaving a duplicate or crashing', async ({ page }) => {
+    await login(page);
+    await page.goto('/workouts');
+
+    const cards = page.locator('button:has(p.font-semibold)');
+    await expect(cards.first()).toBeVisible({ timeout: 10000 });
+    await cards.first().click();
+
+    const sheet = page.getByRole('dialog');
+    const startLink = sheet.getByRole('link', { name: /start workout/i });
+    await expect(startLink).toBeVisible();
+    await startLink.click();
+
+    await page.waitForURL(/\/workout\/.+/, { timeout: 10000 });
+    const workoutId = page.url().split('/workout/')[1];
+
+    // Make some progress so there's a real prior session to replace.
+    const skipButton = page.getByRole('button', { name: /^skip/i });
+    const startBlockButton = page.getByRole('button', { name: /^start /i });
+    if (await startBlockButton.isVisible().catch(() => false)) {
+      await startBlockButton.click();
+    }
+    await skipButton.first().click();
+    await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
+
+    await page.locator('header button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click();
+    await page.getByRole('button', { name: /^restart$/i }).click();
+
+    // Lands back on exercise 1 of a fresh, still-usable session — not a crash.
+    await expect(page.getByText(/Exercise 1 of/i)).toBeVisible({ timeout: 10000 });
+
+    // Exactly one in_progress session for this workout, not two.
+    const api = makeApiClient();
+    const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
+    const { data: sessions } = await api
+      .from('workout_sessions')
+      .select('id, status')
+      .eq('workout_id', workoutId)
+      .eq('user_id', signInData.user.id)
+      .eq('status', 'in_progress');
+    expect(sessions?.length).toBe(1);
+  });
 });
