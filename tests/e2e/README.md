@@ -45,9 +45,18 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
 - `workouts.spec.js` — workout library: list, search, detail sheet with structure
 - `workout-execution.spec.js` — starts a real workout, skips through every exercise, finishes
   it, and verifies the session is persisted as `completed` in Supabase
+- `tabata-rest.spec.js` — seeds a two-block Tabata workout (via `fixtures/tabataSeed.js`) and
+  verifies the inter-block rest countdown actually ticks through the block-complete log screen,
+  overlays (rather than blocks) the next block's start panel, and prompts a confirm dialog when
+  starting that block early instead of silently skipping the rest
 - `plan-builder.spec.js` — generates a weekly plan end to end via the real
   `generateWeeklyPlan` LLM edge function (clears any existing plan for the current week first
   so it always exercises full generation; allow extra time, hence the 90s suite timeout)
+- `plan-queue.spec.js` — fires two real `generateWeeklyPlan` calls at once (for next week and
+  the week after, so it doesn't collide with `plan-builder.spec.js`'s current-week plan) to
+  force one into the `plan_generation_jobs` queue, then polls `pollPlanJob` — the same way the
+  frontend does — until it completes. Calls the edge functions directly rather than through the
+  UI, since the queue's pacing guard is only reliably triggered by near-simultaneous requests
 - `admin-taxonomy.spec.js` — non-admin redirect, add/edit/delete a taxonomy term
 - `admin-review.spec.js` — non-admin redirect, approve/reject a seeded pending exercise or
   workout submission
