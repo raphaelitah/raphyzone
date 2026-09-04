@@ -98,6 +98,7 @@ export default function WorkoutExecution() {
   const loadedExerciseSessionsRef = useRef([]);
   const pausedAtRef = useRef(null);
   const blockTimerWasRunningRef = useRef(false);
+  const progressHydratedRef = useRef(false); // guards the progress-persist effect until initial load/resume has set index
 
   useEffect(() => { logsRef.current = logs; }, [logs]);
   useEffect(() => { exercisesRef.current = exercises; }, [exercises]);
@@ -114,6 +115,17 @@ export default function WorkoutExecution() {
 
   // Reset per-exercise enter time whenever the active exercise changes
   useEffect(() => { enterTimeRef.current = Date.now(); }, [index]);
+
+  // Persist exactly where the athlete currently is (including which blocks
+  // they've skipped past, which never gets an exercise_sessions row of its
+  // own) so leaving and resuming lands them back here instead of exercise 1.
+  useEffect(() => {
+    if (!progressHydratedRef.current || !sessionIdRef.current) return;
+    supabase.from('workout_sessions')
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers] } })
+      .eq('id', sessionIdRef.current)
+      .then(() => {});
+  }, [index, completedBlockTimers]);
 
   const pendingLoadRef = useRef(null);
 
@@ -135,13 +147,18 @@ export default function WorkoutExecution() {
     throw error;
   };
 
-  const finishLoadingWorkout = async (sess, w, plans, active, isResumed) => {
+  // `sessionExisted` means this session was found already sitting in the
+  // database (as opposed to one we just inserted) — the athlete may have left
+  // and come back. That's distinct from "the clock was already started":
+  // skipping past exercises never requires starting the block/set timer, so
+  // progress can exist on a session whose start_timestamp is still null.
+  const finishLoadingWorkout = async (sess, w, plans, active, sessionExisted) => {
     sessionIdRef.current = sess.id;
     sessionCreatedMsRef.current = sess.created_date ? new Date(sess.created_date).getTime() : Date.now();
     setSession(sess);
-    if (isResumed) {
-      // The user already started this session earlier — keep the clock running across the resume.
-      const startMs = sess.start_timestamp ? new Date(sess.start_timestamp).getTime() : Date.now();
+    if (sessionExisted && sess.start_timestamp) {
+      // The user already started this session's clock earlier — keep it running across the resume.
+      const startMs = new Date(sess.start_timestamp).getTime();
       sessionStartMsRef.current = startMs;
       setSessionStartMs(startMs);
       setTimerStarted(true);
@@ -209,6 +226,38 @@ export default function WorkoutExecution() {
       }
     });
     if (Object.keys(hydrated).length) setLogs(hydrated);
+
+    if (sessionExisted) {
+      // Land back where the athlete left off. The `progress` column is the
+      // precise record of this (it also covers skipped exercises, which
+      // intentionally never get an exercise_sessions row); fall back to
+      // deriving it from logged exercises for older sessions saved before
+      // that column existed.
+      const savedProgress = sess.progress;
+      let completed = new Set(Array.isArray(savedProgress?.completedBlockIds) ? savedProgress.completedBlockIds : []);
+      let resumeIdx = Number.isInteger(savedProgress?.index) ? savedProgress.index : null;
+
+      if (resumeIdx == null) {
+        // Mark any block whose exercises are all already logged as done, then
+        // jump to the first exercise (in or outside a block) that isn't yet
+        // logged — completed work stays a milestone instead of forcing a
+        // restart from exercise 1.
+        const blockIds = [...new Set(finalExercises.map((e) => e.block_id).filter(Boolean))];
+        completed = new Set();
+        blockIds.forEach((bid) => {
+          const blockExs = finalExercises.filter((e) => e.block_id === bid);
+          if (blockExs.length && blockExs.every((e) => hydrated[e.key])) completed.add(bid);
+        });
+        resumeIdx = finalExercises.findIndex((e) => !hydrated[e.key] && !(e.block_id && completed.has(e.block_id)));
+      }
+      if (resumeIdx === -1 || resumeIdx == null) resumeIdx = 0;
+      resumeIdx = Math.min(Math.max(0, resumeIdx), Math.max(0, finalExercises.length - 1));
+
+      if (completed.size) setCompletedBlockTimers(completed);
+      setIndex(resumeIdx);
+      indexRef.current = resumeIdx;
+    }
+    progressHydratedRef.current = true;
   };
 
   useEffect(() => {
@@ -251,7 +300,7 @@ export default function WorkoutExecution() {
           return;
         }
 
-        let wasAlreadyStarted = !!sess?.start_timestamp;
+        const sessionExisted = !!sess;
         if (!sess) {
           const { session, conflict } = await insertInProgressSession({
             user_id: user.id, workout_id: workoutId, workout_name: w.name,
@@ -265,10 +314,9 @@ export default function WorkoutExecution() {
             return;
           }
           sess = session;
-          wasAlreadyStarted = !!sess?.start_timestamp;
         }
         if (!active() || !sess) return;
-        await finishLoadingWorkout(sess, w, plans, active, wasAlreadyStarted);
+        await finishLoadingWorkout(sess, w, plans, active, sessionExisted);
       } catch {
         if (active()) setLoading(false);
       }
@@ -283,7 +331,7 @@ export default function WorkoutExecution() {
       await supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', conflictSession.id);
       const { w, plans, sess: existingSess } = pendingLoadRef.current || {};
       let sess = existingSess;
-      let wasAlreadyStarted = !!sess?.start_timestamp;
+      const sessionExisted = !!sess;
       if (!sess) {
         const { session, conflict } = await insertInProgressSession({
           user_id: user.id, workout_id: workoutId, workout_name: w?.name,
@@ -295,12 +343,11 @@ export default function WorkoutExecution() {
           return;
         }
         sess = session;
-        wasAlreadyStarted = !!sess?.start_timestamp;
       }
       setConflictSession(null);
       pendingLoadRef.current = null;
       setLoading(true);
-      await finishLoadingWorkout(sess, w, plans, () => true, wasAlreadyStarted);
+      await finishLoadingWorkout(sess, w, plans, () => true, sessionExisted);
     } finally {
       setEndingConflict(false);
     }
@@ -645,6 +692,7 @@ export default function WorkoutExecution() {
 
   const restartWorkout = async () => {
     setRestartOpen(false);
+    progressHydratedRef.current = false; // pause progress-persist until the new session id is in place
     try {
       if (sessionIdRef.current) {
         await supabase.from('exercise_sessions').delete().eq('workout_session_id', sessionIdRef.current);
@@ -653,6 +701,7 @@ export default function WorkoutExecution() {
     } catch { /* silent */ }
     setLogs({});
     setRestOverrides({});
+    setCompletedBlockTimers(new Set());
     exerciseSessionIdsRef.current = {};
     exerciseElapsedRef.current = {};
     setIndex(0);
@@ -660,8 +709,10 @@ export default function WorkoutExecution() {
     const { data: s } = await supabase.from('workout_sessions').insert({
       user_id: userRef.current.id, workout_id: workoutId, workout_name: workoutRef.current?.name,
       date: targetDate, status: 'in_progress', start_timestamp: new Date().toISOString(),
+      progress: { index: 0, completedBlockIds: [] },
     }).select().single();
     sessionIdRef.current = s.id;
+    progressHydratedRef.current = true;
     sessionCreatedMsRef.current = new Date(s.created_date || s.start_timestamp).getTime();
     setSession(s);
     const startMs = new Date(s.start_timestamp).getTime();
@@ -877,9 +928,10 @@ export default function WorkoutExecution() {
   );
 
   const isLast = index === exercises.length - 1;
+  // Leaving the screen (back chevron, bottom nav, etc.) doesn't end the
+  // session — it stays in_progress so the athlete resumes exactly where they
+  // left off. Only "Stop workout" or "Restart" actually give up progress.
   const back = () => {
-    const sid = sessionIdRef.current;
-    if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});
     window.history.length > 1 ? navigate(-1) : navigate('/');
   };
   const showLogPrompt = logPrompt != null && logPrompt.keys.includes(current.key);

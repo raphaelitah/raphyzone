@@ -3,6 +3,7 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import BottomNav from '@/components/BottomNav';
+import ActiveWorkoutBanner from '@/components/ActiveWorkoutBanner';
 
 export default function Layout() {
   const { user } = useAuth();
@@ -53,6 +54,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-md min-h-screen pb-16">
+        <ActiveWorkoutBanner />
         <Outlet />
       </main>
       <BottomNav />
