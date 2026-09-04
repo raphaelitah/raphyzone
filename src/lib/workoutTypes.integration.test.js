@@ -147,6 +147,42 @@ describe('"2007" (Circuit workout: row + pull-ups + push jerk, for time)', () =>
   });
 });
 
+describe('"Barbara" (circuit workout: 5 rounds for time, rest 3 min between rounds)', () => {
+  const workout = { workout_id: '6a8b5ff82f65fc56923ecce0', name: 'Barbara' };
+  const blocks = [
+    { block_id: 'BLK00268', workout_id: workout.workout_id, order_index: 1, block_label: 'A', block_type: 'circuit', workout_format: 'for_time', rounds: 5, rest_seconds: 180 },
+  ];
+  const blockExercises = [
+    { block_exercise_id: 'BE00578', block_id: 'BLK00268', order_in_block: 1, step_type: 'exercise', exercise_id: 'EX01796', exercise_title_raw: 'Pull-Up Head to Bar', prescription_value: '20' },
+    { block_exercise_id: 'BE00579', block_id: 'BLK00268', order_in_block: 2, step_type: 'exercise', exercise_id: 'EX01803', exercise_title_raw: 'Push-Up', prescription_value: '30' },
+    { block_exercise_id: 'BE00580', block_id: 'BLK00268', order_in_block: 3, step_type: 'exercise', exercise_id: 'EX00455', exercise_title_raw: 'Butterfly Sit-Up', prescription_value: '40' },
+    { block_exercise_id: 'BE00581', block_id: 'BLK00268', order_in_block: 4, step_type: 'exercise', exercise_id: 'EX00059', exercise_title_raw: 'Air Squat', prescription_value: '50' },
+    { block_exercise_id: 'BE00582', block_id: 'BLK00268', order_in_block: 5, step_type: 'rest', prescription_type: 'time', prescription_value: '3 minutes' },
+  ];
+
+  it('derives a rotating Circuit timer config (5 rounds, 3-min rest) instead of no timer at all', () => {
+    expect(deriveBlockTimerConfig(blocks[0], 4)).toEqual({
+      blockLabel: 'Circuit',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      isSuperset: true,
+      timerDefaultConfig: { rounds: 5, restSec: 180 },
+    });
+  });
+
+  it('flattens the 4 movements in order (the rest step is excluded, it is handled by the rotating timer), each carrying the block round count', () => {
+    const { blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap } =
+      buildWorkoutFixture({ workout, blocks, blockExercises });
+    const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
+    expect(list.map((e) => e.exercise_name)).toEqual(['Pull-Up Head to Bar', 'Push-Up', 'Butterfly Sit-Up', 'Air Squat']);
+    expect(list.every((e) => e.rounds === 5)).toBe(true);
+  });
+
+  it('does not rotate a single-pass circuit (rounds unset defaults to 1)', () => {
+    expect(deriveBlockTimerConfig({ ...blocks[0], rounds: undefined }, 4)).toBeNull();
+  });
+});
+
 describe('"1775" (AMRAP workout: self-paced, 60-minute time cap)', () => {
   const workout = { workout_id: '264f33ca51aef9c2a9f66d13', name: '1775' };
   const blocks = [

@@ -138,6 +138,21 @@ export function isSupersetBlock(block) {
   return type === 'superset' || format === 'superset';
 }
 
+export function isCircuitBlock(block) {
+  const type = (block.block_type || '').toLowerCase();
+  return type === 'circuit';
+}
+
+// A circuit only needs to rotate exercise-by-exercise when it repeats: a
+// single pass through (the default, block.rounds unset or 1) is already a
+// straight sequential list, no different from any other for-time block. Once
+// rounds > 1 (e.g. Barbara's "5 rounds for time"), the athlete must do one
+// rep of each movement in order, then loop back to the first for the next
+// round — not finish every rep of movement A before moving to B.
+export function isRotatingCircuitBlock(block) {
+  return isCircuitBlock(block) && (block.rounds || 1) > 1;
+}
+
 export function countWorkoutRests(workout, blocksByWorkout, blockExercisesByBlock) {
   const blocks = blocksByWorkout[workout.workout_id] || [];
   let count = 0;
@@ -206,6 +221,19 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
       timerDefaultConfig: {
         rounds: block.rounds ?? 1,
         restSec: block.rest_seconds ?? 90,
+      },
+    };
+  }
+
+  if (isRotatingCircuitBlock(block)) {
+    return {
+      blockLabel: 'Circuit',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      isSuperset: true,
+      timerDefaultConfig: {
+        rounds: block.rounds ?? 1,
+        restSec: block.rest_seconds ?? 0,
       },
     };
   }
