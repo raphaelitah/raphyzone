@@ -1,9 +1,42 @@
+import { useEffect, useState } from 'react';
 import { Loader2, Check, Clock, Dumbbell, Search } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+const RANKING_MESSAGES = [
+  'Ranking compatible workouts…',
+  'Comparing equipment against your setup…',
+  'Weighing recovery since your last session…',
+  'Checking recent training load…',
+  'Matching duration to your schedule…',
+  'Scanning the library for a good fit…',
+  'Balancing intensity against the rest of your week…',
+  'Cross-checking your exercise history…',
+  'Filtering out recent repeats…',
+  'Lining up options by muscle groups worked…',
+  'Sanity-checking each suggestion…',
+  'Narrowing down the shortlist…',
+];
+
+function useRotatingLabel(active, messages, intervalMs = 2000) {
+  const [text, setText] = useState(messages[0]);
+  useEffect(() => {
+    if (!active) return;
+    setText(messages[Math.floor(Math.random() * messages.length)]);
+    const interval = setInterval(() => {
+      setText((prev) => {
+        const options = messages.filter((m) => m !== prev);
+        return options[Math.floor(Math.random() * options.length)];
+      });
+    }, intervalMs);
+    return () => clearInterval(interval);
+  }, [active]);
+  return text;
+}
+
 export default function SwapShortlistSheet({ open, onOpenChange, loading, alternatives, currentName, onPick, onViewDetails = null, keepLabel = null, onSearchLibrary = null }) {
+  const rankingLabel = useRotatingLabel(loading, RANKING_MESSAGES);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl h-[70dvh] flex flex-col p-0">
@@ -17,7 +50,7 @@ export default function SwapShortlistSheet({ open, onOpenChange, loading, altern
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16">
               <Loader2 className="h-8 w-8 text-brand animate-spin mb-3" />
-              <p className="text-sm text-muted-foreground">Ranking compatible workouts…</p>
+              <p className="text-sm text-muted-foreground">{rankingLabel}</p>
             </div>
           ) : alternatives.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-16">No alternatives found. Try rebuilding the whole plan instead.</p>
