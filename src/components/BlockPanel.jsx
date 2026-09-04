@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 // with the active one highlighted, caller-supplied body (the part that
 // actually differs between block types — tap-to-start vs. countdown timer),
 // and an optional "skip this block" link.
-export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSelectExercise, onSkip, skipLabel, children }) {
+export default function BlockPanel({ label, roundLabel, exercises, activeKey, onSelectExercise = null, onSkip, skipLabel, children }) {
   return (
     <div className="rounded-2xl border border-border p-4 mb-4 bg-card">
       {(label || roundLabel) && (

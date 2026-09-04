@@ -25,14 +25,14 @@ export default function SupersetPanel({
   restSec,
   onExerciseElapsed,
   onFinish,
-  onSkip,
+  onSkip = null,
   onStartTimer,
   onAdjustRest,
-  onSwap,
+  onSwap = null,
   label = 'Superset',
   unitLabel = 'Round',
-  weightLoading,
-  onWeightClick,
+  weightLoading = false,
+  onWeightClick = null,
 }) {
   const [round, setRound] = useState(1);
   const [exIndex, setExIndex] = useState(0);

@@ -793,7 +793,7 @@ export default function WorkoutExecution() {
 
   // Shared card for both AI-suggested and manually-searched substitute candidates,
   // so the two lists in the swap sheet read as one consistent UI.
-  const renderSubstituteCard = (exercise, { key, confidence, reason, onUse }) => (
+  const renderSubstituteCard = (exercise, { key, confidence = null, reason = null, onUse }) => (
     <Card key={key} className="rounded-2xl border-border p-4">
       <div className="flex items-center gap-3 mb-1">
         <div className="h-9 w-9 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">

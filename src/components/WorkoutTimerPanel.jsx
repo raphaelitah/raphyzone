@@ -31,7 +31,7 @@ export default function WorkoutTimerPanel({
   isRotatingBlock,
   isPreviewExercise,
   nextUpName,
-  onSwap,
+  onSwap = null,
 }) {
   const [workSec, setWorkSec] = useState(defaultConfig?.workSec?.toString() || '20');
   const [restSec, setRestSec] = useState(defaultConfig?.restSec?.toString() || '10');

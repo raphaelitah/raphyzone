@@ -19,7 +19,7 @@ export function Spec({ label, value, subtext = null, loading = false, onClick = 
 
 // Sets/Reps/Weight/Rest tile row shared by standalone exercises and block
 // (superset/EMOM/Tabata) exercises so the tracking experience is consistent.
-export default function ExerciseSpecRow({ exercise, distanceKm, durationSeconds, weightLoading, onWeightClick }) {
+export default function ExerciseSpecRow({ exercise, distanceKm = null, durationSeconds = null, weightLoading = false, onWeightClick = null }) {
   if (!exercise) return null;
   const isRunning = isRunningExercise(exercise.details);
   const setsValue = exercise.rounds > 1 ? exercise.effective_sets : exercise.sets;

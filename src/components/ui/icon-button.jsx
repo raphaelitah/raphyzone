@@ -36,7 +36,20 @@ const iconButtonVariants = cva(
  * parent that has the `group` class, so the color change follows
  * `group-hover` instead.
  */
-const IconButton = React.forwardRef(function IconButton(
+/**
+ * @param {{
+ *   icon: React.ElementType,
+ *   label?: React.ReactNode,
+ *   variant?: "secondary" | "primary",
+ *   bare?: boolean,
+ *   as?: React.ElementType,
+ *   className?: string,
+ *   iconClassName?: string,
+ *   [key: string]: any,
+ * }} props
+ * @param {React.Ref<any>} ref
+ */
+function IconButtonRender(
   { icon: Icon, label, variant, bare, as: Comp = "button", className, iconClassName, ...props },
   ref
 ) {
@@ -55,6 +68,8 @@ const IconButton = React.forwardRef(function IconButton(
       {label}
     </Comp>
   )
-})
+}
+
+const IconButton = React.forwardRef(IconButtonRender)
 
 export { IconButton, iconButtonVariants }
