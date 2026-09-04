@@ -230,9 +230,13 @@ export default function Workouts() {
     const matchesDifficulty = difficulty === 'All' || w.difficulty === difficulty.toLowerCase();
     const matchesType = workoutType === 'All' || WORKOUT_FORMATS
       .filter((f) => f.label === workoutType)
-      .some((f) => workoutFormatMatches(w.workout_format, f.value));
+      .some((f) => workoutFormatMatches(w.workout_format, f.value)
+        // Falls back to the workout's own blocks in case the top-level
+        // workout_format wasn't rolled up to include a format one of its
+        // blocks actually uses (e.g. a "superset" workout with tabata timing).
+        || (blocksByWorkout[w.workout_id] || []).some((b) => b.workout_format === f.value));
     return matchesRegion && matchesDifficulty && matchesType;
-  }), [workouts, searchResults, region, running, difficulty, workoutType]);
+  }), [workouts, searchResults, region, running, difficulty, workoutType, blocksByWorkout]);
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop;
