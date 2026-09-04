@@ -3,6 +3,33 @@
 // already has playing (music, a podcast) instead of interrupting it.
 let audioCtx = null;
 
+const MUTE_KEY = 'timerSoundsMuted';
+
+function readMuted() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(MUTE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+let muted = readMuted();
+
+export function isTimerAudioMuted() {
+  return muted;
+}
+
+export function setTimerAudioMuted(value) {
+  muted = value;
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(MUTE_KEY, value ? '1' : '0');
+  } catch {
+    // ignore — worst case the mute preference doesn't persist
+  }
+}
+
 function getContext() {
   if (typeof window === 'undefined') return null;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -37,6 +64,7 @@ export function primeTimerAudio() {
 
 // 3-2-1 countdown tick, before a phase (lead-in, work, or rest) ends.
 export function playCountdownBeep() {
+  if (muted) return;
   const ctx = getContext();
   if (!ctx) return;
   tone(ctx, { freq: 740, startAt: ctx.currentTime, duration: 0.12, volume: 0.18 });
@@ -46,6 +74,7 @@ export function playCountdownBeep() {
 // rest) — a soft two-note ascending chime so it reads as "go" without being
 // a harsh alarm sound.
 export function playGoBeep() {
+  if (muted) return;
   const ctx = getContext();
   if (!ctx) return;
   const now = ctx.currentTime;

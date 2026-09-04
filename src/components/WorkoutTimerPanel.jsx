@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Pause, RotateCcw, SkipForward, RefreshCw } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import BlockPanel from '@/components/BlockPanel';
+import { isTimerAudioMuted, setTimerAudioMuted } from '@/lib/timerSounds';
 
 function formatClock(sec) {
   const s = Math.max(0, Math.ceil(sec || 0));
@@ -39,6 +40,13 @@ export default function WorkoutTimerPanel({
   // Before the block timer is armed, tapping a pill just previews that
   // exercise's details — it doesn't start anything.
   const [previewKey, setPreviewKey] = useState(null);
+  const [muted, setMuted] = useState(() => isTimerAudioMuted());
+
+  const toggleMuted = () => {
+    const next = !muted;
+    setTimerAudioMuted(next);
+    setMuted(next);
+  };
 
   const previewExercise = !armed && isRotatingBlock
     ? (exercises || []).find((e) => e.key === previewKey) || displayExercise
@@ -114,14 +122,24 @@ export default function WorkoutTimerPanel({
 
         {armed && (
           <>
-            {timer.phase && (
-              <span className={cn(
-                'text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full',
-                timer.phase === 'work' ? 'bg-brand/10 text-brand' : 'bg-muted text-muted-foreground'
-              )}>
-                {timer.status === 'done' ? 'Done' : (timer.phase === 'leadin' ? 'Get ready' : timer.phase)}
-              </span>
-            )}
+            <div className="flex items-center justify-center gap-2 w-full relative">
+              {timer.phase && (
+                <span className={cn(
+                  'text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full',
+                  timer.phase === 'work' ? 'bg-brand/10 text-brand' : 'bg-muted text-muted-foreground'
+                )}>
+                  {timer.status === 'done' ? 'Done' : (timer.phase === 'leadin' ? 'Get ready' : timer.phase)}
+                </span>
+              )}
+              <button
+                onClick={toggleMuted}
+                aria-label={muted ? 'Unmute timer beeps' : 'Mute timer beeps'}
+                aria-pressed={muted}
+                className="absolute right-0 flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground"
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            </div>
             <p className="text-5xl font-bold tabular-nums tracking-tight">{formatClock(timer.remainingSec)}</p>
             {timer.phase === 'rest' && (
               <div className="flex items-center gap-2">
