@@ -31,3 +31,13 @@ export function currentWeekStartISO() {
   monday.setDate(now.getDate() + diffToMonday);
   return monday.toISOString().slice(0, 10);
 }
+
+// Adds `days` to a YYYY-MM-DD string, returning the same format. Used to derive
+// distinct-but-real Monday dates (e.g. next week, the week after) for tests that
+// need more than one week_start_date without colliding with the "current week"
+// plan other specs exercise.
+export function addDaysISO(iso, days) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
