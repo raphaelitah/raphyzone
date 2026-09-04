@@ -191,11 +191,14 @@ function backoffMsFor(message: string, attempt: number): number {
     const waitMs = Math.ceil(parseFloat(match[1]) * 1000) + 500;
     return Math.min(waitMs, MAX_RATE_LIMIT_WAIT_MS);
   }
-  return 400 * attempt;
+  // No explicit retry-after (e.g. a transient 5xx "high demand" blip, not a
+  // metered rate limit) — a short flat backoff isn't enough time for it to
+  // clear, so scale up more aggressively between attempts.
+  return 1500 * attempt;
 }
 
 async function callProviderWithRetry({ provider, prompt, schema, functionName }: { provider: Provider; prompt: string; schema: LLMSchema; functionName: string }): Promise<any> {
-  const maxAttempts = 2;
+  const maxAttempts = 3;
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
