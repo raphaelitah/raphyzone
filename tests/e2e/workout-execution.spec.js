@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, ATHLETE } from './fixtures/auth';
-import { makeApiClient } from './fixtures/apiClient';
+import { makeApiClient, findMultiExerciseWorkoutId } from './fixtures/apiClient';
 
 test.describe('Running a workout (regression)', () => {
   test.beforeEach(async () => {
@@ -62,19 +62,16 @@ test.describe('Running a workout (regression)', () => {
   });
 
   test('leaving mid-workout and coming back resumes where the athlete left off', async ({ page }) => {
+    // Navigate straight to a workout known to have several exercises — picking
+    // "the first card" in the library is order-dependent on the live catalog and
+    // can land on a single-exercise workout, finishing (not landing on exercise 2)
+    // as soon as it's skipped.
+    const setupApi = makeApiClient();
+    await setupApi.auth.signInWithPassword(ATHLETE);
+    const workoutId = await findMultiExerciseWorkoutId(setupApi);
+
     await login(page);
-    await page.goto('/workouts');
-
-    const cards = page.locator('button:has(p.font-semibold)');
-    await expect(cards.first()).toBeVisible({ timeout: 10000 });
-    await cards.first().click();
-
-    const sheet = page.getByRole('dialog');
-    const startLink = sheet.getByRole('link', { name: /start workout/i });
-    await expect(startLink).toBeVisible();
-    await startLink.click();
-
-    await page.waitForURL(/\/workout\/.+/, { timeout: 10000 });
+    await page.goto(`/workout/${workoutId}`);
 
     // Skip past the first exercise/block so there's real progress to resume.
     const skipButton = page.getByRole('button', { name: /^skip/i });
@@ -84,6 +81,16 @@ test.describe('Running a workout (regression)', () => {
     }
     await skipButton.first().click();
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
+
+    // The advanced index is persisted to workout_sessions.progress in a background
+    // (non-debounced, fire-and-forget) effect — wait for that write to land before
+    // leaving, otherwise resuming can race it and land back on exercise 1.
+    const progressApi = makeApiClient();
+    await progressApi.auth.signInWithPassword(ATHLETE);
+    await expect.poll(async () => {
+      const { data } = await progressApi.from('workout_sessions').select('progress').eq('workout_id', workoutId).eq('status', 'in_progress').maybeSingle();
+      return data?.progress?.index;
+    }, { timeout: 10000 }).toBe(1);
 
     // Leave via the header back chevron — this must NOT abandon the session.
     await page.locator('header button').first().click();
@@ -113,20 +120,14 @@ test.describe('Running a workout (regression)', () => {
   });
 
   test('restarting mid-workout replaces the session instead of leaving a duplicate or crashing', async ({ page }) => {
+    // See the previous test for why we navigate straight to a known
+    // multi-exercise workout instead of clicking "the first card".
+    const setupApi = makeApiClient();
+    await setupApi.auth.signInWithPassword(ATHLETE);
+    const workoutId = await findMultiExerciseWorkoutId(setupApi);
+
     await login(page);
-    await page.goto('/workouts');
-
-    const cards = page.locator('button:has(p.font-semibold)');
-    await expect(cards.first()).toBeVisible({ timeout: 10000 });
-    await cards.first().click();
-
-    const sheet = page.getByRole('dialog');
-    const startLink = sheet.getByRole('link', { name: /start workout/i });
-    await expect(startLink).toBeVisible();
-    await startLink.click();
-
-    await page.waitForURL(/\/workout\/.+/, { timeout: 10000 });
-    const workoutId = page.url().split('/workout/')[1];
+    await page.goto(`/workout/${workoutId}`);
 
     // Make some progress so there's a real prior session to replace.
     const skipButton = page.getByRole('button', { name: /^skip/i });
