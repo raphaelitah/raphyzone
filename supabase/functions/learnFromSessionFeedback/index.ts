@@ -97,9 +97,12 @@ Deno.serve(async (req: Request) => {
     const calibration = (profile.strength_calibration || []).filter((c: any) => c.weight_kg);
     const overrides = profile.exercise_weight_overrides || [];
 
-    // Dedup keys: per-exercise by exercise_id, pattern by pattern.
-    const pendingExerciseKeys = new Set((existing || []).filter((r: any) => r.adjustment_type !== 'pattern_baseline').map((r: any) => r.exercise_id));
-    const pendingPatternKeys = new Set((existing || []).filter((r: any) => r.adjustment_type === 'pattern_baseline').map((r: any) => r.pattern));
+    // Dedup keys: per-exercise by exercise_id, pattern by pattern. Only recs still
+    // pending should block a new one — a resolved rec's exercise/pattern must remain
+    // eligible again once fresh post-resolution sessions provide a new signal.
+    const stillPending = (existing || []).filter((r: any) => r.status === 'pending');
+    const pendingExerciseKeys = new Set(stillPending.filter((r: any) => r.adjustment_type !== 'pattern_baseline').map((r: any) => r.exercise_id));
+    const pendingPatternKeys = new Set(stillPending.filter((r: any) => r.adjustment_type === 'pattern_baseline').map((r: any) => r.pattern));
 
     // Only consider exercises/patterns with enough signal (>= 2 sessions).
     const exerciseSignals = Object.entries(byExercise)
