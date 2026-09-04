@@ -49,7 +49,7 @@ const PROVIDERS: Provider[] = [
     name: 'gemini',
     envKey: 'GEMINI_API_KEY',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
   },
 ];
 
