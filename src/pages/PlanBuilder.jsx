@@ -75,13 +75,11 @@ function useRotatingLoadingText(active) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// How often to poll a queued job, and how long to wait before offering the
-// "email me instead" fallback. Groq's shared token budget means concurrent
-// "build my week" clicks get paced ~25s apart (see supabase/functions/_shared/
-// planQueue.ts) — a few people queued ahead is a matter of a minute or two,
-// so the email offer only shows up once it's genuinely been a while.
+// How often to poll a queued job. The "email me instead" fallback (offered
+// after EMAIL_OFFER_AFTER_MS of waiting) is disabled for now — see
+// beginQueuePolling — so that constant is unused until it's turned back on.
 const POLL_INTERVAL_MS = 3000;
-const EMAIL_OFFER_AFTER_MS = 90_000;
+// const EMAIL_OFFER_AFTER_MS = 90_000;
 
 export default function PlanBuilder() {
   const { user } = useAuth();
@@ -218,7 +216,8 @@ export default function PlanBuilder() {
     setQueueWaitedLong(false);
     setNotifySent(false);
     setNotifyError('');
-    emailOfferTimerRef.current = setTimeout(() => setQueueWaitedLong(true), EMAIL_OFFER_AFTER_MS);
+    // Email fallback is disabled for now (EMAIL_OFFER_AFTER_MS timer intentionally
+    // not started) — queueWaitedLong never flips true, so the offer stays hidden.
     pollQueuedJob(jobId);
   };
 
