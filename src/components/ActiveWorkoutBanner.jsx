@@ -40,13 +40,13 @@ export default function ActiveWorkoutBanner() {
   return (
     <button
       onClick={() => navigate(`/workout/${session.workout_id}?date=${session.date}`)}
-      className="sticky top-0 z-30 w-full flex items-center gap-2 px-4 py-2.5 bg-brand text-brand-foreground text-sm font-medium"
+      className="sticky top-0 z-30 w-full flex items-center gap-2 px-4 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-b-2xl"
     >
       <span className="relative flex h-2 w-2 shrink-0">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-foreground/60" />
         <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-foreground" />
       </span>
-      <span className="flex-1 text-left truncate">Resume {session.workout_name}</span>
+      <span className="flex-1 text-left truncate leading-none">Resume {session.workout_name}</span>
       {elapsed != null && (
         <span className="flex items-center gap-1 tabular-nums shrink-0">
           <Clock className="h-3.5 w-3.5" /> {formatDuration(elapsed)}
