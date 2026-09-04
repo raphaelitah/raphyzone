@@ -82,6 +82,7 @@ export default function WorkoutExecution() {
   // instead of pausing while the athlete logs their performance.
   const [blockRestUntil, setBlockRestUntil] = useState(null);
   const [blockRestFromId, setBlockRestFromId] = useState(null);
+  const [pendingTabataStart, setPendingTabataStart] = useState(null); // Tabata start values held while confirming an early start during rest
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
   const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
@@ -478,6 +479,29 @@ export default function WorkoutExecution() {
 
   const handleStartBlockTimer = (values) => {
     if (!current || !blockLabel) return;
+    // Starting mid-rest is allowed, but confirmed first — rest keeps running
+    // underneath so the athlete can browse the upcoming block while resting,
+    // and jumping in early is a deliberate choice, not an accident.
+    if (restingBeforeNextBlock) {
+      setPendingTabataStart(values);
+      return;
+    }
+    startTimer();
+    setArmedTimerConfig({
+      mode: 'interval',
+      workSec: values.workSec,
+      restSec: values.restSec,
+      rounds: values.rounds,
+      exerciseCount: (isEmomFamily && !isAlternatingEmom) ? 1 : currentBlockExercises.length,
+      blockId: current.block_id,
+    });
+  };
+
+  const confirmStartWhileResting = () => {
+    if (!pendingTabataStart || !current) return;
+    const values = pendingTabataStart;
+    setPendingTabataStart(null);
+    skipInterBlockRest();
     startTimer();
     setArmedTimerConfig({
       mode: 'interval',
@@ -1085,56 +1109,63 @@ export default function WorkoutExecution() {
               })}
             </div>
           </>
-        ) : restingBeforeNextBlock ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border p-8 text-center">
-            <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Resting</span>
-            <p className="text-5xl font-bold tabular-nums tracking-tight">{formatDuration(restRemainingSec)}</p>
-            <button onClick={skipInterBlockRest} className="text-sm font-medium text-brand">Skip rest</button>
-          </div>
-        ) : isBlockActive && isSuperset ? (
-          <SupersetPanel
-            key={current.block_id}
-            exercises={currentBlockExercises}
-            rounds={timerDefaultConfig?.rounds || 1}
-            restSec={restOverrides[current.block_id] ?? (timerDefaultConfig?.restSec ?? 0)}
-            onExerciseElapsed={handleSupersetExerciseElapsed}
-            onFinish={handleSupersetFinish}
-            onSkip={handleSupersetSkip}
-            onStartTimer={startTimer}
-            onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
-            onSwap={requestSubstitute}
-          />
-        ) : isBlockActive ? (
-          <WorkoutTimerPanel
-            key={current.block_id}
-            blockLabel={blockLabel}
-            defaultConfig={timerDefaultConfig}
-            armed={timerArmed}
-            timer={timerArmed ? timer : null}
-            onStart={handleStartBlockTimer}
-            onSkipBlock={handleSkipBlock}
-            exercises={currentBlockExercises}
-            displayExercise={displayExercise}
-            isRotatingBlock={isRotatingBlock}
-            isPreviewExercise={isPreviewExercise}
-            nextUpName={nextUpName}
-            onSwap={requestSubstitute}
-          />
         ) : (
-          <SupersetPanel
-            key={current.key}
-            label={null}
-            unitLabel="Set"
-            exercises={[current]}
-            rounds={soloRounds}
-            restSec={restOverrides[current.block_id] ?? (current.rest_seconds || 0)}
-            onExerciseElapsed={handleSupersetExerciseElapsed}
-            onFinish={handleSoloFinish}
-            onStartTimer={startTimer}
-            onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
-            weightLoading={weightLoading}
-            onWeightClick={calcWeight}
-          />
+          <>
+            {restingBeforeNextBlock && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/50 px-4 py-2.5 mb-4">
+                <span className="text-sm font-medium text-muted-foreground">Resting</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold tabular-nums">{formatDuration(restRemainingSec)}</span>
+                  <button onClick={skipInterBlockRest} className="text-xs font-medium text-brand">Skip</button>
+                </div>
+              </div>
+            )}
+            {isBlockActive && isSuperset ? (
+              <SupersetPanel
+                key={current.block_id}
+                exercises={currentBlockExercises}
+                rounds={timerDefaultConfig?.rounds || 1}
+                restSec={restOverrides[current.block_id] ?? (timerDefaultConfig?.restSec ?? 0)}
+                onExerciseElapsed={handleSupersetExerciseElapsed}
+                onFinish={handleSupersetFinish}
+                onSkip={handleSupersetSkip}
+                onStartTimer={startTimer}
+                onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
+                onSwap={requestSubstitute}
+              />
+            ) : isBlockActive ? (
+              <WorkoutTimerPanel
+                key={current.block_id}
+                blockLabel={blockLabel}
+                defaultConfig={timerDefaultConfig}
+                armed={timerArmed}
+                timer={timerArmed ? timer : null}
+                onStart={handleStartBlockTimer}
+                onSkipBlock={handleSkipBlock}
+                exercises={currentBlockExercises}
+                displayExercise={displayExercise}
+                isRotatingBlock={isRotatingBlock}
+                isPreviewExercise={isPreviewExercise}
+                nextUpName={nextUpName}
+                onSwap={requestSubstitute}
+              />
+            ) : (
+              <SupersetPanel
+                key={current.key}
+                label={null}
+                unitLabel="Set"
+                exercises={[current]}
+                rounds={soloRounds}
+                restSec={restOverrides[current.block_id] ?? (current.rest_seconds || 0)}
+                onExerciseElapsed={handleSupersetExerciseElapsed}
+                onFinish={handleSoloFinish}
+                onStartTimer={startTimer}
+                onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
+                weightLoading={weightLoading}
+                onWeightClick={calcWeight}
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -1189,6 +1220,21 @@ export default function WorkoutExecution() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={pendingTabataStart != null} onOpenChange={(open) => { if (!open) setPendingTabataStart(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Still resting</AlertDialogTitle>
+            <AlertDialogDescription>
+              There's {formatDuration(restRemainingSec)} of rest left before this block. Start now anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingTabataStart(null)}>Keep resting</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStartWhileResting}>Start now</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent>
