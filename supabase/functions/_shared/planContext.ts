@@ -80,23 +80,35 @@ export function buildProfileContext(profile: any, feedback: any[]) {
 - Workouts previously rejected: ${digest.rejectedWorkouts.join('; ') || 'none'}`;
 }
 
-// Compact (no pretty-print indentation) and pared down to only the fields the
-// selection prompt's RULES section actually reads (modality, duration,
-// equipment, exercises for dislike/pattern matching, name/id for the pick,
-// movement_focus for the week-level variety rule). `goal`, `split`, and
-// `difficulty` are still never referenced — including them was pure token
-// overhead with no effect on which workout gets picked, and the full row (with
-// every field) is re-fetched from the DB later by verifyWorkoutReasons anyway.
+// Pared down to only the fields the selection prompt's RULES section actually
+// reads (modality, duration, equipment, exercises for dislike/pattern
+// matching, name/id for the pick, movement_focus for the week-level variety
+// rule). `goal`, `split`, and `difficulty` are still never referenced —
+// including them was pure token overhead with no effect on which workout gets
+// picked, and the full row (with every field) is re-fetched from the DB later
+// by verifyWorkoutReasons anyway.
+//
+// Emitted as a pipe-delimited table with one header line rather than
+// per-object JSON: JSON repeats every field name (id/name/modality/...) for
+// each of the ~60-100 rows in a typical filtered catalog, which is pure
+// overhead the model doesn't need to see twice. The table form cuts that
+// redundant-key cost with no loss of information — the LLM handles delimited
+// tabular data just as reliably as JSON for a flat shape like this. Fields
+// that could plausibly contain a literal "|" (there are none in this dataset)
+// would break a row; exercise names are comma-joined, which is a minor
+// ambiguity risk only if an exercise name itself contains a comma.
 export function buildWorkoutCatalog(workouts: any[]) {
-  return JSON.stringify((workouts || []).map((w) => ({
-    id: w.id,
-    name: w.name,
-    modality: w.modality || null,
-    movement_focus: w.movement_focus || null,
-    duration_min: w.est_duration_min || w.duration_minutes || null,
-    required_equipment: w.equipment || [],
-    exercises: (w.exercises || []).map((e: any) => e.exercise_name),
-  })));
+  const header = 'id|name|modality|movement_focus|duration_min|equipment|exercises';
+  const rows = (workouts || []).map((w) => [
+    w.id,
+    w.name,
+    w.modality || '',
+    w.movement_focus || '',
+    w.est_duration_min || w.duration_minutes || '',
+    (w.equipment || []).join(','),
+    (w.exercises || []).map((e: any) => e.exercise_name).join(','),
+  ].join('|'));
+  return [header, ...rows].join('\n');
 }
 
 // Pre-filters the catalog to workouts the athlete could actually be assigned,
@@ -118,7 +130,7 @@ export function buildWorkoutCatalog(workouts: any[]) {
 // it exists only because some modalities (e.g. "Mixed Conditioning") can have
 // 70+ approved workouts in the catalog, which alone can blow the prompt budget
 // regardless of how tightly the other fields are trimmed.
-const MAX_PER_MODALITY = 20;
+const MAX_PER_MODALITY = 14;
 
 export function filterCatalogForSelection(workouts: any[], profile: any, neededModalities: string[], hasActivityDays: boolean) {
   let list = workouts || [];

@@ -7,10 +7,13 @@ import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, co
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
 import { generateWarmup } from '../_shared/warmupGenerator.ts';
 
-// Ported from base44/functions/generateWeeklyPlan. Behavior is unchanged from the
-// original — see that file's comments for the two-phase (structure, then
-// selection) LLM prompting strategy. Only the auth/data-access/LLM-call layers
-// were swapped for their Supabase equivalents.
+// Ported from base44/functions/generateWeeklyPlan, originally as a two-phase
+// (structure, then selection) LLM prompting strategy. Merged into a single
+// call: the two phases were sequential in code but not actually dependent on
+// separate model turns — the model can decide a day's modality and pick its
+// workout in the same pass, since it needs the full catalog for the picks
+// either way. This halves LLM round trips and cuts overall token/latency cost
+// on top of the trimmed catalog format in planContext.ts.
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -82,30 +85,50 @@ Deno.serve(async (req: Request) => {
     const targetStrengthDays = Math.round((resistancePriority / ratioTotal) * trainDayCount);
     const targetConditioningDays = trainDayCount - targetStrengthDays;
 
-    // Phase 1 — structure: assign a modality to each train day from the catalog's modality values.
-    const structurePrompt = `You are an expert training coach planning a training week.
+    // Catalog is filtered by equipment + per-modality cap only — modality
+    // narrowing can't happen ahead of time anymore since deciding each day's
+    // modality is now part of the same call that picks its workout.
+    const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, [], true);
+    const catalog = buildWorkoutCatalog(filteredWorkouts);
+
+    const openSlots = baseSlots.filter((s) => !lockedDays.has(s.day));
+
+    // Single call: decide each open day's modality/focus (train days) and pick
+    // its workout in the same pass, using the catalog above.
+    const planPrompt = `You are an expert training coach building a training week for an athlete — deciding day structure and picking specific workouts in one pass.
 
 ${profileContext}
 
 WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}${setupEquipment ? `\nWEEK EQUIPMENT OVERRIDE (replaces the athlete's normal equipment for THIS WEEK ONLY): ${setupEquipment.join(', ')}` : ''}
 
 DETERMINED DAY SLOTS (the user is always right — do NOT change activity or rest days):
-${baseSlots.filter((s) => !lockedDays.has(s.day)).map((s) => `- ${s.day}: ${s.slot_type}${s.activity ? ' (' + s.activity + ')' : ''}`).join('\n')}
+${openSlots.map((s) => `- ${s.day}: ${s.slot_type}${s.activity ? ' (' + s.activity + ')' : ''}`).join('\n')}
 ${lockedDays.size ? `\nLOCKED DAYS (already completed or already past — do NOT plan these, they are excluded above): ${[...lockedDays].join(', ')}` : ''}
 
-YOUR TASK:
-- For each TRAIN day, decide its "modality" — the kind of training that day should be. Choose from the catalog's modality values: "Strength / Muscular Endurance" (resistance training), "Mixed Conditioning" (metcons, circuits, cardio circuits), "Cyclical / Monostructural" (running, cycling, rowing), "Mobility / Flexibility" (yoga, mobility), "Skill / Power" (powerlifting/skill).
-- The week's modality mix should be driven by the athlete's primary goal, secondary goal, body_focus, performance_focus, AND the resistance/conditioning priority ratio below.
-- RESISTANCE/CONDITIONING RATIO (strong guiding constraint — stay close to this): The athlete has ${trainDayCount} train day(s). Aim for ~${targetStrengthDays} strength-modality day(s) and ~${targetConditioningDays} conditioning/mixed-modality day(s). You may deviate when the athlete's goal or focus clearly justifies it, but do not stray far.
-- For each TRAIN day assigned "Strength / Muscular Endurance" modality, also set a concise "focus" that balances movement patterns across the week and respects body_focus/performance_focus.
-- You MAY downgrade a train day to "rest" ONLY if the week's context clearly requires it (e.g. recovery issue, schedule change). Never upgrade a rest or activity day. Never change an activity day or its activity.
+WORKOUT CATALOG (select ONLY from these by id; each row is "id|name|modality|movement_focus|duration_min|equipment|exercises"):
+${catalog}
+
+YOUR TASK, for each day listed above:
+1. STRUCTURE — For each TRAIN day, decide its "modality": "Strength / Muscular Endurance" (resistance training), "Mixed Conditioning" (metcons, circuits, cardio circuits), "Cyclical / Monostructural" (running, cycling, rowing), "Mobility / Flexibility" (yoga, mobility), or "Skill / Power" (powerlifting/skill). The week's modality mix should be driven by the athlete's primary goal, secondary goal, body_focus, performance_focus, AND the resistance/conditioning priority ratio below.
+   - RESISTANCE/CONDITIONING RATIO (strong guiding constraint — stay close to this): The athlete has ${trainDayCount} train day(s). Aim for ~${targetStrengthDays} strength-modality day(s) and ~${targetConditioningDays} conditioning/mixed-modality day(s). You may deviate when the athlete's goal or focus clearly justifies it, but do not stray far.
+   - For each TRAIN day assigned "Strength / Muscular Endurance" modality, also set a concise "focus" that balances movement patterns across the week and respects body_focus/performance_focus.
+   - You MAY downgrade a train day to "rest" ONLY if the week's context clearly requires it (e.g. recovery issue, schedule change). Never upgrade a rest or activity day. Never change an activity day or its activity.
+2. SELECTION — Once a day's modality is decided, pick exactly one catalog workout for it:
+   - TRAIN days: pick exactly one workout_id matching that day's modality. No duplicate workout_ids across the entire week (train days AND guided activity days combined).
+   - ACTIVITY days: check if the catalog contains a workout whose "modality" matches the user's activity (e.g. activity "Running" → "Cyclical / Monostructural"; "Yoga" → "Mobility / Flexibility"; "Cycling" → "Cyclical / Monostructural"). If a matching-modality workout exists, assign the best match as that day's workout_id with a reason. If NO matching-modality workout exists, leave workout_id unset for that day and instead add it to "suggestions" with 2-3 closest conditioning/cardio catalog workout ids as optional guidance.
+   - Never assign a workout to a rest day.
+   - Match each day's modality/focus/activity, the athlete's desired duration, and goal.
+   - EQUIPMENT MATCHING IS MANDATORY: Only assign a workout if ALL its required equipment is in the athlete's "Available equipment" list. If the equipment profile is CUSTOM, the athlete does NOT have a full gym — never assign a workout requiring equipment they don't have, even if it fits the modality/focus/goal perfectly.
+   - EVERY TRAIN DAY MUST GET A WORKOUT: never leave a train day with no selection. If no catalog workout satisfies the day's modality AND equipment constraints together, first relax the modality match (pick the closest available modality) before relaxing equipment; only relax equipment as a last resort, and pick the workout requiring the fewest missing items.
+   - Strongly avoid any exercise/pattern in dislikes or frequently-rejected.
+   - VARY movement_focus across the week: when multiple train days share the same modality, do NOT repeat the same movement_focus value on consecutive or multiple days if the catalog offers a different one that still fits — spread the training stimulus out instead of picking the same focus every time.
 - Return only the DETERMINED DAY SLOTS listed above — do not include locked days.
 
-Return JSON with a "days" array, each item { day, slot_type, modality (for train days), focus (for strength-modality train days), activity (for activity days) }.`;
+Return JSON with a "days" array, each item { day, slot_type, modality (for train days), focus (for strength-modality train days), activity (for activity days), workout_id (for train/matched activity days), reason (for days with a workout_id) }, and a "suggestions" array (array of { day, workout_ids }) for activity days with no matching-modality workout.`;
 
-    const structureRes = await callLLM({
-      functionName: 'generateWeeklyPlan:structure',
-      prompt: structurePrompt,
+    const planRes = await callLLM({
+      functionName: 'generateWeeklyPlan',
+      prompt: planPrompt,
       schema: {
         type: 'object',
         properties: {
@@ -119,91 +142,10 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
                 modality: { type: 'string' },
                 focus: { type: 'string' },
                 activity: { type: 'string' },
-              },
-              required: ['day', 'slot_type'],
-            },
-          },
-        },
-        required: ['days'],
-      },
-    });
-
-    const structByDay: Record<string, any> = {};
-    (structureRes.days || []).forEach((d: any) => { structByDay[d.day] = d; });
-    const finalSlots = baseSlots.map((base) => {
-      if (lockedDays.has(base.day)) {
-        const existingEntry = existingByDay[base.day];
-        return {
-          day: base.day,
-          slot_type: existingEntry.slot_type,
-          activity: existingEntry.activity || null,
-          modality: existingEntry.modality || null,
-          focus: existingEntry.focus || null,
-          locked: true,
-        };
-      }
-      const s = structByDay[base.day] || {};
-      let slot_type = base.slot_type;
-      if (base.slot_type === 'train' && s.slot_type === 'rest') slot_type = 'rest';
-      return {
-        day: base.day,
-        slot_type,
-        activity: (base as any).activity || null,
-        modality: slot_type === 'train' ? (s.modality || 'Strength / Muscular Endurance') : null,
-        focus: slot_type === 'train' && s.modality === 'Strength / Muscular Endurance' ? (s.focus || '') : null,
-      };
-    });
-
-    const trainDays = finalSlots.filter((s) => s.slot_type === 'train' && !(s as any).locked);
-    const activityDays = finalSlots.filter((s) => s.slot_type === 'activity' && !(s as any).locked);
-    const neededModalities = [...new Set(trainDays.map((s) => s.modality).filter(Boolean))];
-    const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, neededModalities, activityDays.length > 0);
-    const catalog = buildWorkoutCatalog(filteredWorkouts);
-
-    // Phase 2 — selection: pick catalog workouts matching each day's decided modality.
-    const selectionPrompt = `You are an expert training coach selecting workouts from a catalog.
-
-${profileContext}
-
-WEEK CONTEXT: ${contextAnswer || 'normal week'}${contextNotes ? ' — ' + contextNotes : ''}${setupEquipment ? `\nWEEK EQUIPMENT OVERRIDE (replaces the athlete's normal equipment for THIS WEEK ONLY): ${setupEquipment.join(', ')}` : ''}
-
-TRAIN DAYS TO FILL (pick exactly one catalog workout per day, no duplicates across the week):
-${trainDays.map((s) => `- ${s.day}: modality "${s.modality}"${s.focus ? ', focus "' + s.focus + '"' : ''}`).join('\n') || 'none'}
-
-ACTIVITY DAYS (the user wants to do their own activity on these days):
-${activityDays.map((s) => `- ${s.day}: ${s.activity || 'activity'}`).join('\n') || 'none'}
-
-WORKOUT CATALOG (select ONLY from these by id; each workout has a "modality" field):
-${catalog}
-
-RULES:
-- Pick exactly one workout_id per train day from the catalog, matching that day's decided modality. No duplicate workout_ids across the entire week (train days AND guided activity days combined).
-- For each ACTIVITY day: check if the catalog contains a workout whose "modality" matches the user's activity. The catalog uses these modality values: "Cyclical / Monostructural" (running, cycling, rowing), "Mixed Conditioning" (metcons, circuits, cardio circuits), "Strength / Muscular Endurance" (resistance training), "Mobility / Flexibility" (yoga, mobility), "Skill / Power" (powerlifting/skill). Match accordingly (e.g. activity "Running" → "Cyclical / Monostructural"; "Yoga" → "Mobility / Flexibility"; "Cycling" → "Cyclical / Monostructural"). If a matching-modality workout exists, assign the best match as that day's main workout — add it to "selections" with the day name and a reason. If NO matching-modality workout exists, do NOT assign a main workout — instead add the day to "suggestions" with 2-3 closest conditioning/cardio catalog workout ids as optional guidance.
-- Never assign a workout to a rest day.
-- Match each day's modality/focus/activity, the athlete's desired duration, and goal.
-- EQUIPMENT MATCHING IS MANDATORY: Only assign a workout if ALL its required equipment is in the athlete's "Available equipment" list. If the equipment profile is CUSTOM, the athlete does NOT have a full gym — never assign a workout requiring equipment they don't have, even if it fits the modality/focus/goal perfectly.
-- EVERY TRAIN DAY MUST GET A WORKOUT: never leave a train day with no selection. If no catalog workout satisfies the day's modality AND equipment constraints together, first relax the modality match (pick the closest available modality) before relaxing equipment; only relax equipment as a last resort, and pick the workout requiring the fewest missing items.
-- Strongly avoid any exercise/pattern in dislikes or frequently-rejected.
-- VARY movement_focus across the week: when multiple train days share the same modality, do NOT repeat the same "movement_focus" value on consecutive or multiple days if the catalog offers a different one that still fits — spread the training stimulus out instead of picking the same focus every time.
-
-Return JSON with "selections" (array of { day, workout_id, reason }) and "suggestions" (array of { day, workout_ids }).`;
-
-    const selRes = await callLLM({
-      functionName: 'generateWeeklyPlan:selection',
-      prompt: selectionPrompt,
-      schema: {
-        type: 'object',
-        properties: {
-          selections: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                day: { type: 'string' },
                 workout_id: { type: 'string' },
                 reason: { type: 'string' },
               },
-              required: ['day', 'workout_id', 'reason'],
+              required: ['day', 'slot_type'],
             },
           },
           suggestions: {
@@ -218,18 +160,43 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
             },
           },
         },
-        required: ['selections', 'suggestions'],
+        required: ['days', 'suggestions'],
       },
     });
 
+    const planByDay: Record<string, any> = {};
+    (planRes.days || []).forEach((d: any) => { planByDay[d.day] = d; });
+    const finalSlots = baseSlots.map((base) => {
+      if (lockedDays.has(base.day)) {
+        const existingEntry = existingByDay[base.day];
+        return {
+          day: base.day,
+          slot_type: existingEntry.slot_type,
+          activity: existingEntry.activity || null,
+          modality: existingEntry.modality || null,
+          focus: existingEntry.focus || null,
+          locked: true,
+        };
+      }
+      const s = planByDay[base.day] || {};
+      let slot_type = base.slot_type;
+      if (base.slot_type === 'train' && s.slot_type === 'rest') slot_type = 'rest';
+      return {
+        day: base.day,
+        slot_type,
+        activity: (base as any).activity || null,
+        modality: slot_type === 'train' ? (s.modality || 'Strength / Muscular Endurance') : null,
+        focus: slot_type === 'train' && s.modality === 'Strength / Muscular Endurance' ? (s.focus || '') : null,
+      };
+    });
+
     const workoutMap = new Map((workouts || []).map((w: any) => [w.id, w]));
-    const selByDay: Record<string, any> = {};
-    (selRes.selections || []).forEach((s: any) => { selByDay[s.day] = s; });
+    const selByDay: Record<string, any> = planByDay;
     const sugByDay: Record<string, string[]> = {};
-    (selRes.suggestions || []).forEach((s: any) => { sugByDay[s.day] = s.workout_ids || []; });
+    (planRes.suggestions || []).forEach((s: any) => { sugByDay[s.day] = s.workout_ids || []; });
 
     // Verify all draft reasons against the actual chosen workout data so no claim is hallucinated.
-    const draftItems = (selRes.selections || [])
+    const draftItems = (planRes.days || [])
       .map((s: any) => ({ workout_id: s.workout_id, draft_reason: s.reason }))
       .filter((i: any) => i.workout_id);
     let verifiedReasons: Record<string, string> = {};
@@ -238,7 +205,7 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
         const verified = await verifyWorkoutReasons(supabase, draftItems);
         verified.forEach((v) => { verifiedReasons[v.workout_id] = v.reason; });
       } catch {
-        (selRes.selections || []).forEach((s: any) => { if (s.workout_id) verifiedReasons[s.workout_id] = s.reason; });
+        draftItems.forEach((i) => { verifiedReasons[i.workout_id] = i.draft_reason; });
       }
     }
 
@@ -337,10 +304,12 @@ Return JSON with "selections" (array of { day, workout_id, reason }) and "sugges
     };
     let plan;
     if (existingPlan) {
-      const { data } = await supabase.from('weekly_plans').update(payload).eq('id', existingPlan.id).select().single();
+      const { data, error } = await supabase.from('weekly_plans').update(payload).eq('id', existingPlan.id).select().single();
+      if (error) throw new Error(`Failed to update weekly plan: ${error.message}`);
       plan = data;
     } else {
-      const { data } = await supabase.from('weekly_plans').insert(payload).select().single();
+      const { data, error } = await supabase.from('weekly_plans').insert(payload).select().single();
+      if (error) throw new Error(`Failed to insert weekly plan: ${error.message}`);
       plan = data;
     }
 

@@ -68,7 +68,7 @@ ${dayLine}
 
 OTHER DAYS ALREADY ASSIGNED (do not duplicate these workouts): ${other_days || 'none'}
 
-WORKOUT CATALOG (choose from this list by id; each workout has a "modality" field):
+WORKOUT CATALOG (choose from this list by id; each row is "id|name|modality|movement_focus|duration_min|equipment|exercises"):
 ${catalog}
 
 RULES:
