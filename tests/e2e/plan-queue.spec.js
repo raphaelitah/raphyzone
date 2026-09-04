@@ -24,6 +24,13 @@ test.describe('Weekly plan generation queue (regression)', () => {
     weekA = addDaysISO(currentWeekStartISO(), 7);
     weekB = addDaysISO(currentWeekStartISO(), 14);
     await api.from('weekly_plans').delete().eq('user_id', signInData.user.id).in('week_start_date', [weekA, weekB]);
+    // claim_next_plan_job claims the globally OLDEST queued job (see the migration),
+    // not one scoped to this request — a stale 'queued' row left behind by a prior
+    // (e.g. interrupted CI) run of this same spec gets claimed ahead of the jobs this
+    // test just inserted, breaking the "exactly one immediate, one queued" assumption.
+    // RLS only allows SELECT for the owner, so this can only clean up this user's own
+    // leftovers, which is exactly the set that can interfere with this spec.
+    await api.from('plan_generation_jobs').delete().eq('user_id', signInData.user.id).eq('status', 'queued');
   });
 
   test('a second concurrent generation queues and completes via polling', async () => {
