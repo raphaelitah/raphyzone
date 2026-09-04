@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# E2E signs in against the real Supabase project's single seeded athlete account
+# (one in-progress workout session, one profile row) — two runs hitting it at
+# once race each other and cause spurious failures, so only let one run per ref
+# proceed at a time.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     name: Lint, typecheck, unit tests
@@ -20,6 +28,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
   e2e:
     name: E2E (mobile-chrome)
