@@ -34,6 +34,15 @@ test.describe('Weekly plan generation queue (regression)', () => {
   });
 
   test('a second concurrent generation queues and completes via polling', async () => {
+    // The pacing guard's clock (see claim_next_plan_job / PACING_SECONDS in
+    // planQueue.ts) is global across all users, not scoped to this test — if
+    // plan-builder.spec.js's generation (which runs immediately before this file)
+    // claimed a job recently enough, this test's first request would ALSO get
+    // paced into the "queued" branch instead of running immediately, breaking the
+    // "exactly one immediate, one queued" assumption below. Wait out the full
+    // window first so this test controls its own pacing clock.
+    await new Promise((resolve) => setTimeout(resolve, 26000));
+
     // Fired together (no await between) so both requests reach the pacing guard
     // within milliseconds of each other — the first to claim sets the pacing
     // clock, so the second reliably lands in the "queued" branch instead of a
