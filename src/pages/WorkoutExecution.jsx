@@ -77,6 +77,11 @@ export default function WorkoutExecution() {
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [restOverrides, setRestOverrides] = useState({}); // block_id -> rest seconds, sticky for the rest of the session
   const [armedTimerConfig, setArmedTimerConfig] = useState(null);
+  // Rest owed between the block that just finished and the next one — runs on
+  // wall-clock time so it keeps ticking through the log/tracking screen
+  // instead of pausing while the athlete logs their performance.
+  const [blockRestUntil, setBlockRestUntil] = useState(null);
+  const [blockRestFromId, setBlockRestFromId] = useState(null);
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
   const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
@@ -115,6 +120,16 @@ export default function WorkoutExecution() {
 
   // Reset per-exercise enter time whenever the active exercise changes
   useEffect(() => { enterTimeRef.current = Date.now(); }, [index]);
+
+  // Clears the inter-block rest once its wall-clock deadline passes, checked
+  // on every 1s tick (above) so it expires whether or not the log/tracking
+  // screen for the finished block is still open.
+  useEffect(() => {
+    if (blockRestUntil != null && Date.now() >= blockRestUntil) {
+      setBlockRestUntil(null);
+      setBlockRestFromId(null);
+    }
+  });
 
   // Persist exactly where the athlete currently is (including which blocks
   // they've skipped past, which never gets an exercise_sessions row of its
@@ -439,11 +454,24 @@ export default function WorkoutExecution() {
     setIndex(nextIdx);
   };
 
+  // Starts the wall-clock rest owed after finishing `blockId`, if it isn't
+  // the last block and has a configured rest_seconds. Tracking performance
+  // on the log screen afterward doesn't add extra rest — it just runs
+  // concurrently with this same countdown.
+  const startInterBlockRest = (blockId) => {
+    if (!blockId || isLastBlock(blockId)) return;
+    const restSec = exercises.find((e) => e.block_id === blockId)?.rest_seconds || 0;
+    if (restSec <= 0) return;
+    setBlockRestUntil(Date.now() + restSec * 1000);
+    setBlockRestFromId(blockId);
+  };
+
   useEffect(() => {
     if (!armedTimerConfig || timer.status !== 'done') return;
     const blockId = armedTimerConfig.blockId;
     timer.reset(); // otherwise the next block's timer starts already "done"
     setArmedTimerConfig(null);
+    startInterBlockRest(blockId);
     openLogPrompt(exercises.filter((e) => e.block_id === blockId).map((e) => e.key), blockId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer.status, armedTimerConfig]);
@@ -523,6 +551,7 @@ export default function WorkoutExecution() {
 
   const handleSupersetFinish = () => {
     if (!current) return;
+    startInterBlockRest(current.block_id);
     openLogPrompt(exercises.filter((e) => e.block_id === current.block_id).map((e) => e.key), current.block_id);
   };
 
@@ -541,6 +570,7 @@ export default function WorkoutExecution() {
   // distance/time) once all sets are done.
   const handleSoloFinish = () => {
     if (!current) return;
+    startInterBlockRest(current.block_id);
     openLogPrompt([current.key], null);
   };
 
@@ -935,6 +965,10 @@ export default function WorkoutExecution() {
     window.history.length > 1 ? navigate(-1) : navigate('/');
   };
   const showLogPrompt = logPrompt != null && logPrompt.keys.includes(current.key);
+  const restRemainingSec = blockRestUntil != null ? Math.max(0, Math.ceil((blockRestUntil - Date.now()) / 1000)) : 0;
+  const restingOnLogPrompt = showLogPrompt && restRemainingSec > 0 && blockRestFromId === logPrompt.blockId;
+  const restingBeforeNextBlock = !showLogPrompt && restRemainingSec > 0 && blockRestFromId != null && blockRestFromId !== current.block_id;
+  const skipInterBlockRest = () => { setBlockRestUntil(null); setBlockRestFromId(null); };
   const blockLogExercises = showLogPrompt ? exercises.filter((e) => logPrompt.keys.includes(e.key)) : [];
   const soloRounds = Math.max(1, (current.rounds > 1 ? current.effective_sets : current.sets) || 1);
   const isManualSearchPending = manualQuery.trim() !== debouncedManualQuery;
@@ -992,6 +1026,15 @@ export default function WorkoutExecution() {
       <div className="flex-1 px-5 py-4 overflow-y-auto">
         {showLogPrompt ? (
           <>
+            {restingOnLogPrompt && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/50 px-4 py-2.5 mb-4">
+                <span className="text-sm font-medium text-muted-foreground">Rest before next block</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold tabular-nums">{formatDuration(restRemainingSec)}</span>
+                  <button onClick={skipInterBlockRest} className="text-xs font-medium text-brand">Skip</button>
+                </div>
+              </div>
+            )}
             <h2 className="text-xl font-semibold tracking-tight">
               {logPrompt.review ? 'Edit ' : ''}
               {logPrompt.blockId ? blockLabel : (blockLogExercises[0]?.exercise_name || 'Exercise')}
@@ -1042,6 +1085,12 @@ export default function WorkoutExecution() {
               })}
             </div>
           </>
+        ) : restingBeforeNextBlock ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border p-8 text-center">
+            <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-muted text-muted-foreground">Resting</span>
+            <p className="text-5xl font-bold tabular-nums tracking-tight">{formatDuration(restRemainingSec)}</p>
+            <button onClick={skipInterBlockRest} className="text-sm font-medium text-brand">Skip rest</button>
+          </div>
         ) : isBlockActive && isSuperset ? (
           <SupersetPanel
             key={current.block_id}
