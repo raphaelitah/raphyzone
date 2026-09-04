@@ -14,8 +14,8 @@ export default async function(req) {
     if (!items.length) return Response.json({ verified: [] });
 
     const ids = [...new Set(items.map((i) => i.workout_id).filter(Boolean))];
-    const workouts = await base44.asServiceRole.entities.Workout.list('-created_date', Math.max(ids.length, 1));
-    const workoutMap = new Map(workouts.filter((w) => ids.includes(w.id)).map((w) => [w.id, w]));
+    const workouts = ids.length ? await base44.asServiceRole.entities.Workout.filter({ id: { $in: ids } }) : [];
+    const workoutMap = new Map(workouts.map((w) => [w.id, w]));
 
     const records = items
       .map((i) => {
