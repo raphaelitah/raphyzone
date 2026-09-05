@@ -18,9 +18,11 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints } from 'lucide-react';
-import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise } from '@/lib/fitness';
+import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
+import QuickCalibrationSheet from '@/components/QuickCalibrationSheet';
+import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
@@ -46,6 +48,7 @@ function formatDuration(sec) {
 export default function WorkoutExecution() {
   const { workoutId } = useParams();
   const { user } = useAuth();
+  const { profile, reload: reloadProfile } = useAthleteProfile();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetDate = searchParams.get('date') || fmtISO(new Date());
@@ -893,6 +896,7 @@ export default function WorkoutExecution() {
   };
 
   const [weightLoading, setWeightLoading] = useState(false);
+  const [calibrationPrompt, setCalibrationPrompt] = useState(null); // calibration pattern key to quick-calibrate, or null
 
   const persistWeight = async (exerciseCode, weight) => {
     if (!plan) return;
@@ -916,10 +920,39 @@ export default function WorkoutExecution() {
       if (ew[current.exercise_id] != null) {
         setExercises((prev) => prev.map((e, i) => i === index ? { ...e, target_weight: ew[current.exercise_id] } : e));
         persistWeight(current.exercise_id, ew[current.exercise_id]);
+      } else {
+        // No suggestion came back — if it's because this movement pattern has never
+        // been calibrated, ask the one question needed instead of leaving it blank.
+        const movementPattern = current.details?.movement_pattern;
+        const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+          (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+        );
+        const alreadyCalibrated = (profile?.strength_calibration || []).some((c) => c.pattern === patternKey);
+        if (patternKey && !alreadyCalibrated) setCalibrationPrompt(patternKey);
       }
     } catch { /* silent */ }
     setWeightLoading(false);
   };
+
+  const handleCalibrationSaved = async () => {
+    await reloadProfile();
+    await calcWeight();
+  };
+
+  // Surface the quick calibration prompt as soon as the screen loads an exercise
+  // with no weight and no calibration for its pattern, instead of waiting for a
+  // manual reload click.
+  useEffect(() => {
+    if (!current || !profile || calibrationPrompt) return;
+    const requiresWeight = !isRunningExercise(current.details) && current.details?.requires_load !== false;
+    if (!requiresWeight || current.target_weight) return;
+    const movementPattern = current.details?.movement_pattern;
+    const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+      (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+    );
+    const alreadyCalibrated = (profile.strength_calibration || []).some((c) => c.pattern === patternKey);
+    if (patternKey && !alreadyCalibrated) setCalibrationPrompt(patternKey);
+  }, [current?.key, profile]);
 
   const applySubstitute = async (alt) => {
     const targetKey = subTarget?.key ?? current.key;
@@ -1323,6 +1356,15 @@ export default function WorkoutExecution() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <QuickCalibrationSheet
+        key={calibrationPrompt}
+        patternKey={calibrationPrompt}
+        unit={profile?.weight_unit || 'kg'}
+        open={!!calibrationPrompt}
+        onOpenChange={(v) => !v && setCalibrationPrompt(null)}
+        onSaved={handleCalibrationSaved}
+      />
 
       <AlertDialog open={pendingTabataStart != null} onOpenChange={(open) => { if (!open) setPendingTabataStart(null); }}>
         <AlertDialogContent>
