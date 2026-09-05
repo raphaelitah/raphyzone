@@ -2,9 +2,13 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  globalSetup: './tests/e2e/global-setup.js',
   fullyParallel: true,
-  // Capped: many specs sign in against the real Supabase project, whose password-auth
-  // rate limit gets tripped by too many concurrent sign-ins, causing flaky login timeouts.
+  // Capped: many specs still sign in directly against the real Supabase project via
+  // makeApiClient() (for setup/teardown as a specific user), whose password-auth rate
+  // limit gets tripped by too many concurrent sign-ins, causing flaky login timeouts.
+  // Page-level auth no longer contributes to this — login() reuses a session cached by
+  // global-setup.js instead of driving a real sign-in per test.
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
