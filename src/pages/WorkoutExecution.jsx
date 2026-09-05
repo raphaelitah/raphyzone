@@ -1021,7 +1021,7 @@ export default function WorkoutExecution() {
             <h1 className="font-semibold truncate">{workout.name}</h1>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+        <div className="overflow-y-auto px-5 py-6 space-y-5">
           <div>
             <h2 className="text-xl font-semibold flex items-center gap-2"><Footprints className="h-5 w-5 text-brand" /> Warm Up</h2>
             <p className="text-sm text-muted-foreground mt-1">{warmup.duration_minutes} min · not tracked</p>
