@@ -72,6 +72,7 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         warmup_first_movement_sets: f.warmup_first_movement_sets,
         warmup_notes: f.warmup_notes,
         dislikes: f.dislikes,
+        dislikes_reviewed: f.dislikes_reviewed,
       }).eq('id', profile.id);
       if (updateError) throw updateError;
       setSaveState('saved');
@@ -133,6 +134,7 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         warmup_first_movement_sets: profile.warmup_first_movement_sets ?? 2,
         warmup_notes: profile.warmup_notes || '',
         dislikes: profile.dislikes || [],
+        dislikes_reviewed: !!profile.dislikes_reviewed,
         calibrated: !!profile.calibrated,
         weight_setup: {
           dumbbells: { max_kg: ws.dumbbells?.max_kg ?? null },
@@ -376,12 +378,23 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
                 <input
                   value={dislikeInput}
                   onChange={(e) => setDislikeInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && dislikeInput.trim()) { e.preventDefault(); setForm((f) => ({ ...f, dislikes: [...new Set([...(f.dislikes || []), dislikeInput.trim()])] })); setDislikeInput(''); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && dislikeInput.trim()) { e.preventDefault(); setForm((f) => ({ ...f, dislikes: [...new Set([...(f.dislikes || []), dislikeInput.trim()])], dislikes_reviewed: false })); setDislikeInput(''); } }}
                   placeholder="e.g. Jump Rope"
                   className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
                 />
-                <Button variant="outline" size="sm" onClick={() => { if (dislikeInput.trim()) { setForm((f) => ({ ...f, dislikes: [...new Set([...(f.dislikes || []), dislikeInput.trim()])] })); setDislikeInput(''); } }} disabled={!dislikeInput.trim()}>Add</Button>
+                <Button variant="outline" size="sm" onClick={() => { if (dislikeInput.trim()) { setForm((f) => ({ ...f, dislikes: [...new Set([...(f.dislikes || []), dislikeInput.trim()])], dislikes_reviewed: false })); setDislikeInput(''); } }} disabled={!dislikeInput.trim()}>Add</Button>
               </div>
+              {(form.dislikes || []).length === 0 && (
+                <label className="flex items-center gap-2 mt-2.5 text-xs text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!form.dislikes_reviewed}
+                    onChange={(e) => setForm((f) => ({ ...f, dislikes_reviewed: e.target.checked }))}
+                    className="h-3.5 w-3.5 rounded border-border accent-brand"
+                  />
+                  None — there's nothing I want to avoid
+                </label>
+              )}
             </div>
           </TabsContent>
 

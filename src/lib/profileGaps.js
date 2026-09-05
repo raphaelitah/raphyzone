@@ -38,7 +38,7 @@ export const PROFILE_GAPS = [
     placeholder: 'e.g. Burpees, Overhead Press',
     question: () => "Any exercises you'd rather avoid?",
     hint: () => "We'll steer clear of them in your plans.",
-    isMissing: (p) => !(p?.dislikes?.length),
+    isMissing: (p) => !(p?.dislikes?.length) && !p?.dislikes_reviewed,
     buildPatch: (value) => ({ dislikes: value.split(',').map((s) => s.trim()).filter(Boolean) }),
   },
   {
@@ -109,7 +109,8 @@ const COMPLETENESS_EXTRA_FIELDS = [
   { key: 'desired_activities', isMissing: (p) => !(p?.desired_activities?.length) && !p?.desired_activities_reviewed },
   {
     key: 'weight_setup',
-    isMissing: (p) => !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg),
+    isMissing: (p) => p?.equipment_profile !== 'full_gym'
+      && !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg),
   },
   {
     key: 'training_mix',
