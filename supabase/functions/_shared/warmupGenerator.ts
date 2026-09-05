@@ -42,11 +42,22 @@ export interface WarmupPrefs {
 export interface WarmupResult {
   generated_at: string;
   duration_minutes: number;
-  mobility: { exercise_id: string | null; exercise_name: string }[];
-  cardio: { machine: string; duration_minutes: number } | null;
-  first_movement: { exercise_id: string | null; exercise_name: string; sets: number } | null;
+  mobility: { exercise_id: string | null; exercise_name: string; detail: string }[];
+  cardio: { machine: string; duration_minutes: number; intensity: string } | null;
+  first_movement: { exercise_id: string | null; exercise_name: string; sets: number; detail: string } | null;
   notes: string | null;
 }
+
+// Plain-text intensity cue per cardio machine, phrased as an easy warm up
+// pace rather than a target for the session itself.
+const CARDIO_INTENSITY_CUE: Record<string, string> = {
+  'Assault Bike': 'easy, conversational pace (RPE 3-4/10)',
+  'Rowing Machine': 'easy pace, around 20-22 spm',
+  SkiErg: 'easy pace, around 20-22 spm',
+  'Stationary Bike': 'easy spin, light resistance (RPE 3-4/10)',
+  Treadmill: 'brisk walk to light jog (RPE 3-4/10)',
+  Stairmaster: 'easy, steady pace (RPE 3-4/10)',
+};
 
 const CARDIO_MACHINES = ['Assault Bike', 'Rowing Machine', 'SkiErg', 'Stationary Bike', 'Treadmill', 'Stairmaster'];
 // Rough intensity ranking, highest first — biases toward higher-intensity
@@ -213,7 +224,11 @@ export function generateWarmup(
       const extra = savedCompatible.filter((e) => !exclude.has(e.id)).slice(0, maxItems - mobilityPicks.length);
       mobilityPicks = [...mobilityPicks, ...extra];
     }
-    result.mobility = mobilityPicks.map((e) => ({ exercise_id: e.id || null, exercise_name: e.name }));
+    result.mobility = mobilityPicks.map((e) => ({
+      exercise_id: e.id || null,
+      exercise_name: e.name,
+      detail: '1-2 sets x 10 reps (or 30 sec) each side, controlled tempo',
+    }));
   }
 
   // --- Cardio ---
@@ -230,7 +245,11 @@ export function generateWarmup(
         (a, b) => CARDIO_INTENSITY_ORDER.indexOf(a) - CARDIO_INTENSITY_ORDER.indexOf(b)
       );
       const machine = isConditioningFocused ? ranked[0] : pool[0];
-      result.cardio = { machine, duration_minutes: Math.max(2, Math.min(8, perSectionMinutes)) };
+      result.cardio = {
+        machine,
+        duration_minutes: Math.max(2, Math.min(8, perSectionMinutes)),
+        intensity: CARDIO_INTENSITY_CUE[machine] || 'easy, conversational pace (RPE 3-4/10)',
+      };
     }
   }
 
@@ -254,10 +273,12 @@ export function generateWarmup(
       candidate = focus.resolvedExercises[0];
     }
     if (candidate) {
+      const sets = prefs.warmup_first_movement_sets ?? 2;
       result.first_movement = {
         exercise_id: candidate.id || null,
         exercise_name: candidate.name,
-        sets: prefs.warmup_first_movement_sets ?? 2,
+        sets,
+        detail: `${sets} light sets x 8-10 reps, well below working weight`,
       };
     }
   }

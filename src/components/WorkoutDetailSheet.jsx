@@ -112,20 +112,26 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
                   <div>
                     <p className="text-xs font-medium text-amber-800 mb-1">Mobility</p>
                     <ul className="text-sm text-amber-950/90 space-y-0.5">
-                      {warmup.mobility.map((m, i) => <li key={m.exercise_id || i}>· {m.exercise_name}</li>)}
+                      {warmup.mobility.map((m, i) => (
+                        <li key={m.exercise_id || i}>· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps each side'}</li>
+                      ))}
                     </ul>
                   </div>
                 )}
                 {warmup.cardio && (
                   <div>
                     <p className="text-xs font-medium text-amber-800 mb-1">Cardio primer</p>
-                    <p className="text-sm text-amber-950/90">{warmup.cardio.machine} · {warmup.cardio.duration_minutes} min easy</p>
+                    <p className="text-sm text-amber-950/90">
+                      {warmup.cardio.machine} · {warmup.cardio.duration_minutes} min · {warmup.cardio.intensity || 'easy, conversational pace (RPE 3-4/10)'}
+                    </p>
                   </div>
                 )}
                 {warmup.first_movement && (
                   <div>
                     <p className="text-xs font-medium text-amber-800 mb-1">Movement prep</p>
-                    <p className="text-sm text-amber-950/90">{warmup.first_movement.exercise_name} · {warmup.first_movement.sets} light sets</p>
+                    <p className="text-sm text-amber-950/90">
+                      {warmup.first_movement.exercise_name} · {warmup.first_movement.detail || `${warmup.first_movement.sets} light sets x 8-10 reps`}
+                    </p>
                   </div>
                 )}
                 {warmup.notes && <p className="text-xs text-amber-700/80 italic">{warmup.notes}</p>}

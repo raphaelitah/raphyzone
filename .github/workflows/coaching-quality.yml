@@ -1,0 +1,104 @@
+name: Coaching Quality Expert
+
+# Two complementary checks, both writing to reports/coaching-quality-log.md:
+#   - audit: a static data audit over the catalog (scripts/coaching-quality-audit.mjs)
+#     — no browser, checks nonsensical prescriptions, mis-modeled structure, duration
+#     vs. structure mismatches, and equipment assigned to an athlete that they don't
+#     actually own.
+#   - agent: logs into the real app as the dedicated qa-coach@raphyzone.dev account
+#     and actually executes real catalog workouts through the UI like a human athlete
+#     would (scripts/coaching-quality-agent.mjs) — real weight/feedback logging, real
+#     rest-transition checks — and narrates a verdict per workout.
+# Both run nightly and on demand. Neither duplicates the regular e2e job, which only
+# checks that the UI/DB mechanically work, not whether a workout makes sense.
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: coaching-quality
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    name: Run static catalog audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run audit:coaching-quality
+        id: audit
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Commit updated report log
+        run: |
+          if [ -n "$(git status --porcelain reports/coaching-quality-log.md)" ]; then
+            git config user.name "coaching-quality-bot"
+            git config user.email "actions@github.com"
+            git add reports/coaching-quality-log.md
+            git commit -m "Coaching quality audit: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
+      - name: Fail the job if the audit found anomalies
+        if: steps.audit.outcome == 'failure'
+        run: exit 1
+
+  agent:
+    name: Run live workout-execution agent
+    runs-on: ubuntu-latest
+    # Runs after `audit` (not in parallel) so both jobs' commits to
+    # reports/coaching-quality-log.md never race each other.
+    needs: audit
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Start dev server
+        run: npm run dev &
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - name: Wait for dev server
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5173 > /dev/null && exit 0
+            sleep 2
+          done
+          echo "Dev server did not come up in time" >&2
+          exit 1
+      - run: node scripts/coaching-quality-agent.mjs
+        id: agent
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BASE_URL: http://localhost:5173
+      - name: Pull latest before committing (audit job may have pushed already)
+        run: git pull --rebase --autostash
+      - name: Commit updated report log
+        run: |
+          if [ -n "$(git status --porcelain reports/coaching-quality-log.md)" ]; then
+            git config user.name "coaching-quality-bot"
+            git config user.email "actions@github.com"
+            git add reports/coaching-quality-log.md
+            git commit -m "Coaching quality agent run: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
+      - name: Fail the job if the agent flagged anything
+        if: steps.agent.outcome == 'failure'
+        run: exit 1

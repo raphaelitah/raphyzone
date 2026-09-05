@@ -1064,7 +1064,7 @@ export default function WorkoutExecution() {
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Mobility</h3>
               <ul className="space-y-1">
                 {warmup.mobility.map((m, i) => (
-                  <li key={m.exercise_id || i} className="text-sm">· {m.exercise_name}</li>
+                  <li key={m.exercise_id || i} className="text-sm">· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps each side'}</li>
                 ))}
               </ul>
             </div>
@@ -1072,13 +1072,17 @@ export default function WorkoutExecution() {
           {hasCardio && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Cardio</h3>
-              <p className="text-sm">{warmup.cardio.machine} · {warmup.cardio.duration_minutes} min</p>
+              <p className="text-sm">
+                {warmup.cardio.machine} · {warmup.cardio.duration_minutes} min · {warmup.cardio.intensity || 'easy, conversational pace (RPE 3-4/10)'}
+              </p>
             </div>
           )}
           {hasFirstMovement && (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground mb-2">First Movement Prep</h3>
-              <p className="text-sm">{warmup.first_movement.exercise_name} · {warmup.first_movement.sets} sets</p>
+              <p className="text-sm">
+                {warmup.first_movement.exercise_name} · {warmup.first_movement.detail || `${warmup.first_movement.sets} light sets x 8-10 reps`}
+              </p>
             </div>
           )}
           {warmup.notes && <p className="text-sm text-muted-foreground">{warmup.notes}</p>}
