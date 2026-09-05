@@ -113,7 +113,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
                     <p className="text-xs font-medium text-amber-800 mb-1">Mobility</p>
                     <ul className="text-sm text-amber-950/90 space-y-0.5">
                       {warmup.mobility.map((m, i) => (
-                        <li key={m.exercise_id || i}>· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps each side'}</li>
+                        <li key={m.exercise_id || i}>· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps'}</li>
                       ))}
                     </ul>
                   </div>

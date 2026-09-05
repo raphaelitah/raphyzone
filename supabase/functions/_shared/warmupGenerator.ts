@@ -227,7 +227,7 @@ export function generateWarmup(
     result.mobility = mobilityPicks.map((e) => ({
       exercise_id: e.id || null,
       exercise_name: e.name,
-      detail: '1-2 sets x 10 reps (or 30 sec) each side, controlled tempo',
+      detail: '1-2 sets x 10 reps (or 30 sec), controlled tempo',
     }));
   }
 

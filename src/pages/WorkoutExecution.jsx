@@ -1064,7 +1064,7 @@ export default function WorkoutExecution() {
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Mobility</h3>
               <ul className="space-y-1">
                 {warmup.mobility.map((m, i) => (
-                  <li key={m.exercise_id || i} className="text-sm">· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps each side'}</li>
+                  <li key={m.exercise_id || i} className="text-sm">· {m.exercise_name} — {m.detail || '1-2 sets x 10 reps'}</li>
                 ))}
               </ul>
             </div>
