@@ -425,6 +425,7 @@ export default function WorkoutExecution() {
   const isEmomFamily = blockTimerMeta?.isEmomFamily ?? false;
   const isAlternatingEmom = blockTimerMeta?.isAlternatingEmom ?? false;
   const isSuperset = blockTimerMeta?.isSuperset ?? false;
+  const isAmrap = blockTimerMeta?.isAmrap ?? false;
   const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
   const adjustRest = (blockId, baseSec, delta) => {
     setRestOverrides((prev) => ({ ...prev, [blockId]: Math.max(0, (prev[blockId] ?? baseSec) + delta) }));
@@ -675,7 +676,7 @@ export default function WorkoutExecution() {
 
   // A block either rotates through its exercises one at a time (Tabata, and an
   // "alternating" EMOM) or runs them all together every round (default EMOM).
-  const isRotatingBlock = !isEmomFamily || isAlternatingEmom;
+  const isRotatingBlock = (!isEmomFamily || isAlternatingEmom) && !isAmrap;
   let displayExercise = current;
   let isPreviewExercise = false;
   let nextUpName = null;

@@ -138,6 +138,11 @@ export function isSupersetBlock(block) {
   return type === 'superset' || format === 'superset';
 }
 
+export function isAMRAPBlock(block) {
+  const format = (block.workout_format || '').toLowerCase();
+  return format === 'amrap';
+}
+
 export function isCircuitBlock(block) {
   const type = (block.block_type || '').toLowerCase();
   return type === 'circuit';
@@ -188,6 +193,9 @@ export function getEffectiveRounds(block, exerciseCount) {
     const mins = getEMOMMinutes(block);
     if (mins > 0) return Math.floor(mins / exerciseCount);
   }
+  // AMRAP's `rounds`, when set, is only a coach-set target for as-many-as-
+  // possible work — not a prescribed set count to display/multiply into sets.
+  if (isAMRAPBlock(block)) return 1;
   return block.rounds || 1;
 }
 
@@ -221,6 +229,25 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
       timerDefaultConfig: {
         rounds: block.rounds ?? 1,
         restSec: block.rest_seconds ?? 90,
+      },
+    };
+  }
+
+  // AMRAP: a single countdown against the block's time cap, no round
+  // advancing — the athlete decides for themselves when to loop back to the
+  // first exercise. `rounds`, when present, is only a coach-set target, not
+  // a count the timer should enforce, so it's ignored here.
+  if (isAMRAPBlock(block)) {
+    return {
+      blockLabel: 'AMRAP',
+      isEmomFamily: false,
+      isAlternatingEmom: false,
+      isSuperset: false,
+      isAmrap: true,
+      timerDefaultConfig: {
+        workSec: block.time_cap_sec || 0,
+        restSec: 0,
+        rounds: 1,
       },
     };
   }

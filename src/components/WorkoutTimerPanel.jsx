@@ -53,11 +53,12 @@ export default function WorkoutTimerPanel({
     : displayExercise;
 
   const isEmom = /^E\d*MOM$/.test(blockLabel || '');
+  const isAmrap = blockLabel === 'AMRAP';
   const progressPct = armed && timer?.phaseDurationSec > 0
     ? ((timer.phaseDurationSec - timer.remainingSec) / timer.phaseDurationSec) * 100
     : 0;
 
-  const roundLabel = armed
+  const roundLabel = isAmrap ? null : armed
     ? `Round ${timer.round} of ${timer.totalRounds}`
     : `Round 1 of ${Math.max(1, parseInt(rounds, 10) || 1)}`;
 
@@ -91,7 +92,7 @@ export default function WorkoutTimerPanel({
       <div className="flex flex-col items-center gap-3 w-full">
         {!armed && (
           <>
-            {!isEmom && (
+            {!isEmom && !isAmrap && (
               <div className="grid grid-cols-3 gap-2 w-full">
                 <div>
                   <label className="text-xs text-muted-foreground">Work (s)</label>

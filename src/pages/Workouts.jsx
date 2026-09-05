@@ -16,6 +16,7 @@ import {
   countWorkoutExercises,
   roundToFive,
   isEMOMBlock,
+  isAMRAPBlock,
   getWorkoutMetaLine,
 } from '@/lib/workoutStructure';
 import { useAuth } from '@/lib/AuthContext';
@@ -398,11 +399,11 @@ export default function Workouts() {
                               {block.block_label}
                             </span>
                             <span className="text-xs font-medium text-muted-foreground capitalize">
-                              {block.block_type?.replace(/_/g, ' ')}
+                              {isAMRAPBlock(block) ? 'AMRAP' : block.block_type?.replace(/_/g, ' ')}
                             </span>
                             {!isEMOMBlock(block) && (
                               <>
-                                {block.rounds > 1 && (
+                                {block.rounds > 1 && !isAMRAPBlock(block) && (
                                   <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>
                                 )}
                                 {block.time_cap_sec > 0 && (
