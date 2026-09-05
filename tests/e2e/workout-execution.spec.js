@@ -219,3 +219,74 @@ test.describe('Running a workout (regression)', () => {
     expect(sessions?.length).toBe(1);
   });
 });
+
+// Dedicated workout whose very first exercise (Wall Ball Squat, a "Squat"
+// movement pattern) has no prescribed load — chosen via direct DB queries so
+// the popup is guaranteed to appear on the first exercise without needing to
+// skip through others first. See QuickCalibrationSheet.jsx / calcWeight in
+// WorkoutExecution.jsx for the behavior under test.
+const QUICK_CALIBRATION_WORKOUT_ID = '9d387467-5940-47b1-a4a0-f55d412dd3f1';
+
+test.describe('Quick calibration prompt mid-workout', () => {
+  let api;
+  let profileId;
+  let originalCalibration;
+
+  test.beforeEach(async () => {
+    api = makeApiClient();
+    const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
+    const { data: before } = await api
+      .from('athlete_profiles')
+      .select('id, strength_calibration')
+      .eq('user_id', signInData.user.id)
+      .single();
+    profileId = before.id;
+    originalCalibration = before.strength_calibration;
+
+    // Remove any existing "squat" calibration so the prompt is guaranteed to
+    // fire, and clear a stale in-progress session the same way the other
+    // describe block above does.
+    const withoutSquat = (before.strength_calibration || []).filter((c) => c.pattern !== 'squat');
+    await api.from('athlete_profiles').update({ strength_calibration: withoutSquat }).eq('id', profileId);
+    await api.from('workout_sessions').delete().eq('user_id', signInData.user.id).eq('status', 'in_progress');
+  });
+
+  test.afterEach(async () => {
+    await api.from('athlete_profiles').update({ strength_calibration: originalCalibration }).eq('id', profileId);
+  });
+
+  test('prompts once, saves the answer, and never asks again for that pattern', async ({ page }) => {
+    await login(page);
+    await page.goto(`/workout/${QUICK_CALIBRATION_WORKOUT_ID}`);
+    await dismissWarmupIfPresent(page);
+
+    // The popup surfaces as soon as the first exercise loads, without needing
+    // to trigger a weight-suggestion fetch manually.
+    await expect(page.getByText(/^Squat Pattern$/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/comfortably squat/i)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Barbell Back Squat' }).click();
+    await page.getByPlaceholder('e.g. 60').fill('100');
+    await page.getByRole('button', { name: /^save & get suggested weight$/i }).click();
+
+    // Saving closes the sheet and persists the answer — no further prompt for
+    // this exercise/pattern.
+    await expect(page.getByText(/^Squat Pattern$/)).not.toBeVisible({ timeout: 10000 });
+
+    const { data: after } = await api
+      .from('athlete_profiles')
+      .select('strength_calibration')
+      .eq('id', profileId)
+      .single();
+    const squatEntry = (after.strength_calibration || []).find((c) => c.pattern === 'squat');
+    expect(squatEntry?.exercise).toBe('Barbell Back Squat');
+    expect(squatEntry?.weight_kg).toBeCloseTo(100, 0);
+
+    // Reloading the same exercise (fresh page load re-runs the "surface the
+    // prompt" effect) must not ask again now that the pattern is calibrated.
+    await page.reload();
+    await dismissWarmupIfPresent(page);
+    await page.waitForTimeout(2000);
+    await expect(page.getByText(/^Squat Pattern$/)).not.toBeVisible();
+  });
+});
