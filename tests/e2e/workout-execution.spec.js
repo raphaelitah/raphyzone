@@ -23,19 +23,33 @@ async function dismissWarmupIfPresent(page) {
 
 // QuickCalibrationSheet.jsx pops up over an exercise whenever the athlete has no
 // calibration for its movement pattern yet, asking a one-question "what do you
-// normally lift for this" prompt before a weight suggestion can be shown. It sits
-// on top of the exercise screen's own Skip button, so skip-through regression tests
-// need to dismiss it (via the sheet's close control) the same way they dismiss the
-// warm-up screen — otherwise every skip attempt hangs waiting for a button that's
-// present but covered.
+// normally lift for this" prompt before a weight suggestion can be shown. It can
+// appear before *any* exercise in a workout, not just the first, and reappears for
+// the next exercise moments after being dismissed — so a one-shot dismiss-then-click
+// isn't reliable (the sheet can pop back in the gap between them, especially on a
+// slower CI runner). dismissCalibrationPromptIfPresent closes it if present, right
+// now; clickThroughCalibration wraps a click with a short retry loop that keeps
+// clearing it until the actual target click goes through.
 async function dismissCalibrationPromptIfPresent(page) {
   const closeButton = page.getByRole('button', { name: /^close$/i });
   if (await closeButton.isVisible({ timeout: 500 }).catch(() => false)) {
-    await closeButton.click();
+    await closeButton.click().catch(() => {});
     // Radix animates the backdrop out rather than removing it immediately — a
     // click right after this can still land on it ("intercepts pointer events")
     // if the very next action fires before the animation finishes.
     await closeButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+}
+
+async function clickThroughCalibration(page, locator, options = {}) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    await dismissCalibrationPromptIfPresent(page);
+    try {
+      await locator.click({ timeout: 6000, ...options });
+      return;
+    } catch (err) {
+      if (attempt === 5) throw err;
+    }
   }
 }
 
@@ -79,14 +93,14 @@ test.describe('Running a workout (regression)', () => {
       if (!/\/workout\//.test(page.url())) break;
       await dismissCalibrationPromptIfPresent(page);
       if (await startBlockButton.isVisible().catch(() => false)) {
-        await startBlockButton.click();
+        await clickThroughCalibration(page, startBlockButton);
       }
       // Skipping the last exercise navigates to /progress asynchronously — that
       // can land between this loop's top-of-iteration URL check and this click,
       // leaving no "Skip" button to find. Not stuck, just finished; stop instead
       // of waiting out the full click timeout on a page that no longer has one.
       if (!(await skipButton.first().isVisible({ timeout: 2000 }).catch(() => false))) break;
-      await skipButton.first().click();
+      await clickThroughCalibration(page, skipButton.first());
     }
 
     await page.waitForURL(/\/progress/, { timeout: 15000 });
@@ -123,9 +137,9 @@ test.describe('Running a workout (regression)', () => {
     const startBlockButton = page.getByRole('button', { name: /^start /i });
     await dismissCalibrationPromptIfPresent(page);
     if (await startBlockButton.isVisible().catch(() => false)) {
-      await startBlockButton.click();
+      await clickThroughCalibration(page, startBlockButton);
     }
-    await skipButton.first().click();
+    await clickThroughCalibration(page, skipButton.first());
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
 
     // The advanced index is persisted to workout_sessions.progress in a background
@@ -139,8 +153,7 @@ test.describe('Running a workout (regression)', () => {
     }, { timeout: 10000 }).toBe(1);
 
     // Leave via the header back chevron — this must NOT abandon the session.
-    await dismissCalibrationPromptIfPresent(page);
-    await page.locator('header button').first().click();
+    await clickThroughCalibration(page, page.locator('header button').first());
     await page.waitForURL((url) => !/\/workout\//.test(url.pathname), { timeout: 10000 });
 
     // The resume banner should now be visible from any other screen, with a running clock.
@@ -182,13 +195,12 @@ test.describe('Running a workout (regression)', () => {
     const startBlockButton = page.getByRole('button', { name: /^start /i });
     await dismissCalibrationPromptIfPresent(page);
     if (await startBlockButton.isVisible().catch(() => false)) {
-      await startBlockButton.click();
+      await clickThroughCalibration(page, startBlockButton);
     }
-    await skipButton.first().click();
+    await clickThroughCalibration(page, skipButton.first());
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
 
-    await dismissCalibrationPromptIfPresent(page);
-    await page.locator('header button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click();
+    await clickThroughCalibration(page, page.locator('header button').filter({ has: page.locator('svg.lucide-rotate-ccw') }));
     await page.getByRole('button', { name: /^restart$/i }).click();
     // Restarting creates a fresh session, so its own warm up screen reappears.
     await dismissWarmupIfPresent(page);

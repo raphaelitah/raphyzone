@@ -81,10 +81,23 @@ begin
 
     insert into public.athlete_profiles (
       user_id, goal, experience_level, onboarded, calibrated,
-      equipment_profile, available_equipment
+      equipment_profile, available_equipment, strength_calibration
     ) values (
       athlete_id, 'hypertrophy', 'intermediate', true, true,
-      'full_gym', '["barbell","dumbbell","bodyweight","machine","cable","kettlebell","bands"]'::jsonb
+      'full_gym', '["barbell","dumbbell","bodyweight","machine","cable","kettlebell","bands"]'::jsonb,
+      -- One entry per CALIBRATION_PATTERNS key (src/lib/fitness.js) so
+      -- WorkoutExecution's automatic QuickCalibrationSheet popup (fires whenever
+      -- the current exercise's movement pattern has no calibration at all) never
+      -- interrupts the e2e regression suite's skip-through flows.
+      jsonb_build_array(
+        jsonb_build_object('pattern', 'squat', 'exercise', 'Barbell Back Squat', 'weight_kg', 60),
+        jsonb_build_object('pattern', 'hinge', 'exercise', 'Deadlift', 'weight_kg', 80),
+        jsonb_build_object('pattern', 'horizontal_push', 'exercise', 'Bench Press', 'weight_kg', 50),
+        jsonb_build_object('pattern', 'vertical_push', 'exercise', 'Standing Overhead Press', 'weight_kg', 30),
+        jsonb_build_object('pattern', 'horizontal_pull', 'exercise', 'Dumbbell Row', 'weight_kg', 20),
+        jsonb_build_object('pattern', 'vertical_pull', 'exercise', 'Lat Pulldown', 'weight_kg', 40),
+        jsonb_build_object('pattern', 'olympic_power', 'exercise', 'Single DB Snatch', 'weight_kg', 15)
+      )
     );
   end if;
   -- Coaching Quality Expert agent account
