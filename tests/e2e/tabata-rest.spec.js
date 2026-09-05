@@ -30,9 +30,17 @@ test.describe('Inter-block rest between Tabata blocks', () => {
     await login(page);
     await page.goto(`/workout/${seeded.workoutUuid}`);
 
+    // A warm up screen may appear before the workout view — skip past it.
+    const skipWarmup = page.getByRole('button', { name: /skip warm up/i });
+    const startTabataButton = page.getByRole('button', { name: /^start tabata/i });
+    await expect(skipWarmup.or(startTabataButton)).toBeVisible({ timeout: 15000 });
+    if (await skipWarmup.isVisible()) {
+      await skipWarmup.click();
+    }
+
     // Block 1: start the Tabata (1s work, 1s rest, 1 round, plus the fixed
     // 10s lead-in) and wait for it to finish into the log/tracking screen.
-    await page.getByRole('button', { name: /^start tabata/i }).click();
+    await startTabataButton.click();
     await expect(page.getByRole('heading', { name: /tabata complete/i })).toBeVisible({ timeout: 20000 });
 
     // The rest banner should be visible and actually ticking down while the
@@ -51,7 +59,6 @@ test.describe('Inter-block rest between Tabata blocks', () => {
     // by a blocking "resting" screen.
     await page.getByRole('button', { name: /save.*continue/i }).click();
     await expect(page.getByText(/^resting$/i)).toBeVisible({ timeout: 10000 });
-    const startTabataButton = page.getByRole('button', { name: /^start tabata/i });
     await expect(startTabataButton).toBeVisible();
 
     // Starting the next block early (while still resting) should prompt a
