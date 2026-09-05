@@ -65,20 +65,19 @@ test.describe('Running a workout (regression)', () => {
   });
 
   test('start a workout, skip through every exercise, and finish it', async ({ page }) => {
+    // Clicking "the first card" in the live catalog used to pick the workout here,
+    // but that's order-dependent and occasionally lands on a long multi-block
+    // benchmark (dozens of exercises), which made this test wildly flaky in CI —
+    // anywhere from ~8s to over two minutes for the exact same code. The card-click
+    // UI path itself (library -> detail sheet -> "Start workout" link) is already
+    // covered by workouts.spec.js, so this test only needs a workout guaranteed to
+    // have a small, bounded exercise count.
+    const setupApi = makeApiClient();
+    await setupApi.auth.signInWithPassword(ATHLETE);
+    const workoutId = await findMultiExerciseWorkoutId(setupApi);
+
     await login(page);
-    await page.goto('/workouts');
-
-    const cards = page.locator('button:has(p.font-semibold)');
-    await expect(cards.first()).toBeVisible({ timeout: 10000 });
-    await cards.first().click();
-
-    const sheet = page.getByRole('dialog');
-    const startLink = sheet.getByRole('link', { name: /start workout/i });
-    await expect(startLink).toBeVisible();
-    await startLink.click();
-
-    await page.waitForURL(/\/workout\/.+/, { timeout: 10000 });
-    const workoutId = page.url().split('/workout/')[1];
+    await page.goto(`/workout/${workoutId}`);
     await dismissWarmupIfPresent(page);
 
     // Skip every exercise (skipping never requires filling in weight/distance).
