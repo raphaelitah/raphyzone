@@ -57,6 +57,14 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
   force one into the `plan_generation_jobs` queue, then polls `pollPlanJob` — the same way the
   frontend does — until it completes. Calls the edge functions directly rather than through the
   UI, since the queue's pacing guard is only reliably triggered by near-simultaneous requests
+
+Both of these are tagged `@llm-quota` and excluded from the CI e2e job that runs on every
+push/PR — Gemini's free tier caps this project at 20 requests/day shared across all consumers
+(local dev, CI, `pollPlanJob`'s background draining), and running the full suite more than a
+handful of times a day exhausts it. They run only via a manual `workflow_dispatch` trigger
+(the "E2E (LLM-dependent, manual only)" job in `.github/workflows/ci.yml`, or
+`npm run test:e2e -- --grep "@llm-quota"` locally) — run them explicitly when you actually need
+to verify plan-generation behavior, not as part of routine CI.
 - `admin-taxonomy.spec.js` — non-admin redirect, add/edit/delete a taxonomy term
 - `admin-review.spec.js` — non-admin redirect, approve/reject a seeded pending exercise or
   workout submission

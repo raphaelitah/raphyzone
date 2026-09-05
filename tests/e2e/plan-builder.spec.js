@@ -8,7 +8,12 @@ import { makeApiClient, currentWeekStartISO } from './fixtures/apiClient';
 // _shared/llm.ts), so a single generation can legitimately take over a minute.
 test.describe.configure({ timeout: 180000 });
 
-test.describe('Weekly plan builder (regression)', () => {
+// Tagged so CI can exclude it from the on-push run: Gemini's free tier caps
+// this project at 20 requests/day shared across all consumers (local dev, CI,
+// pollPlanJob's background draining), and this spec alone burns several per
+// run — see .github/workflows/ci.yml, which only runs @llm-quota specs on a
+// manual workflow_dispatch.
+test.describe('Weekly plan builder (regression) @llm-quota', () => {
   test.beforeEach(async ({ page }) => {
     // Start from a clean slate so we exercise the full generation flow rather than
     // resuming an already-generated plan for this week.

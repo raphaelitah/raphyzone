@@ -13,7 +13,9 @@ import { makeApiClient, currentWeekStartISO, addDaysISO } from './fixtures/apiCl
 // runs independently of plan-builder.spec.js's current-week plan.
 test.describe.configure({ timeout: 180000 });
 
-test.describe('Weekly plan generation queue (regression)', () => {
+// See plan-builder.spec.js's @llm-quota tag comment — this spec also burns
+// several real Gemini calls against the shared 20/day free-tier quota.
+test.describe('Weekly plan generation queue (regression) @llm-quota', () => {
   let api;
   let weekA;
   let weekB;
