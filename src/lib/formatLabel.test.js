@@ -46,6 +46,10 @@ describe('computeFormatLabel', () => {
   });
 
   it('applies the bodyweight strength label consistently across mixed components', () => {
-    expect(computeFormatLabel('mixed(superset+strength_sets)', true, 'W')).toBe('Calisthenics + Calisthenics');
+    expect(computeFormatLabel('mixed(superset+strength_sets)', true, 'W')).toBe('Calisthenics');
+  });
+
+  it('dedupes repeated component labels in a mixed format', () => {
+    expect(computeFormatLabel('mixed(circuit+strength_sets+superset)', false, 'W')).toBe('Circuit + Bodybuilding');
   });
 });

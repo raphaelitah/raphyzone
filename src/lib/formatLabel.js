@@ -31,7 +31,7 @@ export function computeFormatLabel(workoutFormat, allBodyweight, workoutName) {
   const mixedMatch = workoutFormat.match(/^mixed\s*\((.+)\)$/);
   if (mixedMatch) {
     const components = mixedMatch[1].split('+').map((s) => s.trim());
-    return components.map(mapComponent).join(' + ');
+    return [...new Set(components.map(mapComponent))].join(' + ');
   }
 
   return mapComponent(workoutFormat);

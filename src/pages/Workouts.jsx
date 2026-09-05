@@ -146,8 +146,8 @@ export default function Workouts() {
     const sets = data || [];
     setSetsByBlockExercise((prev) => {
       const next = { ...prev };
+      beIds.forEach((beId) => { next[beId] = []; });
       sets.forEach((s) => {
-        if (!next[s.block_exercise_id]) next[s.block_exercise_id] = [];
         next[s.block_exercise_id].push(s);
       });
       Object.values(next).forEach((arr) => arr.sort((a, b) => (a.set_number || 0) - (b.set_number || 0)));
@@ -157,11 +157,10 @@ export default function Workouts() {
 
   const refreshData = async () => {
     setLoading(true);
-    setBlocksByWorkout({});
-    setBlockExercisesByBlock({});
     setLoadedSetsFor(new Set());
     await loadWorkouts();
     if (selected) {
+      await loadStructureData([selected]);
       setLoadedSetsFor((prev) => {
         const next = new Set(prev);
         next.delete(selected.workout_id);
@@ -304,10 +303,7 @@ export default function Workouts() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{w.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                      {(() => {
-                        const emomBlock = (blocksByWorkout[w.workout_id] || []).find((b) => isEMOMBlock(b));
-                        return emomBlock ? `${w.format_label} x ${emomBlock.rounds} mins` : w.format_label;
-                      })()}
+                      {w.format_label}
                     </p>
                   </div>
                   <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', WORKOUT_DIFFICULTY_META[w.difficulty]?.color)}>
@@ -357,11 +353,7 @@ export default function Workouts() {
               <SheetHeader className="px-5 pt-5">
                 <SheetTitle className="text-xl text-left">{selected.name}</SheetTitle>
                 <SheetDescription className="text-left">
-                  {(() => {
-                    const emomBlock = (blocksByWorkout[selected.workout_id] || []).find((b) => isEMOMBlock(b));
-                    const base = selected.format_label;
-                    return emomBlock ? `${base} x ${emomBlock.rounds} mins` : base;
-                  })()}
+                  {selected.format_label}
                 </SheetDescription>
               </SheetHeader>
               <div className="px-5 pb-8 space-y-4">

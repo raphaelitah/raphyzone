@@ -61,7 +61,6 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
 
   const blocks = blocksByWorkout[workout.workout_id] || [];
   const duration = roundToFive(workout.est_duration_min);
-  const emomBlock = blocks.find((b) => isEMOMBlock(b));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -79,7 +78,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
         </SheetHeader>
         <div className="px-5 pb-8 space-y-4">
           <p className="text-sm text-muted-foreground">
-            {emomBlock ? `${workout.format_label} x ${emomBlock.rounds} mins` : workout.format_label}
+            {workout.format_label}
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
             <Tag>{WORKOUT_DIFFICULTY_META[workout.difficulty]?.label}</Tag>
