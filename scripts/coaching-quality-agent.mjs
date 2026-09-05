@@ -152,11 +152,17 @@ async function login(page) {
 // leaving "Bodyweight" toggled when there's no weight field at all), a "Normal"
 // feedback rating, and a short note, then saves. Returns the number of entries filled.
 async function fillLogPromptAndSave(page, log) {
-  const weightWrappers = page.locator('div', { has: page.getByText('Max weight used (kg)') });
-  const weightCount = await weightWrappers.count();
+  // page.locator('div', { has: ... }) matches every ancestor div that contains the
+  // label, not just its immediate card — with one exercise that coincidentally
+  // resolves fine, but with several (a finished superset logs all of them at once)
+  // it grabs a shared outer container instead of each exercise's own scope. Walking
+  // up from the label itself to its nearest ".mb-3" ancestor (the actual per-exercise
+  // wrapper in ExerciseSpecRow's completion card) scopes it correctly per exercise.
+  const weightLabels = page.getByText('Max weight used (kg)');
+  const weightCount = await weightLabels.count();
   for (let i = 0; i < weightCount; i++) {
-    const wrapper = weightWrappers.nth(i);
-    const input = wrapper.locator('input[type="number"]');
+    const card = weightLabels.nth(i).locator('xpath=ancestor::div[contains(@class, "mb-3")][1]');
+    const input = card.locator('input[type="number"]');
     if (await input.count()) {
       const placeholder = await input.getAttribute('placeholder');
       const value = placeholder && placeholder !== '0' ? placeholder : '0';
@@ -188,7 +194,10 @@ async function fillLogPromptAndSave(page, log) {
 // appears, records the transition (declared vs. observed vs. ground truth), confirms
 // it's actually ticking (not frozen), and returns whether one was seen at all.
 async function checkRestBanner(page, expectedSeconds, transitionLabel, log) {
-  const restBadge = page.getByText(/^rest$/i).first();
+  // Scoped to <span> because ExerciseSpecRow's always-present "REST" spec tile is a
+  // <p> with the exact same text ("Rest") — a plain getByText(/^rest$/i) matches that
+  // tile even when no rest phase is active at all, which is not what we want to detect.
+  const restBadge = page.locator('span', { hasText: /^rest$/i }).first();
   const restingBanner = page.getByText(/^resting$/i).or(page.getByText(/rest before next block/i)).first();
   const seenBadge = await restBadge.isVisible({ timeout: 600 }).catch(() => false);
   const seenBanner = !seenBadge && await restingBanner.isVisible({ timeout: 600 }).catch(() => false);
@@ -222,8 +231,12 @@ async function fillQuickCalibrationIfShown(page, log) {
   const sheetSaveBtn = page.getByRole('button', { name: /^save & get suggested weight$/i });
   if (!(await sheetSaveBtn.isVisible({ timeout: 1500 }).catch(() => false))) return false;
 
+  // The Sheet's own "Close" button renders before the movement options in DOM
+  // order, so a plain "first button in the dialog" grabs that instead — scope to
+  // the options' own distinctive classes (QuickCalibrationSheet.jsx) to actually
+  // pick a movement rather than dismissing the sheet unfilled.
   const dialog = page.getByRole('dialog');
-  const firstOption = dialog.locator('button').first();
+  const firstOption = dialog.locator('button.rounded-xl.border.px-4.py-3.text-left').first();
   await firstOption.click().catch(() => {});
   await dialog.locator('input[type="number"]').fill('20').catch(() => {});
   await sheetSaveBtn.click({ timeout: 5000 }).catch(() => {});
@@ -248,7 +261,17 @@ async function checkWeightSuggestion(page, log) {
   if (!hasRefreshIcon) return; // bodyweight/running exercise, or already has a suggested weight
 
   await weightLabel.click().catch(() => {});
-  await page.waitForTimeout(1200);
+  // This triggers a real network round trip (assignWorkoutWeights edge function).
+  // A fixed short wait risks moving on before it resolves, leaving its eventual
+  // state update (setExercises/persistWeight) to land later — possibly after we've
+  // already advanced to a different exercise, which could easily explain a session
+  // occasionally looking like it "jumped back" for no reason. Poll for the loading
+  // spinner to actually clear instead of guessing a fixed delay.
+  const loadingSpinner = weightLabel.locator('..').locator('svg.animate-spin');
+  for (let waited = 0; waited < 8000; waited += 400) {
+    if (!(await loadingSpinner.isVisible().catch(() => false))) break;
+    await page.waitForTimeout(400);
+  }
   if (await fillQuickCalibrationIfShown(page, log)) return;
 
   const stillMissing = (await weightLabel.locator('svg').count().catch(() => 0)) > 0;
@@ -261,19 +284,27 @@ async function checkWeightSuggestion(page, log) {
 
 // Reads whichever exercise name is currently headlined on screen (SupersetPanel and
 // WorkoutTimerPanel both render it as `<p class="text-lg font-semibold text-center">`)
-// and flags it against the previous one read, catching the same core movement
-// appearing back-to-back live — the same check coaching-quality-audit.mjs makes
-// statically from the database, kept here too since it's cheap and confirms the
-// athlete actually sees it happen on screen, not just that the data implies it.
+// and flags it against the previous exercise's name at genuine exercise boundaries
+// (`log.justCompletedExercise`, set after a log-prompt save or a block/exercise
+// skip — a multi-round exercise re-shows the same heading every round, which is
+// normal repetition, not what this is looking for). This catches two different real
+// problems with the same symptom: the content genuinely repeating a movement
+// back-to-back (coaching-quality-audit.mjs also catches this statically), and a
+// session-state bug where a block finishes but the app re-renders its first exercise
+// again instead of finishing — confirmed live once (see reports/coaching-quality-log.md:
+// a 40-round block's "Save & Continue" left `logPrompt.review` true, which short-circuits
+// handleSaveLogPrompt's advance/finish, while completedBlockTimers already had the
+// block marked done — so it fell back to rendering exercise index 0 solo).
 async function checkConsecutiveMovement(page, log) {
+  if (!log.justCompletedExercise) return;
   const heading = page.locator('p.text-lg.font-semibold.text-center').first();
   const text = await heading.textContent({ timeout: 500 }).catch(() => null);
   if (!text) return;
   const core = coreMovementName(text);
   if (core && log.lastExerciseCore && core === log.lastExerciseCore) {
-    log.movementIssues.push(`"${log.lastExerciseName}" is immediately followed by "${text.trim()}" — same core movement back-to-back, a coach would swap one out`);
+    log.movementIssues.push(`"${log.lastExerciseName}" is immediately followed by "${text.trim()}" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly`);
   }
-  if (core) { log.lastExerciseCore = core; log.lastExerciseName = text.trim(); }
+  if (core) { log.lastExerciseCore = core; log.lastExerciseName = text.trim(); log.justCompletedExercise = false; }
 }
 
 // Executes one workout end to end, narrating what happened rather than asserting
@@ -288,7 +319,7 @@ async function runWorkout(page, candidate, qaCoachId) {
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
 
-  const log = { weightsLogged: [], weightIssues: [], movementIssues: [], lastExerciseCore: null, lastExerciseName: null, transitions: [], usedFallbackSkip: 0, timerDrivenBlocks: [] };
+  const log = { weightsLogged: [], weightIssues: [], movementIssues: [], lastExerciseCore: null, lastExerciseName: null, justCompletedExercise: true, transitions: [], usedFallbackSkip: 0, timerDrivenBlocks: [] };
   let warmupShown = false;
   let finished = false;
   let iterations = 0;
@@ -296,6 +327,16 @@ async function runWorkout(page, candidate, qaCoachId) {
 
   try {
     await page.goto(`${BASE_URL}/workout/${candidate.workout.id}`);
+
+    // A stray in-progress session can slip past the per-candidate cleanup in main()
+    // — e.g. the previous workout's finish() write lands just after that delete
+    // ran — and the app blocks with a "Workout already in progress" dialog neither
+    // "Skip warm up" nor any exercise-screen control matches, which otherwise stalls
+    // the whole run at zero steps for no visible reason.
+    const endInProgress = page.getByRole('button', { name: /^end it & start this one$/i });
+    if (await endInProgress.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await endInProgress.click();
+    }
 
     const skipWarmup = page.getByRole('button', { name: /^skip warm up$/i });
     const exerciseHeading = page.getByText(/Exercise \d+ of/i);
@@ -336,7 +377,10 @@ async function runWorkout(page, candidate, qaCoachId) {
       const blockSkip = page.getByRole('button', { name: /^skip [a-z]/i }); // e.g. "Skip circuit", "Skip superset"
       const plainSkip = page.getByRole('button', { name: /^skip$/i });
 
+      const dbg = (branch) => { if (process.env.DEBUG_AGENT) console.error(`[${iterations}] branch=${branch}`); };
+
       if (await startBlock.isVisible().catch(() => false)) {
+        dbg('startBlock');
         const label = await startBlock.textContent().catch(() => 'block');
         log.timerDrivenBlocks.push(label?.trim());
         await checkRestBanner(page, 0, `entering ${label?.trim() || 'next block'}`, log);
@@ -345,31 +389,46 @@ async function runWorkout(page, candidate, qaCoachId) {
         continue;
       }
       if (await startSet.isVisible().catch(() => false)) {
+        dbg('startSet');
         await checkConsecutiveMovement(page, log);
         await checkWeightSuggestion(page, log);
         if ((await clickIfFinishing(startSet)) === 'finished') break;
-        continue;
-      }
-      if (await doneBtn.isVisible({ timeout: 9000 }).catch(() => false)) {
-        if ((await clickIfFinishing(doneBtn)) === 'finished') break;
+        // A real "Get ready" lead-in (~8-10s) follows before "Done" appears. "Skip
+        // <block>" is always visible throughout a superset (even during Start
+        // set/lead-in), so waiting for it here — properly, via waitFor, not a
+        // one-shot isVisible() — matters: without it, the generic branch fallthrough
+        // below would treat "Done not visible yet" as license to hit that always-on
+        // escape hatch mid-countdown and prematurely end the whole block.
+        const doneReady = await doneBtn.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+        if (doneReady) {
+          dbg('done (after lead-in)');
+          if ((await clickIfFinishing(doneBtn)) === 'finished') break;
+        }
         continue;
       }
       if (await skipRestBtn.isVisible().catch(() => false)) {
+        dbg('skipRest');
         await checkRestBanner(page, null, 'between rounds', log);
         if ((await clickIfFinishing(skipRestBtn)) === 'finished') break;
         continue;
       }
       if (await saveBtn.isVisible().catch(() => false)) {
+        dbg('save');
         await fillLogPromptAndSave(page, log);
+        log.justCompletedExercise = true; // the exercise/block this log screen was for has now genuinely concluded
         continue;
       }
       if (await blockSkip.isVisible().catch(() => false)) {
+        dbg('blockSkip:' + (await blockSkip.textContent().catch(() => '?')));
         // Timer-driven block (circuit/EMOM/tabata) — no per-phase control available.
+        log.justCompletedExercise = true;
         if ((await clickIfFinishing(blockSkip)) === 'finished') break;
         continue;
       }
       if (await plainSkip.isVisible().catch(() => false)) {
+        dbg('plainSkip');
         log.usedFallbackSkip++;
+        log.justCompletedExercise = true;
         if ((await clickIfFinishing(plainSkip)) === 'finished') break;
         continue;
       }
@@ -392,7 +451,10 @@ async function runWorkout(page, candidate, qaCoachId) {
   const estimatedMinutes = Math.round(estimateWorkoutMinutes(candidate.blocks, exerciseCountByBlock));
   const declaredMinutes = candidate.workout.est_duration_min ?? candidate.workout.duration_minutes ?? null;
 
-  const { data: sessions } = await db.from('workout_sessions').select('status').eq('workout_id', candidate.workout.workout_id).eq('user_id', qaCoachId).order('created_date', { ascending: false }).limit(1);
+  // workout_sessions.workout_id stores the workout's UUID (candidate.workout.id, same
+  // as the /workout/:id URL) — not workouts.workout_id, the human-readable text code
+  // used elsewhere (e.g. coaching_agent_reviews.workout_id).
+  const { data: sessions } = await db.from('workout_sessions').select('status').eq('workout_id', candidate.workout.id).eq('user_id', qaCoachId).order('created_date', { ascending: false }).limit(1);
   const sessionStatus = sessions?.[0]?.status;
 
   const problems = [];
@@ -482,16 +544,22 @@ async function main() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await login(page);
+  // A freshly-started Vite dev server (every CI run) compiles modules on demand —
+  // the first real page load can take much longer than normal and blow through the
+  // per-workout wait budgets below. One throwaway navigation here absorbs that cold
+  // start before any candidate is timed.
+  await page.goto(`${BASE_URL}/workouts`, { timeout: 60000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
 
   const results = [];
   for (const candidate of candidates) {
-    if (qaCoachId) await db.from('workout_sessions').delete().eq('user_id', qaCoachId).eq('status', 'in_progress');
+    await db.from('workout_sessions').delete().eq('user_id', qaCoachId).eq('status', 'in_progress');
     // An unexpected crash on one workout (a genuinely unrecognized screen state,
     // a browser-level failure) shouldn't take down the rest of the night's batch —
     // record it as flagged and move on, same as any other reviewed problem.
     let result;
     try {
-      result = await runWorkout(page, candidate);
+      result = await runWorkout(page, candidate, qaCoachId);
     } catch (err) {
       result = {
         workoutId: candidate.workout.workout_id,
