@@ -65,6 +65,9 @@ export default function BlockEditor({
         </span>
         <span className="text-sm font-medium flex-1 capitalize truncate">
           {block.block_type?.replace(/_/g, ' ') || 'Block'}
+          {block.rounds > 1 && (
+            <span className="text-xs text-muted-foreground normal-case"> · {block.rounds} rounds</span>
+          )}
         </span>
         <button onClick={() => onMoveBlock(block, 'up')} disabled={isFirst} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none">
           <ChevronUp className="h-3.5 w-3.5" />
