@@ -17,6 +17,7 @@ import { corsHeaders } from './_shared/cors.ts';
 // status='approved' workout, matching the original Base44 behavior.
 
 const BATCH_SIZE = 5;
+const MONOSTRUCTURAL_MODALITY = 'Cyclical / Monostructural';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -34,21 +35,24 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const workoutIds: string[] | undefined = Array.isArray(body.workout_ids) ? body.workout_ids : undefined;
 
-    let workoutsQuery = admin.from('workouts').select('id, workout_id, name, workout_format, format_label, workout_category, difficulty, modality, goal, split, equipment').eq('status', 'approved');
+    let workoutsQuery = admin.from('workouts').select('id, workout_id, name, workout_format, format_label, workout_category, difficulty, modality, sub_modality, goal, split, equipment').eq('status', 'approved');
     if (workoutIds) workoutsQuery = workoutsQuery.in('workout_id', workoutIds);
     const { data: workouts, error: wErr } = await workoutsQuery;
     if (wErr) throw wErr;
     if (!workouts?.length) return Response.json({ total: 0, classified: 0, runningPreserved: 0, updated: 0, changes: [] }, { headers: corsHeaders });
 
     const workoutCodes = workouts.map((w) => w.workout_id);
-    const [{ data: blocks, error: bErr }, { data: modalityTerms }] = await Promise.all([
+    const [{ data: blocks, error: bErr }, { data: modalityTerms }, { data: subModalityTerms }] = await Promise.all([
       admin.from('workout_blocks').select('block_id, workout_id').in('workout_id', workoutCodes),
       admin.from('taxonomy_terms').select('value').eq('dimension', 'modality'),
+      admin.from('taxonomy_terms').select('value').eq('dimension', 'sub_modality'),
     ]);
     if (bErr) throw bErr;
 
     const modalityValues = (modalityTerms || []).map((t: any) => t.value).filter(Boolean);
     if (!modalityValues.length) modalityValues.push('strength', 'conditioning', 'running', 'mixed', 'yoga', 'mobility');
+    const subModalityValues = (subModalityTerms || []).map((t: any) => t.value).filter(Boolean);
+    if (!subModalityValues.length) subModalityValues.push('Running');
 
     const blockIds = (blocks || []).map((b: any) => b.block_id);
     const { data: blockExs, error: beErr } = blockIds.length
@@ -107,6 +111,7 @@ Deno.serve(async (req: Request) => {
         workout_category: w.workout_category,
         difficulty: w.difficulty,
         oldModality: w.modality,
+        oldSubModality: w.sub_modality,
         oldGoal: w.goal,
         oldSplit: w.split,
         oldEquipment: w.equipment || [],
@@ -133,7 +138,7 @@ Deno.serve(async (req: Request) => {
 
     for (const [batchIdx, batch] of batches.entries()) {
       if (batchIdx > 0) await new Promise((resolve) => setTimeout(resolve, 4000));
-      const prompt = buildBatchPrompt(batch, modalityValues);
+      const prompt = buildBatchPrompt(batch, modalityValues, subModalityValues);
       let results: any[];
       try {
         const res = await callLLM({
@@ -149,6 +154,7 @@ Deno.serve(async (req: Request) => {
                   properties: {
                     id: { type: 'string' },
                     modality: { type: 'string' },
+                    sub_modality: { type: 'string' },
                     goal: { type: 'string', enum: ['strength', 'hypertrophy', 'mixed'] },
                     split: { type: 'string' },
                     confidence: { type: 'number' },
@@ -173,16 +179,22 @@ Deno.serve(async (req: Request) => {
         const r = resultById.get(w.id);
         if (!r) { failedWorkoutIds.push(w.workout_id); continue; }
         const newModality = modalityValues.includes(r.modality) ? r.modality : 'mixed';
+        // sub_modality only applies within the monostructural-cardio modality — a
+        // workout classified as strength/mixed/etc. never gets one.
+        const newSubModality = newModality === MONOSTRUCTURAL_MODALITY && subModalityValues.includes(r.sub_modality)
+          ? r.sub_modality
+          : null;
         const newGoal = ['strength', 'hypertrophy', 'mixed'].includes(r.goal) ? r.goal : 'mixed';
         const newSplit = r.split || w.oldSplit || '';
         const newEquipment = w.equipmentUnion.length ? w.equipmentUnion : w.oldEquipment;
 
-        const changed = w.oldModality !== newModality || w.oldGoal !== newGoal || w.oldSplit !== newSplit
+        const changed = w.oldModality !== newModality || (w.oldSubModality || null) !== newSubModality
+          || w.oldGoal !== newGoal || w.oldSplit !== newSplit
           || JSON.stringify(w.oldEquipment || []) !== JSON.stringify(newEquipment);
 
         if (changed) {
           const { error: uErr } = await admin.from('workouts').update({
-            modality: newModality, goal: newGoal, split: newSplit, equipment: newEquipment, updated_date: new Date().toISOString(),
+            modality: newModality, sub_modality: newSubModality, goal: newGoal, split: newSplit, equipment: newEquipment, updated_date: new Date().toISOString(),
           }).eq('id', w.id);
           if (uErr) throw uErr;
         }
@@ -190,8 +202,8 @@ Deno.serve(async (req: Request) => {
         changeLog.push({
           workout_id: w.workout_id,
           name: w.name,
-          old: { modality: w.oldModality, goal: w.oldGoal, split: w.oldSplit, equipment: w.oldEquipment },
-          new: { modality: newModality, goal: newGoal, split: newSplit, equipment: newEquipment },
+          old: { modality: w.oldModality, sub_modality: w.oldSubModality, goal: w.oldGoal, split: w.oldSplit, equipment: w.oldEquipment },
+          new: { modality: newModality, sub_modality: newSubModality, goal: newGoal, split: newSplit, equipment: newEquipment },
           confidence: r.confidence,
           reason: r.reason,
           changed,
@@ -213,7 +225,7 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-function buildBatchPrompt(batch: any[], modalityValues: string[]) {
+function buildBatchPrompt(batch: any[], modalityValues: string[], subModalityValues: string[]) {
   const workoutTexts = batch.map((w) => {
     const exList = w.exercises.length ? w.exercises : [{ name: 'no exercise data', reps: '?', equipment: '?', body_region: '?', movement_pattern: '?' }];
     const exLines = exList
@@ -236,6 +248,9 @@ CLASSIFICATION GUIDE:
   - "conditioning": primarily cardio/conditioning (rowing, cycling, jump rope, calisthenics circuits) with minimal heavy resistance
   - "running": running-focused sessions
   - "yoga"/"mobility": recovery, mobility, yoga flows
+- sub_modality: ONLY when modality is the monostructural-cardio value — one of "${subModalityValues.join('", "')}"
+  - Set to "Running" ONLY if the workout is actually a running session (jogging, sprinting, treadmill, distance/interval running) — the primary or only cardio activity is running.
+  - Leave sub_modality empty for other monostructural-cardio work that is NOT running — rowing, biking/assault bike, jump rope, ski erg, swimming, mixed-implement conditioning circuits, etc.
 - goal: "strength" (maximal force, low reps), "hypertrophy" (muscle growth, 6-15 reps), "mixed" (varied/conditioning/metcon)
 - split: concise label — "Push", "Pull", "Legs", "Upper", "Lower", "Full Body", "Posterior Chain", "Core", "Full Body Conditioning", "Cardio", etc.
 
@@ -249,5 +264,5 @@ WORKOUTS TO CLASSIFY (use the id shown after "WORKOUT"):
 
 ${workoutTexts}
 
-Return JSON with a "results" array, one entry per workout above, each { id, modality, goal, split, confidence, reason }.`;
+Return JSON with a "results" array, one entry per workout above, each { id, modality, sub_modality, goal, split, confidence, reason }.`;
 }

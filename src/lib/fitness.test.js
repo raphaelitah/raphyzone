@@ -133,11 +133,16 @@ describe('youtubeEmbedUrl', () => {
 });
 
 describe('isRunningWorkout / isRunningExercise', () => {
-  it('matches on the exact modality / movement_pattern strings', () => {
-    expect(isRunningWorkout({ modality: 'Cyclical / Monostructural' })).toBe(true);
+  it('matches on the exact sub_modality / movement_pattern strings', () => {
+    expect(isRunningWorkout({ modality: 'Cyclical / Monostructural', sub_modality: 'Running' })).toBe(true);
     expect(isRunningWorkout({ modality: 'Strength' })).toBe(false);
     expect(isRunningExercise({ movement_pattern: 'Locomotion / Cardio', modality: 'Cyclical / Monostructural' })).toBe(true);
     expect(isRunningExercise({ movement_pattern: 'Push', modality: 'Cyclical / Monostructural' })).toBe(false);
+  });
+
+  it('does not match other monostructural-cardio workouts (rowing, biking, jump rope) without sub_modality Running', () => {
+    expect(isRunningWorkout({ modality: 'Cyclical / Monostructural' })).toBe(false);
+    expect(isRunningWorkout({ modality: 'Cyclical / Monostructural', sub_modality: null })).toBe(false);
   });
 
   it('does not match bodyweight/calisthenics exercises mistagged with the cardio movement pattern', () => {

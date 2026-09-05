@@ -1,10 +1,15 @@
 import { format, startOfWeek, addDays, isSameDay, parseISO, differenceInCalendarDays } from 'date-fns';
 
-// Workouts/exercises don't have a dedicated "running" taxonomy value — the catalog
-// (and the AI plan generator) key running/cycling/rowing off these shared values.
+// Exercises don't have a dedicated "running" taxonomy value — the AI plan
+// generator keys running/cycling/rowing exercises off these shared values.
 export const RUNNING_MODALITY = 'Cyclical / Monostructural';
 export const RUNNING_MOVEMENT_PATTERN = 'Locomotion / Cardio';
-export const isRunningWorkout = (workout) => workout?.modality === RUNNING_MODALITY;
+// Workouts DO have a dedicated sub_modality: 'Cyclical / Monostructural' modality
+// covers all monostructural cardio (running, rowing, biking, jump rope, ...), so
+// running workouts are tagged with sub_modality = 'Running' to be filterable
+// without matching every other monostructural-cardio workout.
+export const RUNNING_SUB_MODALITY = 'Running';
+export const isRunningWorkout = (workout) => workout?.sub_modality === RUNNING_SUB_MODALITY;
 // movement_pattern alone over-matches: ~120 bodyweight/calisthenics exercises
 // (Bear Crawl, Duck Walk, Hollow Body Wall Walk, etc.) are also tagged
 // 'Locomotion / Cardio' despite being reps/time-under-tension moves, not
