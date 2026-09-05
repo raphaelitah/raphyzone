@@ -44,27 +44,31 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
     if (!workout) return;
     setLoading(true);
     try {
-      const [{ data: blksData }, { data: allBlockExsData }, { data: allSetsData }] = await Promise.all([
-        supabase.from('workout_blocks').select('*').eq('workout_id', workout.workout_id),
-        supabase.from('block_exercises').select('*').order('created_date', { ascending: false }).limit(700),
-        supabase.from('prescribed_sets').select('*').order('created_date', { ascending: false }).limit(500),
-      ]);
+      const { data: blksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', workout.workout_id);
       const blks = blksData || [];
-      const allBlockExs = allBlockExsData || [];
-      const allSets = allSetsData || [];
       blks.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
       setBlocks(blks);
-      const blockIds = new Set(blks.map((b) => b.block_id));
+
+      const blockIds = blks.map((b) => b.block_id);
+      const { data: blockExsData } = blockIds.length
+        ? await supabase.from('block_exercises').select('*').in('block_id', blockIds)
+        : { data: [] };
+      const blockExs = blockExsData || [];
       const beMap = {};
-      allBlockExs.filter((be) => blockIds.has(be.block_id)).forEach((be) => {
+      blockExs.forEach((be) => {
         if (!beMap[be.block_id]) beMap[be.block_id] = [];
         beMap[be.block_id].push(be);
       });
       Object.values(beMap).forEach((arr) => arr.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0)));
       setBlockExercisesByBlock(beMap);
-      const beIds = new Set(Object.values(beMap).flat().map((be) => be.block_exercise_id));
+
+      const beIds = blockExs.map((be) => be.block_exercise_id);
+      const { data: setsData } = beIds.length
+        ? await supabase.from('prescribed_sets').select('*').in('block_exercise_id', beIds)
+        : { data: [] };
+      const sets = setsData || [];
       const setMap = {};
-      allSets.filter((s) => beIds.has(s.block_exercise_id)).forEach((ps) => {
+      sets.forEach((ps) => {
         if (!setMap[ps.block_exercise_id]) setMap[ps.block_exercise_id] = [];
         setMap[ps.block_exercise_id].push(ps);
       });
