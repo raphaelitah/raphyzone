@@ -53,6 +53,24 @@ async function clickThroughCalibration(page, locator, options = {}) {
   }
 }
 
+// One entry per CALIBRATION_PATTERNS key (src/lib/fitness.js) so
+// WorkoutExecution's automatic QuickCalibrationSheet popup (fires whenever the
+// current exercise's movement pattern has zero calibration entries at all) never
+// interrupts these skip-through flows. Set directly here — rather than trusting
+// scripts/seed-test-data.sql alone — because ATHLETE's calibration is shared,
+// mutable state other spec files (calibration.spec.js, the quick-calibration test
+// below) also legitimately modify mid-run; asserting it fresh in this describe
+// block's own beforeEach is what actually keeps it stable regardless of run order.
+const FULL_CALIBRATION = [
+  { pattern: 'squat', exercise: 'Barbell Back Squat', weight_kg: 60 },
+  { pattern: 'hinge', exercise: 'Deadlift', weight_kg: 80 },
+  { pattern: 'horizontal_push', exercise: 'Bench Press', weight_kg: 50 },
+  { pattern: 'vertical_push', exercise: 'Standing Overhead Press', weight_kg: 30 },
+  { pattern: 'horizontal_pull', exercise: 'Dumbbell Row', weight_kg: 20 },
+  { pattern: 'vertical_pull', exercise: 'Lat Pulldown', weight_kg: 40 },
+  { pattern: 'olympic_power', exercise: 'Single DB Snatch', weight_kg: 15 },
+];
+
 test.describe('Running a workout (regression)', () => {
   test.beforeEach(async () => {
     // Clear any in-progress session left over from a prior (e.g. failed) run —
@@ -62,6 +80,7 @@ test.describe('Running a workout (regression)', () => {
     const api = makeApiClient();
     const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
     await api.from('workout_sessions').delete().eq('user_id', signInData.user.id).eq('status', 'in_progress');
+    await api.from('athlete_profiles').update({ strength_calibration: FULL_CALIBRATION }).eq('user_id', signInData.user.id);
   });
 
   test('start a workout, skip through every exercise, and finish it', async ({ page }) => {

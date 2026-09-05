@@ -15,6 +15,22 @@ export async function seedTabataWorkout(restBetweenBlocksSec = 15) {
   if (error) throw error;
   const userId = signInData.user.id;
 
+  // A crashed prior run (e.g. the process killed mid-test) can skip
+  // cleanupTabataWorkout entirely, leaving an orphaned row behind — workouts has a
+  // unique constraint on the normalized name, and every run uses this same fixed
+  // name, so that orphan permanently blocks every future insert until removed.
+  const { data: orphans } = await api.from('workouts').select('id, workout_id').eq('name', 'E2E Tabata Rest Test').eq('owner_id', userId);
+  for (const orphan of orphans || []) {
+    const { data: staleBlocks } = await api.from('workout_blocks').select('block_id').eq('workout_id', orphan.workout_id);
+    const staleBlockIds = (staleBlocks || []).map((b) => b.block_id);
+    if (staleBlockIds.length) {
+      await api.from('block_exercises').delete().in('block_id', staleBlockIds);
+      await api.from('workout_blocks').delete().in('block_id', staleBlockIds);
+    }
+    await api.from('workout_sessions').delete().eq('workout_id', orphan.id);
+    await api.from('workouts').delete().eq('id', orphan.id);
+  }
+
   const stamp = Date.now();
   const workoutId = `E2E-TABATA-${stamp}`;
   const { data: workout, error: workoutError } = await api
@@ -71,6 +87,9 @@ export async function cleanupTabataWorkout({ workoutUuid, workoutId, blockIds })
   await api.auth.signInWithPassword(ATHLETE);
   await api.from('block_exercises').delete().in('block_id', blockIds);
   await api.from('workout_blocks').delete().in('block_id', blockIds);
-  await api.from('workout_sessions').delete().eq('workout_id', workoutId);
+  // workout_sessions.workout_id stores the workout's UUID (matching the /workout/:id
+  // URL), not workouts.workout_id — the human-readable text code used everywhere
+  // else in this file. Filtering by the text code here silently deleted nothing.
+  await api.from('workout_sessions').delete().eq('workout_id', workoutUuid);
   await api.from('workouts').delete().eq('id', workoutUuid);
 }
