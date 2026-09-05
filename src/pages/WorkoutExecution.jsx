@@ -90,6 +90,8 @@ export default function WorkoutExecution() {
   const [blockLogEntries, setBlockLogEntries] = useState({});
   const [, setTick] = useState(0);
   const [workoutPaused, setWorkoutPaused] = useState(false);
+  const [warmup, setWarmup] = useState(null);
+  const [warmupDismissed, setWarmupDismissed] = useState(false);
 
   const fullExerciseMapRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -151,10 +153,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers] } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers]);
+  }, [index, completedBlockTimers, warmupDismissed]);
 
   const pendingLoadRef = useRef(null);
 
@@ -202,12 +204,24 @@ export default function WorkoutExecution() {
     loadedExerciseSessionsRef.current = (exerciseSessionsResult.status === 'fulfilled' ? exerciseSessionsResult.value.data : null) || [];
     if (!active()) return;
 
-    setLoading(false);
-
     const currentPlan = (plans || []).find((p) => p.status === 'approved') || plans?.[0] || null;
     setPlan(currentPlan);
     const planSlot = currentPlan?.workouts?.find((s) => s.workout_id === workoutId);
     const exerciseWeights = planSlot?.exercise_weights || {};
+
+    // Resolve the warm up before dropping the loading spinner, so the
+    // exercise view never flashes on screen first and then gets replaced by
+    // the warm up screen (or vice versa) once it resolves.
+    const planWarmup = planSlot?.warmup ?? null;
+    if (planWarmup) {
+      setWarmup(planWarmup);
+    } else {
+      try {
+        const res = await supabase.functions.invoke('getWarmup', { body: { workout_id: workoutId } });
+        if (active() && !res.error) setWarmup(res.data?.warmup ?? null);
+      } catch { /* ignore — workout just runs without a warm up */ }
+    }
+    if (!active()) return;
 
     const blocks = (blocksResult.status === 'fulfilled' ? blocksResult.value.data : null) || [];
     if (!active()) return;
@@ -285,8 +299,11 @@ export default function WorkoutExecution() {
       if (completed.size) setCompletedBlockTimers(completed);
       setIndex(resumeIdx);
       indexRef.current = resumeIdx;
+      if (savedProgress?.warmupDismissed) setWarmupDismissed(true);
     }
+
     progressHydratedRef.current = true;
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -990,6 +1007,57 @@ export default function WorkoutExecution() {
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
   if (!workout) return <div className="p-6 text-center text-muted-foreground">Workout not found.</div>;
+
+  const dismissWarmup = () => setWarmupDismissed(true);
+  if (warmup && !warmupDismissed) {
+    const hasMobility = warmup.mobility?.length > 0;
+    const hasCardio = !!warmup.cardio;
+    const hasFirstMovement = !!warmup.first_movement;
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="px-5 pt-8 pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="p-1 -ml-1"><ChevronLeft className="h-5 w-5" /></button>
+            <h1 className="font-semibold truncate">{workout.name}</h1>
+          </div>
+        </header>
+        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2"><Footprints className="h-5 w-5 text-brand" /> Warm Up</h2>
+            <p className="text-sm text-muted-foreground mt-1">{warmup.duration_minutes} min · not tracked</p>
+          </div>
+          {hasMobility && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Mobility</h3>
+              <ul className="space-y-1">
+                {warmup.mobility.map((m, i) => (
+                  <li key={m.exercise_id || i} className="text-sm">· {m.exercise_name}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {hasCardio && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Cardio</h3>
+              <p className="text-sm">{warmup.cardio.machine} · {warmup.cardio.duration_minutes} min</p>
+            </div>
+          )}
+          {hasFirstMovement && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">First Movement Prep</h3>
+              <p className="text-sm">{warmup.first_movement.exercise_name} · {warmup.first_movement.sets} sets</p>
+            </div>
+          )}
+          {warmup.notes && <p className="text-sm text-muted-foreground">{warmup.notes}</p>}
+        </div>
+        <div className="p-5 border-t border-border flex gap-3">
+          <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl border border-border text-muted-foreground font-medium">Skip warm up</button>
+          <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl bg-brand text-brand-foreground font-medium flex items-center justify-center gap-2"><Dumbbell className="h-4 w-4" /> Start Workout</button>
+        </div>
+      </div>
+    );
+  }
+
   const backNoExercises = () => {
     const sid = sessionIdRef.current;
     if (sid) supabase.from('workout_sessions').update({ status: 'skipped' }).eq('id', sid).eq('status', 'in_progress').then(() => {});

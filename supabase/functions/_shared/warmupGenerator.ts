@@ -127,12 +127,34 @@ function equipmentSatisfied(exercise: ExerciseRow, available: Set<string>): bool
   return tags.every((t) => available.has(t));
 }
 
+// Deterministic per-workout shuffle (mulberry32 seeded by the workout id) so
+// picks vary from workout to workout without being random on every re-fetch
+// of the *same* workout (which would make the preview flicker between loads).
+function seededShuffle<T>(items: T[], seed: string): T[] {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 31) + seed.charCodeAt(i)) | 0;
+  let state = h >>> 0 || 1;
+  const rand = () => {
+    state |= 0; state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function pickMobilityFromCatalog(
   focus: WorkoutFocus,
   exerciseCatalog: ExerciseRow[],
   available: Set<string>,
   count: number,
-  exclude: Set<string>
+  exclude: Set<string>,
+  seed: string
 ): ExerciseRow[] {
   const candidates = exerciseCatalog.filter(
     (e) =>
@@ -141,13 +163,12 @@ function pickMobilityFromCatalog(
       equipmentSatisfied(e, available) &&
       (!focus.body_region || e.body_region === focus.body_region || e.body_region === 'Full Body')
   );
-  // Prefer exact body_region matches over Full Body generic ones.
-  candidates.sort((a, b) => {
-    const aExact = a.body_region === focus.body_region ? 1 : 0;
-    const bExact = b.body_region === focus.body_region ? 1 : 0;
-    return bExact - aExact;
-  });
-  return candidates.slice(0, count);
+  // Prefer exact body_region matches over Full Body generic ones, but shuffle
+  // within each tier (seeded by the workout) so the same body region doesn't
+  // always surface the same handful of exercises in the same order.
+  const exact = seededShuffle(candidates.filter((e) => e.body_region === focus.body_region), seed);
+  const generic = seededShuffle(candidates.filter((e) => e.body_region !== focus.body_region), seed);
+  return [...exact, ...generic].slice(0, count);
 }
 
 export function generateWarmup(
@@ -176,15 +197,20 @@ export function generateWarmup(
   // --- Mobility ---
   if (prefs.warmup_include_mobility) {
     const maxItems = Math.max(2, Math.min(6, Math.round(perSectionMinutes / 1.5)));
+    const seed = workout.id || workout.name || 'warmup';
     const saved = (prefs.warmup_mobility_exercises || [])
       .map((m) => exerciseCatalog.find((e) => e.id === m.exercise_id) || { id: m.exercise_id, name: m.exercise_name, equipment_tags: [] })
       .filter((e): e is ExerciseRow => !!e);
     const savedCompatible = saved.filter((e) => equipmentSatisfied(e, available));
 
-    let mobilityPicks: ExerciseRow[] = savedCompatible.slice(0, maxItems);
+    // Lead with picks tailored to *this* workout's body region so the warm up
+    // actually varies day to day; only fall back to the athlete's saved
+    // favorites to fill out any remaining slots (or when the catalog has
+    // nothing relevant), instead of always opening with the fixed saved list.
+    let mobilityPicks: ExerciseRow[] = pickMobilityFromCatalog(focus, exerciseCatalog, available, maxItems, new Set(), seed);
     if (mobilityPicks.length < maxItems) {
       const exclude = new Set(mobilityPicks.map((e) => e.id));
-      const extra = pickMobilityFromCatalog(focus, exerciseCatalog, available, maxItems - mobilityPicks.length, exclude);
+      const extra = savedCompatible.filter((e) => !exclude.has(e.id)).slice(0, maxItems - mobilityPicks.length);
       mobilityPicks = [...mobilityPicks, ...extra];
     }
     result.mobility = mobilityPicks.map((e) => ({ exercise_id: e.id || null, exercise_name: e.name }));

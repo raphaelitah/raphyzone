@@ -2,6 +2,25 @@ import { test, expect } from '@playwright/test';
 import { login, ATHLETE } from './fixtures/auth';
 import { makeApiClient, findMultiExerciseWorkoutId } from './fixtures/apiClient';
 
+// The workout page shows a "Warm Up" screen (with its own "Skip warm up" /
+// "Start Workout" buttons) before the first exercise whenever the athlete's
+// profile produces one for that workout — dismiss it if present so tests can
+// assert on the exercise sequence itself. A no-op when there's no warm up.
+async function dismissWarmupIfPresent(page) {
+  const skipWarmup = page.getByRole('button', { name: /^skip warm up$/i });
+  const exerciseHeading = page.getByText(/Exercise \d+ of/i);
+  // Wait for whichever screen the page settles on (loading the workout can
+  // take a couple of seconds) rather than racing a short fixed timeout.
+  await Promise.race([
+    skipWarmup.waitFor({ state: 'visible', timeout: 15000 }),
+    exerciseHeading.waitFor({ state: 'visible', timeout: 15000 }),
+  ]).catch(() => {});
+  if (await skipWarmup.isVisible().catch(() => false)) {
+    await skipWarmup.click();
+    await exerciseHeading.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+  }
+}
+
 test.describe('Running a workout (regression)', () => {
   test.beforeEach(async () => {
     // Clear any in-progress session left over from a prior (e.g. failed) run —
@@ -28,6 +47,7 @@ test.describe('Running a workout (regression)', () => {
 
     await page.waitForURL(/\/workout\/.+/, { timeout: 10000 });
     const workoutId = page.url().split('/workout/')[1];
+    await dismissWarmupIfPresent(page);
 
     // Skip every exercise (skipping never requires filling in weight/distance).
     // Skip both advances and logs in one action — there's no separate "Next"
@@ -72,6 +92,7 @@ test.describe('Running a workout (regression)', () => {
 
     await login(page);
     await page.goto(`/workout/${workoutId}`);
+    await dismissWarmupIfPresent(page);
 
     // Skip past the first exercise/block so there's real progress to resume.
     const skipButton = page.getByRole('button', { name: /^skip/i });
@@ -128,6 +149,7 @@ test.describe('Running a workout (regression)', () => {
 
     await login(page);
     await page.goto(`/workout/${workoutId}`);
+    await dismissWarmupIfPresent(page);
 
     // Make some progress so there's a real prior session to replace.
     const skipButton = page.getByRole('button', { name: /^skip/i });
@@ -140,6 +162,8 @@ test.describe('Running a workout (regression)', () => {
 
     await page.locator('header button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click();
     await page.getByRole('button', { name: /^restart$/i }).click();
+    // Restarting creates a fresh session, so its own warm up screen reappears.
+    await dismissWarmupIfPresent(page);
 
     // Lands back on exercise 1 of a fresh, still-usable session — not a crash.
     await expect(page.getByText(/Exercise 1 of/i)).toBeVisible({ timeout: 10000 });
