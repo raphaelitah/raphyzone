@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Check, X, ArrowLeft, Loader2 } from 'lucide-react';
 import { createNotification } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/use-toast';
 
 export default function AdminReview() {
   const { user } = useAuth();
@@ -62,7 +63,8 @@ export default function AdminReview() {
   const approve = async (exercise) => {
     setProcessing(exercise.id);
     try {
-      await supabase.from('exercises').update({ submission_status: 'approved', rejection_reason: null }).eq('id', exercise.id);
+      const { error } = await supabase.from('exercises').update({ submission_status: 'approved', rejection_reason: null }).eq('id', exercise.id);
+      if (error) { toast({ title: 'Failed to approve exercise', variant: 'destructive' }); return; }
       if (exercise.author_id) {
         await createNotification({
           userId: exercise.author_id,
@@ -79,7 +81,8 @@ export default function AdminReview() {
   const reject = async (exercise) => {
     setProcessing(exercise.id);
     try {
-      await supabase.from('exercises').update({ submission_status: 'rejected', rejection_reason: reason || null }).eq('id', exercise.id);
+      const { error } = await supabase.from('exercises').update({ submission_status: 'rejected', rejection_reason: reason || null }).eq('id', exercise.id);
+      if (error) { toast({ title: 'Failed to reject exercise', variant: 'destructive' }); return; }
       if (exercise.author_id) {
         await createNotification({
           userId: exercise.author_id,
@@ -98,7 +101,8 @@ export default function AdminReview() {
   const approveWorkout = async (workout) => {
     setProcessing(workout.id);
     try {
-      await supabase.from('workouts').update({ status: 'approved', rejection_reason: null }).eq('id', workout.id);
+      const { error } = await supabase.from('workouts').update({ status: 'approved', rejection_reason: null }).eq('id', workout.id);
+      if (error) { toast({ title: 'Failed to approve workout', variant: 'destructive' }); return; }
       if (workout.author_id) {
         await createNotification({
           userId: workout.author_id,
@@ -115,7 +119,8 @@ export default function AdminReview() {
   const rejectWorkout = async (workout) => {
     setProcessing(workout.id);
     try {
-      await supabase.from('workouts').update({ status: 'rejected', rejection_reason: reason || null }).eq('id', workout.id);
+      const { error } = await supabase.from('workouts').update({ status: 'rejected', rejection_reason: reason || null }).eq('id', workout.id);
+      if (error) { toast({ title: 'Failed to reject workout', variant: 'destructive' }); return; }
       if (workout.author_id) {
         await createNotification({
           userId: workout.author_id,

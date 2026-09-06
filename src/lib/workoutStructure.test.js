@@ -294,4 +294,14 @@ describe('getWorkoutMetaLine', () => {
     };
     expect(getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlock)).toBe('3 Exercises · 3 Rounds');
   });
+
+  it('derives EMOM rounds from the EMOM block\'s own exercise count, not the whole workout\'s', () => {
+    const workout = { workout_id: 'w1' };
+    const blocksByWorkout = { w1: [{ block_id: 'b1', block_type: 'emom', rounds: 9 }, { block_id: 'b2' }] };
+    const blockExercisesByBlock = {
+      b1: [{ step_type: 'exercise' }, { step_type: 'exercise' }, { step_type: 'exercise' }],
+      b2: [{ step_type: 'exercise' }, { step_type: 'exercise' }],
+    };
+    expect(getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlock)).toBe('5 Exercises · 3 Rounds');
+  });
 });

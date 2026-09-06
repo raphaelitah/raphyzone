@@ -179,7 +179,11 @@ export function getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlo
     parts.push(`${restCount} ${restCount === 1 ? 'Rest' : 'Rests'}`);
   }
   if (emomBlock && emomBlock.rounds) {
-    const denominator = exerciseCount + restCount;
+    const emomExerciseCount = (blockExercisesByBlock[emomBlock.block_id] || []).filter(
+      (be) => be.step_type === 'exercise'
+    ).length;
+    const rotates = isAlternatingEmomBlock(emomBlock) || emomExerciseCount > 1;
+    const denominator = rotates ? emomExerciseCount : 1;
     if (denominator > 0) {
       const rounds = Math.round(emomBlock.rounds / denominator);
       parts.push(`${rounds} ${rounds === 1 ? 'Round' : 'Rounds'}`);

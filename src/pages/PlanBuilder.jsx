@@ -116,12 +116,14 @@ export default function PlanBuilder() {
   const [notifyError, setNotifyError] = useState('');
   const pollTimerRef = useRef(null);
   const emailOfferTimerRef = useRef(null);
+  const regenTimerRef = useRef(null);
 
   const weekStart = fmtISO(mondayOf(new Date()));
 
   useEffect(() => () => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     if (emailOfferTimerRef.current) clearTimeout(emailOfferTimerRef.current);
+    if (regenTimerRef.current) clearTimeout(regenTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -266,9 +268,9 @@ export default function PlanBuilder() {
         if (data.status === 'done') { await finishGeneratedPlan(data); resolve(); return; }
         if (data.status === 'failed') { setError(data.error || 'Regeneration failed.'); resolve(); return; }
         setRegenStatus(data.position ? `Queued — position ${data.position}` : 'Queued…');
-        setTimeout(tick, POLL_INTERVAL_MS);
+        regenTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS);
       } catch {
-        setTimeout(tick, POLL_INTERVAL_MS);
+        regenTimerRef.current = setTimeout(tick, POLL_INTERVAL_MS);
       }
     };
     tick();

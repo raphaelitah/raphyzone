@@ -10,6 +10,7 @@ import { CALIBRATION_PATTERNS, fmtISO } from '@/lib/fitness';
 import { inputToKg } from '@/lib/units';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
+import { toast } from '@/components/ui/use-toast';
 
 const SKIP = "I don't perform this movement";
 
@@ -59,12 +60,19 @@ export default function StrengthCalibration() {
 
       const { data: existing } = await supabase.from('athlete_profiles').select('id').eq('user_id', user.id);
       if (existing?.[0]) {
-        await supabase.from('athlete_profiles').update({
+        const { error } = await supabase.from('athlete_profiles').update({
           strength_calibration: calibration,
           calibrated: true,
           calibrated_date: fmtISO(new Date()),
           strength_known: calibration.length > 0,
         }).eq('id', existing[0].id);
+        if (error) {
+          toast({ title: "Couldn't save your calibration", description: 'Please check your connection and try again.', variant: 'destructive' });
+          return;
+        }
+      } else {
+        toast({ title: "Couldn't save your calibration", description: 'No profile found for this account.', variant: 'destructive' });
+        return;
       }
       await reload();
       recalcPlanWeights(user.id); // background: recalculate plan weights with new calibration

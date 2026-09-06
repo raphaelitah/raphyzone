@@ -34,10 +34,12 @@ export default function Login() {
   };
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    setError("");
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: new URL(returnTo, window.location.origin).toString() },
     });
+    if (oauthError) setError(oauthError.message || "Couldn't sign in with Google");
   };
 
   return (

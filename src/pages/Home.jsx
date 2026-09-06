@@ -284,7 +284,7 @@ export default function Home() {
   const assignWorkoutToSlot = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
     const warmup = await fetchWarmup(workoutId);
-    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual)
+    const updated = plan.workouts.map((w) => (w === slot)
       ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false, warmup }
       : w);
     setPlan({ ...plan, workouts: updated });
@@ -379,7 +379,7 @@ export default function Home() {
   const assignWorkoutToRestDay = async (workoutId, workoutName, reason, slot) => {
     if (!slot || !plan) return;
     const warmup = await fetchWarmup(workoutId);
-    const updated = plan.workouts.map((w) => (w.day === slot.day && !w.manual) ? {
+    const updated = plan.workouts.map((w) => (w === slot) ? {
       ...w,
       slot_type: 'train',
       workout_id: workoutId,

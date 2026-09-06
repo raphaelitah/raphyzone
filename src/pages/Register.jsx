@@ -72,10 +72,12 @@ export default function Register() {
   };
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    setError("");
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: new URL(safeReturnTo(), window.location.origin).toString() },
     });
+    if (oauthError) setError(oauthError.message || "Couldn't sign in with Google");
   };
 
   if (showOtp) {
