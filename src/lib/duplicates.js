@@ -10,21 +10,26 @@ export const UNIQUE_VIOLATION = '23505';
 export async function findDuplicateExercise(name) {
   const norm = normalizeText(name);
   if (!norm) return null;
-  const { data } = await supabase.from('exercises').select('id, name').limit(3000);
+  const { data } = await supabase.from('exercises').select('id, name').ilike('name', norm).limit(10);
   return (data || []).find(e => normalizeText(e.name) === norm) || null;
 }
 
 export async function findDuplicateWorkout(name) {
   const norm = normalizeText(name);
   if (!norm) return null;
-  const { data } = await supabase.from('workouts').select('id, name').limit(3000);
+  const { data } = await supabase.from('workouts').select('id, name').ilike('name', norm).limit(10);
   return (data || []).find(w => normalizeText(w.name) === norm) || null;
 }
 
 export async function findDuplicateTaxonomyTerm(dimension, value, excludeId) {
   const norm = normalizeText(value);
   if (!norm) return null;
-  const { data } = await supabase.from('taxonomy_terms').select('id, value').eq('dimension', dimension).limit(500);
+  const { data } = await supabase
+    .from('taxonomy_terms')
+    .select('id, value')
+    .eq('dimension', dimension)
+    .ilike('value', norm)
+    .limit(10);
   return (data || []).find(t => t.id !== excludeId && normalizeText(t.value) === norm) || null;
 }
 
@@ -56,26 +61,35 @@ async function loadWorkoutExerciseSets(excludeWorkoutId) {
   const relevant = workouts || [];
   if (relevant.length === 0) return [];
 
-  const workoutIds = new Set(relevant.map(w => w.workout_id));
-  const { data: blocks } = await supabase.from('workout_blocks').select('block_id, workout_id').limit(5000);
+  const workoutIds = Array.from(new Set(relevant.map(w => w.workout_id)));
+  const { data: blocks } = await supabase
+    .from('workout_blocks')
+    .select('block_id, workout_id')
+    .in('workout_id', workoutIds)
+    .limit(5000);
   const blockToWorkout = new Map();
+  const blockIds = [];
   (blocks || []).forEach(b => {
-    if (workoutIds.has(b.workout_id)) blockToWorkout.set(b.block_id, b.workout_id);
+    blockToWorkout.set(b.block_id, b.workout_id);
+    blockIds.push(b.block_id);
   });
-
-  const { data: blockExs } = await supabase
-    .from('block_exercises')
-    .select('block_id, step_type, exercise_id, exercise_title_raw')
-    .eq('step_type', 'exercise')
-    .limit(10000);
 
   const setsByWorkout = new Map();
-  (blockExs || []).forEach(be => {
-    const workoutId = blockToWorkout.get(be.block_id);
-    if (!workoutId) return;
-    if (!setsByWorkout.has(workoutId)) setsByWorkout.set(workoutId, new Set());
-    setsByWorkout.get(workoutId).add(exerciseKey(be));
-  });
+  if (blockIds.length > 0) {
+    const { data: blockExs } = await supabase
+      .from('block_exercises')
+      .select('block_id, step_type, exercise_id, exercise_title_raw')
+      .eq('step_type', 'exercise')
+      .in('block_id', blockIds)
+      .limit(10000);
+
+    (blockExs || []).forEach(be => {
+      const workoutId = blockToWorkout.get(be.block_id);
+      if (!workoutId) return;
+      if (!setsByWorkout.has(workoutId)) setsByWorkout.set(workoutId, new Set());
+      setsByWorkout.get(workoutId).add(exerciseKey(be));
+    });
+  }
 
   return relevant.map(w => ({ workout_id: w.workout_id, name: w.name, exerciseSet: setsByWorkout.get(w.workout_id) || new Set() }));
 }

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import { toast } from '@/components/ui/use-toast';
 
 export const DIMENSIONS = [
   { value: 'equipment', label: 'Equipment' },
@@ -74,12 +75,24 @@ export async function transferExercises(dimension, oldTerm, newTerm) {
   const config = FIELD_MAP[dimension];
   if (!config) return;
   if (config.type === 'comma') {
-    const { data } = await supabase.from('exercises').select('id, equipment').limit(3000);
+    const { data } = await supabase
+      .from('exercises')
+      .select('id, equipment')
+      .ilike('equipment', `%${oldTerm}%`)
+      .limit(3000);
     const matching = (data || []).filter(e => e.equipment && e.equipment.split(',').map(s => s.trim()).includes(oldTerm));
-    await Promise.all(matching.map(e => supabase
+    const results = await Promise.all(matching.map(e => supabase
       .from('exercises')
       .update({ equipment: e.equipment.split(',').map(s => s.trim()).map(item => item === oldTerm ? newTerm : item).join(', ') })
       .eq('id', e.id)));
+    const failed = results.filter(r => r.error);
+    if (failed.length > 0) {
+      toast({
+        title: 'Some exercises failed to update',
+        description: `${failed.length} of ${matching.length} exercises could not be transferred from "${oldTerm}" to "${newTerm}".`,
+        variant: 'destructive',
+      });
+    }
   } else if (config.type === 'multi') {
     /** @type {any} */
     const table = supabase.from('exercises');

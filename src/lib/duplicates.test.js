@@ -28,6 +28,12 @@ vi.mock('@/lib/supabaseClient', () => {
       select: () => query,
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return query; },
       neq: (col, val) => { rows = rows.filter((r) => r[col] !== val); return query; },
+      in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return query; },
+      ilike: (col, val) => {
+        const norm = String(val).toLowerCase();
+        rows = rows.filter((r) => String(r[col] || '').toLowerCase() === norm);
+        return query;
+      },
       limit: () => Promise.resolve({ data: rows }),
     };
     return query;
