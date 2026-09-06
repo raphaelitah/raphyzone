@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
+import { useToast } from '@/components/ui/use-toast';
 import { Plus, Loader2, ChevronDown } from 'lucide-react';
 import { DragDropContext } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
 import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/useBlockExerciseCrud';
 
 export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChanged }) {
+  const { toast } = useToast();
   const [blocks, setBlocks] = useState([]);
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
@@ -131,7 +133,7 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
 
   const handleAddBlock = async () => {
     const orderIndex = blocks.length;
-    const { data: newBlock } = await supabase.from('workout_blocks').insert({
+    const { data: newBlock, error } = await supabase.from('workout_blocks').insert({
       workout_id: workout.workout_id,
       block_id: `BLK-${Date.now()}`,
       order_index: orderIndex,
@@ -139,6 +141,10 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
       block_type: 'main',
       rounds: 1,
     }).select().single();
+    if (error || !newBlock) {
+      toast({ title: 'Failed to add block', variant: 'destructive' });
+      return;
+    }
     const relabeled = await relabelBlocks([...blocks, newBlock]);
     setBlocks(relabeled);
     setBlockExercisesByBlock((prev) => ({ ...prev, [newBlock.block_id]: [] }));
@@ -154,14 +160,26 @@ export default function WorkoutEditorSheet({ workout, open, onOpenChange, onChan
   const handleDeleteBlock = async () => {
     if (!deletingBlock) return;
     const blockExs = blockExercisesByBlock[deletingBlock.block_id] || [];
-    for (const be of blockExs) {
-      const sets = setsByBlockExercise[be.block_exercise_id] || [];
-      if (sets.length) {
-        await supabase.from('prescribed_sets').delete().in('id', sets.map((s) => s.id));
+    const setIds = blockExs.flatMap((be) => (setsByBlockExercise[be.block_exercise_id] || []).map((s) => s.id));
+    if (setIds.length) {
+      const { error: setsError } = await supabase.from('prescribed_sets').delete().in('id', setIds);
+      if (setsError) {
+        toast({ title: 'Failed to delete block', variant: 'destructive' });
+        return;
       }
-      await supabase.from('block_exercises').delete().eq('id', be.id);
     }
-    await supabase.from('workout_blocks').delete().eq('id', deletingBlock.id);
+    if (blockExs.length) {
+      const { error: beError } = await supabase.from('block_exercises').delete().in('id', blockExs.map((be) => be.id));
+      if (beError) {
+        toast({ title: 'Failed to delete block', variant: 'destructive' });
+        return;
+      }
+    }
+    const { error: blockError } = await supabase.from('workout_blocks').delete().eq('id', deletingBlock.id);
+    if (blockError) {
+      toast({ title: 'Failed to delete block', variant: 'destructive' });
+      return;
+    }
     const remaining = blocks.filter((b) => b.id !== deletingBlock.id);
     const relabeled = await relabelBlocks(remaining);
     setBlocks(relabeled);

@@ -9,6 +9,7 @@ import { parseISO, format } from 'date-fns';
 import { DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { buildBlocksByWorkout, buildBlockExercisesByBlock } from '@/lib/workoutStructure';
+import { useToast } from '@/components/ui/use-toast';
 
 const CHART_COLORS = ['hsl(var(--brand))', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 
@@ -33,6 +34,7 @@ function modeDifficulty(arr) {
 }
 
 export default function SessionDetailSheet({ session, open, onOpenChange, editable = false, onSaved = null }) {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [exerciseSessions, setExerciseSessions] = useState([]);
   const [history, setHistory] = useState([]);
@@ -160,13 +162,12 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const save = async () => {
     setSaving(true);
     try {
-      const updated = [];
-      for (const es of exerciseSessions) {
+      const results = await Promise.all(exerciseSessions.map(async (es) => {
         const dr = drafts[es.id];
-        if (!dr) { updated.push(es); continue; }
+        if (!dr) return { es, error: null };
         if (dr.skipped) {
-          await supabase.from('exercise_sessions').delete().eq('id', es.id);
-          continue;
+          const { error } = await supabase.from('exercise_sessions').delete().eq('id', es.id);
+          return { es: null, error };
         }
         const payload = {
           max_weight: dr.bodyweight ? 0 : (dr.max_weight === '' ? null : dr.max_weight),
@@ -176,13 +177,22 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
           note: dr.note || '',
           elapsed_seconds: Math.round(dr.elapsed_seconds || 0),
         };
-        await supabase.from('exercise_sessions').update(payload).eq('id', es.id);
-        updated.push({ ...es, ...payload });
+        const { error } = await supabase.from('exercise_sessions').update(payload).eq('id', es.id);
+        return { es: error ? null : { ...es, ...payload }, error };
+      }));
+      if (results.some((r) => r.error)) {
+        toast({ title: 'Failed to save session', description: 'Some exercise updates could not be saved.', variant: 'destructive' });
+        return;
       }
+      const updated = results.filter((r) => r.es).map((r) => r.es);
       setExerciseSessions(updated);
       const diffs = updated.map((e) => e.difficulty).filter(Boolean);
       const overall = modeDifficulty(diffs);
-      await supabase.from('workout_sessions').update({ overall_difficulty: overall }).eq('id', session.id);
+      const { error: overallError } = await supabase.from('workout_sessions').update({ overall_difficulty: overall }).eq('id', session.id);
+      if (overallError) {
+        toast({ title: 'Failed to save session', variant: 'destructive' });
+        return;
+      }
       setEditing(false);
       onSaved?.({ ...session, overall_difficulty: overall });
     } finally { setSaving(false); }

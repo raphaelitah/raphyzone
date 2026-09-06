@@ -11,10 +11,12 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { supabase } from '@/lib/supabaseClient';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
+import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 
 function EditCalibrationSheet({ entry, meta, unit, open, onOpenChange, onSaved }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [exercise, setExercise] = useState(entry?.exercise || '');
   const [customExercise, setCustomExercise] = useState('');
   const [weight, setWeight] = useState(kgToInput(entry?.weight_kg, unit));
@@ -36,7 +38,11 @@ function EditCalibrationSheet({ entry, meta, unit, open, onOpenChange, onSaved }
         const updated = (row.strength_calibration || []).map((c) =>
           c.pattern === entry.pattern ? { ...c, exercise: finalExercise, weight_kg: weightKg } : c
         );
-        await supabase.from('athlete_profiles').update({ strength_calibration: updated }).eq('id', row.id);
+        const { error } = await supabase.from('athlete_profiles').update({ strength_calibration: updated }).eq('id', row.id);
+        if (error) {
+          toast({ title: 'Failed to save calibration', variant: 'destructive' });
+          return;
+        }
         recalcPlanWeights(user.id); // background: recalculate plan weights with new calibration
       }
       await onSaved();

@@ -46,7 +46,11 @@ export default function AddToPlanSheet({ workout, open, onOpenChange }) {
       locked: false,
     } : w);
     try {
-      await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
+      const { error } = await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
+      if (error) {
+        toast({ title: 'Something went wrong', description: 'Could not update your weekly plan.', variant: 'destructive' });
+        return;
+      }
       setPlan({ ...plan, workouts: updated });
       toast({ title: 'Added to your plan', description: `${workout.name} scheduled for ${slot.day}.` });
       onOpenChange(false);

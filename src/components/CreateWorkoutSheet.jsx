@@ -84,7 +84,7 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
     if (error) throw error;
 
     const blockId = `BLK-${Date.now()}`;
-    await supabase.from('workout_blocks').insert({
+    const { error: blockError } = await supabase.from('workout_blocks').insert({
       workout_id: workoutId,
       block_id: blockId,
       order_index: 0,
@@ -92,11 +92,15 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
       block_type: 'main',
       rounds: 1,
     });
+    if (blockError) {
+      toast({ title: 'Failed to save workout', description: 'Could not create workout block.', variant: 'destructive' });
+      return;
+    }
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const beId = `BE-${Date.now()}-${i}`;
-      await supabase.from('block_exercises').insert({
+      const { error: beError } = await supabase.from('block_exercises').insert({
         block_exercise_id: beId,
         block_id: blockId,
         step_type: item.step_type,
@@ -105,9 +109,13 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
         order_in_block: i,
         prescription_value: item.prescription_value || null,
       });
+      if (beError) {
+        toast({ title: 'Failed to save workout', description: 'Could not save an exercise.', variant: 'destructive' });
+        return;
+      }
       const targetReps = parseInt(item.prescription_value, 10);
       if (item.step_type === 'exercise' && item.sets > 0 && !isNaN(targetReps)) {
-        await supabase.from('prescribed_sets').insert(
+        const { error: setsError } = await supabase.from('prescribed_sets').insert(
           Array.from({ length: item.sets }, (_, s) => ({
             set_id: `${beId}-S${s + 1}`,
             block_exercise_id: beId,
@@ -115,6 +123,10 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
             target_reps: targetReps,
           }))
         );
+        if (setsError) {
+          toast({ title: 'Failed to save workout', description: 'Could not save prescribed sets.', variant: 'destructive' });
+          return;
+        }
       }
     }
 

@@ -65,11 +65,22 @@ export default function ProfileGapPrompt({ gap, profile, context = null, onAnswe
           </div>
         )}
         {gap.type === 'text' && (
-          <div className="flex gap-2">
-            <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={gap.placeholder} className="h-9 rounded-lg text-sm flex-1" />
-            <Button size="sm" disabled={saving || !text.trim()} onClick={() => submit(text)} className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90 h-9 shrink-0">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-            </Button>
+          <div>
+            <div className="flex gap-2">
+              <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={gap.placeholder} className="h-9 rounded-lg text-sm flex-1" />
+              <Button size="sm" disabled={saving || !text.trim()} onClick={() => submit(text)} className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90 h-9 shrink-0">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+              </Button>
+            </div>
+            {gap.noneLabel && (
+              <button
+                disabled={saving}
+                onClick={() => submit(null)}
+                className="mt-2 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+              >
+                {gap.noneLabel}
+              </button>
+            )}
           </div>
         )}
       </div>

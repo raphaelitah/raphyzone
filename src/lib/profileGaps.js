@@ -38,8 +38,9 @@ export const PROFILE_GAPS = [
     placeholder: 'e.g. Burpees, Overhead Press',
     question: () => "Any exercises you'd rather avoid?",
     hint: () => "We'll steer clear of them in your plans.",
+    noneLabel: "None — nothing to avoid",
     isMissing: (p) => !(p?.dislikes?.length) && !p?.dislikes_reviewed,
-    buildPatch: (value) => ({ dislikes: value.split(',').map((s) => s.trim()).filter(Boolean) }),
+    buildPatch: (value) => (value === null ? { dislikes_reviewed: true } : { dislikes: value.split(',').map((s) => s.trim()).filter(Boolean) }),
   },
   {
     key: 'secondary_goal',
