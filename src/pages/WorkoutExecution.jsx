@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { toast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import {
@@ -1010,7 +1011,19 @@ export default function WorkoutExecution() {
       const overallDiff = completedExercises.length ? modeDifficulty(completedExercises.map((e) => logs[e.key].difficulty)) : 'normal';
       const clockStartMs = sessionStartMsRef.current ?? sessionCreatedMsRef.current;
       const total = clockStartMs ? (Date.now() - clockStartMs) / 1000 : 0;
-      await supabase.from('workout_sessions').update({ status: 'completed', overall_difficulty: overallDiff, elapsed_seconds: Math.round(total) }).eq('id', sid);
+      const { data: updated, error } = await supabase.from('workout_sessions')
+        .update({ status: 'completed', overall_difficulty: overallDiff, elapsed_seconds: Math.round(total) })
+        .eq('id', sid)
+        .select('id');
+      if (error || !updated?.length) {
+        // Either the write failed outright, or it matched zero rows (a stale/deleted
+        // session id, or a row-level-security policy silently excluding it) — Supabase
+        // doesn't throw for the latter, so we have to check the returned rows ourselves.
+        // Never navigate to /progress on unconfirmed success: that would show the athlete
+        // a "completed" workout that was never actually saved as one.
+        toast({ title: "Couldn't save your workout", description: 'Please check your connection and try finishing again.', variant: 'destructive' });
+        return;
+      }
       try { await supabase.functions.invoke('learnFromSessionFeedback', { body: { workout_session_id: sid } }); } catch {}
       navigate('/progress');
     } finally { setSaving(false); }
