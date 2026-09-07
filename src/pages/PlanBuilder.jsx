@@ -488,6 +488,12 @@ export default function PlanBuilder() {
             <div className="animate-in slide-in-from-bottom-2 duration-300 mb-6">
               <h3 className="font-medium mb-2">{FOLLOWUP_LABEL[context]}</h3>
               <p className="text-xs text-muted-foreground mb-3">Select everything you'll have access to — this replaces your usual equipment for this week only. Leave everything unselected for bodyweight/running only.</p>
+              <button
+                onClick={() => setSetupEquipment((prev) => (prev.length === ALL_EQUIPMENT.length ? [] : [...ALL_EQUIPMENT]))}
+                className={cn('mb-3 px-3 py-2 rounded-full text-xs font-medium border transition-colors', setupEquipment.length === ALL_EQUIPMENT.length ? 'bg-brand text-brand-foreground border-transparent' : 'border-border text-muted-foreground')}
+              >
+                {setupEquipment.length === ALL_EQUIPMENT.length ? 'Full Gym Selected' : 'Select Full Gym'}
+              </button>
               <div className="flex flex-wrap gap-2">
                 {ALL_EQUIPMENT.map((eq) => {
                   const on = setupEquipment.includes(eq);
