@@ -1326,18 +1326,24 @@ export default function WorkoutExecution() {
         </div>
         <div className="flex gap-1 mt-2">
           {breadcrumbGroups.map((group) => (
-            // One pill per block (or per standalone exercise) instead of one per
-            // exercise — members of the same block lead to the same place when
-            // tapped (goToExercise renders the whole block either way), so they
-            // read as a single continuous segment with a hairline gap between
-            // members instead of looking like separate, individually-navigable
-            // steps. Sized by member count so total width still matches the
-            // exercise count, same as before.
-            <div key={group.block_id ?? group.items[0].e.key} className="rounded-full overflow-hidden flex gap-[2px]" style={{ flex: `${group.items.length} 1 0%` }}>
+            // One pill — and one click target — per block (or per standalone
+            // exercise) instead of one per exercise: members of the same block
+            // lead to the same place when tapped (goToExercise renders the whole
+            // block either way), so the whole pill is a single button; the
+            // per-member <span>s inside are purely visual, a hairline gap
+            // between them rather than separately-navigable steps. Sized by
+            // member count so total width still matches the exercise count.
+            <button
+              key={group.block_id ?? group.items[0].e.key}
+              type="button"
+              onClick={() => goToExercise(group.items[0].i)}
+              className="rounded-full overflow-hidden flex gap-[2px]"
+              style={{ flex: `${group.items.length} 1 0%` }}
+            >
               {group.items.map(({ e, i }) => (
-                <button key={e.key} onClick={() => goToExercise(i)} className={cn('h-1 flex-1 transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
+                <span key={e.key} className={cn('h-1 flex-1 transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
               ))}
-            </div>
+            </button>
           ))}
         </div>
       </header>
