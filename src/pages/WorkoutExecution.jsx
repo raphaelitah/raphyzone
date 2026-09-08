@@ -18,7 +18,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
@@ -100,6 +100,18 @@ export default function WorkoutExecution() {
   // block_id (superset) or exercise key (solo) so it survives navigating away
   // and back — otherwise the panel remounts and restarts the current set.
   const [panelProgress, setPanelProgress] = useState({});
+  // Set the instant the athlete finishes the last block/exercise's feedback
+  // screen (or skips past it) — from then on the exercise UI is replaced by a
+  // dedicated saving/done/error screen. This must be set synchronously in the
+  // same handler as any other "block done" state (completedBlockTimers, index,
+  // logPrompt) so React batches them into one render: without it, the finish()
+  // save (which awaits a network round trip) used to leave those other
+  // fields — completedBlockTimers marking the last block done — visible for a
+  // beat, and the "block done" state made isBlockActive fall through to the
+  // solo-exercise fallback UI for whatever `current` still pointed at,
+  // letting the athlete interact with (and "complete") it a second time
+  // before the real save/navigate ever landed.
+  const [completion, setCompletion] = useState(null); // null | 'saving' | 'done' | 'error'
 
   const fullExerciseMapRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -902,7 +914,10 @@ export default function WorkoutExecution() {
     setLoadingSubs(false);
   };
 
-  const [weightLoading, setWeightLoading] = useState(false);
+  // Keyed by exercise.key (not a plain boolean) so that when a block shows
+  // several exercises at once (e.g. a non-rotating EMOM/Tabata block), tapping
+  // refresh on one exercise's weight only spins that one tile.
+  const [weightLoadingKey, setWeightLoadingKey] = useState(null);
   const [calibrationPrompt, setCalibrationPrompt] = useState(null); // calibration pattern key to quick-calibrate, or null
 
   const persistWeight = async (exerciseCode, weight) => {
@@ -924,7 +939,7 @@ export default function WorkoutExecution() {
   const calcWeight = async (exercise = current) => {
     const requiresWeight = exercise && !isRunningExercise(exercise.details) && exercise.details?.requires_load !== false;
     if (!exercise?.exercise_id || !requiresWeight) return;
-    setWeightLoading(true);
+    setWeightLoadingKey(exercise.key);
     try {
       const extraCodes = exercise.exercise_id ? [exercise.exercise_id] : [];
       const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: extraCodes } });
@@ -946,7 +961,7 @@ export default function WorkoutExecution() {
         }
       }
     } catch { /* silent */ }
-    setWeightLoading(false);
+    setWeightLoadingKey(null);
   };
 
   const handleCalibrationSaved = async () => {
@@ -1308,7 +1323,7 @@ export default function WorkoutExecution() {
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
                 onSwap={requestSubstitute}
-                weightLoading={weightLoading}
+                weightLoadingKey={weightLoadingKey}
                 onWeightClick={calcWeight}
                 initialState={panelProgress[current.block_id] ?? null}
                 onStateChange={(s) => setPanelProgress((prev) => ({ ...prev, [current.block_id]: s }))}
@@ -1328,7 +1343,7 @@ export default function WorkoutExecution() {
                 isPreviewExercise={isPreviewExercise}
                 nextUpName={nextUpName}
                 onSwap={requestSubstitute}
-                weightLoading={weightLoading}
+                weightLoadingKey={weightLoadingKey}
                 onWeightClick={calcWeight}
               />
             ) : (
@@ -1343,7 +1358,7 @@ export default function WorkoutExecution() {
                 onFinish={handleSoloFinish}
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
-                weightLoading={weightLoading}
+                weightLoadingKey={weightLoadingKey}
                 onWeightClick={calcWeight}
                 initialState={panelProgress[current.key] ?? null}
                 onStateChange={(s) => setPanelProgress((prev) => ({ ...prev, [current.key]: s }))}

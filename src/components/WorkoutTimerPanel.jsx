@@ -33,7 +33,7 @@ export default function WorkoutTimerPanel({
   isPreviewExercise,
   nextUpName,
   onSwap = null,
-  weightLoading = false,
+  weightLoadingKey = null,
   onWeightClick = null,
 }) {
   const [workSec, setWorkSec] = useState(defaultConfig?.workSec?.toString() || '20');
@@ -71,7 +71,7 @@ export default function WorkoutTimerPanel({
         <YouTubeVideo url={exercise.details.video_url} title={exercise.exercise_name} className="w-full" />
       )}
       <div className="w-full">
-        <ExerciseSpecRow exercise={exercise} weightLoading={weightLoading} onWeightClick={onWeightClick ? () => onWeightClick(exercise) : null} />
+        <ExerciseSpecRow exercise={exercise} weightLoading={weightLoadingKey === exercise?.key} onWeightClick={onWeightClick ? () => onWeightClick(exercise) : null} />
       </div>
       {onSwap && allowSwap && (
         <button onClick={() => onSwap(exercise)} className="flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border border-border text-muted-foreground">
