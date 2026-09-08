@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 /**
- * Shared block/exercise CRUD used by both WorkoutEditorSheet and Workouts.jsx.
+ * Shared block/exercise CRUD used by Workouts.jsx's inline workout editor.
  * Operates on the caller's blockExercisesByBlock / setsByBlockExercise state
  * (both keyed the same way: { [block_id]: [...] } and { [block_exercise_id]: [...] }).
  */

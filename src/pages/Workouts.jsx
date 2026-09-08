@@ -4,11 +4,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus } from 'lucide-react';
-import { IconButton } from '@/components/ui/icon-button';
+import { Dumbbell, Clock, Play, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { WORKOUT_DIFFICULTY_META, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { DragDropContext } from '@hello-pangea/dnd';
+import { WORKOUT_DIFFICULTY_META, WORKOUT_CATEGORIES, isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
   buildBlocksByWorkout,
@@ -22,7 +23,8 @@ import {
 import { useAuth } from '@/lib/AuthContext';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import EditBlockExerciseSheet from '@/components/EditBlockExerciseSheet';
-import WorkoutEditorSheet from '@/components/WorkoutEditorSheet';
+import ExercisePickerSheet from '@/components/ExercisePickerSheet';
+import BlockEditor from '@/components/BlockEditor';
 import CreateWorkoutSheet from '@/components/CreateWorkoutSheet';
 import WorkoutFilters from '@/components/WorkoutFilters';
 import AddToPlanSheet from '@/components/AddToPlanSheet';
@@ -30,6 +32,7 @@ import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/
 import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 
 const BATCH_SIZE = 20;
+const SEARCH_STORAGE_KEY = 'raphyzone:workouts-search-query';
 
 export default function Workouts() {
   const [workouts, setWorkouts] = useState([]);
@@ -42,13 +45,23 @@ export default function Workouts() {
   const [difficulty, setDifficulty] = useState('All');
   const [workoutType, setWorkoutType] = useState('All');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => {
+    try {
+      return sessionStorage.getItem(SEARCH_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [selected, setSelected] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [editingWorkout, setEditingWorkout] = useState(null);
   const [creatingWorkout, setCreatingWorkout] = useState(false);
   const [addingToPlan, setAddingToPlan] = useState(null);
+  const [wForm, setWForm] = useState({ name: '', difficulty: '', workout_category: '', est_duration_min: '', description: '', notes: '' });
+  const [showWorkoutEdit, setShowWorkoutEdit] = useState(false);
+  const [savingWorkout, setSavingWorkout] = useState(false);
+  const [deletingBlock, setDeletingBlock] = useState(null);
+  const [pickerBlock, setPickerBlock] = useState(null);
   const [structureLoading, setStructureLoading] = useState(false);
   const [loadedSetsFor, setLoadedSetsFor] = useState(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
@@ -159,6 +172,17 @@ export default function Workouts() {
   const refreshData = async () => {
     setLoading(true);
     setLoadedSetsFor(new Set());
+    if (selected) {
+      // loadWorkouts() below only refetches the paginated base list, which
+      // doesn't include search-result rows — patch the edited workout into
+      // both places directly so an active search reflects the save too.
+      const { data: freshWorkout } = await supabase.from('workouts').select('*').eq('id', selected.id).single();
+      if (freshWorkout) {
+        setSelected(freshWorkout);
+        setWorkouts((prev) => prev.map((w) => (w.id === freshWorkout.id ? freshWorkout : w)));
+        setSearchResults((prev) => (prev ? prev.map((w) => (w.id === freshWorkout.id ? freshWorkout : w)) : prev));
+      }
+    }
     await loadWorkouts();
     if (selected) {
       await loadStructureData([selected]);
@@ -174,6 +198,23 @@ export default function Workouts() {
     loadWorkouts();
   }, []);
 
+  useEffect(() => {
+    if (selected) {
+      setWForm({
+        name: selected.name || '',
+        difficulty: selected.difficulty || '',
+        workout_category: selected.workout_category || '',
+        est_duration_min: selected.est_duration_min?.toString() || '',
+        description: selected.description || '',
+        notes: selected.notes || '',
+      });
+      setShowWorkoutEdit(false);
+    }
+    // Only re-sync the form when a *different* workout is opened — refreshData()
+    // patches `selected` with fresh rows in the background, and re-running this
+    // off that would blow away whatever the admin is mid-typing.
+  }, [selected?.id]);
+
   // The paginated `workouts` list only holds whatever's been scrolled into
   // view so far, so filtering it client-side made the search box silently
   // miss anything not yet loaded — with the "no results" list empty, the
@@ -181,6 +222,12 @@ export default function Workouts() {
   // loadMore, and the UI never settled on a "no results" state. A non-empty
   // query now searches the whole table server-side instead.
   useEffect(() => {
+    try {
+      if (query) sessionStorage.setItem(SEARCH_STORAGE_KEY, query);
+      else sessionStorage.removeItem(SEARCH_STORAGE_KEY);
+    } catch {
+      // sessionStorage unavailable (private mode, etc.) — search just won't persist
+    }
     const trimmed = query.trim();
     if (!trimmed) {
       setSearchResults(null);
@@ -255,6 +302,140 @@ export default function Workouts() {
     if (!relabeled) return;
     setBlocksByWorkout((prev) => ({ ...prev, [selected.workout_id]: relabeled }));
     await persistBlockOrder(relabeled);
+  };
+
+  const handleSaveWorkout = async () => {
+    setSavingWorkout(true);
+    try {
+      const { data: updated } = await supabase.from('workouts').update({
+        name: wForm.name,
+        difficulty: wForm.difficulty || null,
+        workout_category: wForm.workout_category || null,
+        est_duration_min: wForm.est_duration_min ? parseInt(wForm.est_duration_min, 10) : null,
+        description: wForm.description || null,
+        notes: wForm.notes || null,
+      }).eq('id', selected.id).select().single();
+      if (updated) {
+        setSelected(updated);
+        setWorkouts((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+        setSearchResults((prev) => (prev ? prev.map((w) => (w.id === updated.id ? updated : w)) : prev));
+      }
+      setShowWorkoutEdit(false);
+    } finally {
+      setSavingWorkout(false);
+    }
+  };
+
+  const relabelBlocks = async (blockList) => {
+    const sorted = [...blockList].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+    const updates = [];
+    const relabeled = sorted.map((block, i) => {
+      const label = String.fromCharCode(65 + i);
+      if (block.block_label !== label || block.order_index !== i) {
+        updates.push(supabase.from('workout_blocks').update({ block_label: label, order_index: i }).eq('id', block.id));
+      }
+      return { ...block, block_label: label, order_index: i };
+    });
+    await Promise.all(updates);
+    return relabeled;
+  };
+
+  const handleUpdateBlock = async (blockId, data) => {
+    await supabase.from('workout_blocks').update(data).eq('id', blockId);
+    setBlocksByWorkout((prev) => ({
+      ...prev,
+      [selected.workout_id]: (prev[selected.workout_id] || []).map((b) => (b.id === blockId ? { ...b, ...data } : b)),
+    }));
+  };
+
+  const handleAddBlock = async () => {
+    const blocks = blocksByWorkout[selected.workout_id] || [];
+    const { data: newBlock, error } = await supabase.from('workout_blocks').insert({
+      workout_id: selected.workout_id,
+      block_id: `BLK-${Date.now()}`,
+      order_index: blocks.length,
+      block_label: 'ZZ',
+      block_type: 'main',
+      rounds: 1,
+    }).select().single();
+    if (error || !newBlock) return;
+    const relabeled = await relabelBlocks([...blocks, newBlock]);
+    setBlocksByWorkout((prev) => ({ ...prev, [selected.workout_id]: relabeled }));
+    setBlockExercisesByBlock((prev) => ({ ...prev, [newBlock.block_id]: [] }));
+  };
+
+  const handleDeleteBlock = async () => {
+    if (!deletingBlock) return;
+    const blockExs = blockExercisesByBlock[deletingBlock.block_id] || [];
+    const setIds = blockExs.flatMap((be) => (setsByBlockExercise[be.block_exercise_id] || []).map((s) => s.id));
+    if (setIds.length) await supabase.from('prescribed_sets').delete().in('id', setIds);
+    if (blockExs.length) await supabase.from('block_exercises').delete().in('id', blockExs.map((be) => be.id));
+    await supabase.from('workout_blocks').delete().eq('id', deletingBlock.id);
+    const remaining = (blocksByWorkout[selected.workout_id] || []).filter((b) => b.id !== deletingBlock.id);
+    const relabeled = await relabelBlocks(remaining);
+    setBlocksByWorkout((prev) => ({ ...prev, [selected.workout_id]: relabeled }));
+    setBlockExercisesByBlock((prev) => {
+      const next = { ...prev };
+      delete next[deletingBlock.block_id];
+      return next;
+    });
+    await recomputeAndSaveFormatLabel(selected);
+    setDeletingBlock(null);
+  };
+
+  const handleAddExercise = async (data) => {
+    const block = pickerBlock;
+    const existingExs = blockExercisesByBlock[block.block_id] || [];
+    const orderInBlock = existingExs.length;
+    const beId = `BE-${Date.now()}`;
+
+    if (data.rest) {
+      const { data: newBe } = await supabase.from('block_exercises').insert({
+        block_exercise_id: beId,
+        block_id: block.block_id,
+        step_type: 'rest',
+        exercise_title_raw: 'Rest',
+        order_in_block: orderInBlock,
+        prescription_value: `${data.duration_seconds}s`,
+      }).select().single();
+      setBlockExercisesByBlock((prev) => ({
+        ...prev,
+        [block.block_id]: [...(prev[block.block_id] || []), newBe],
+      }));
+      setPickerBlock(null);
+      return;
+    }
+
+    const { exercise, prescription_value, sets: setCount } = data;
+    const { data: newBe } = await supabase.from('block_exercises').insert({
+      block_exercise_id: beId,
+      block_id: block.block_id,
+      step_type: 'exercise',
+      exercise_id: exercise.exercise_code,
+      exercise_title_raw: exercise.name,
+      order_in_block: orderInBlock,
+      prescription_value: prescription_value || null,
+    }).select().single();
+    setBlockExercisesByBlock((prev) => ({
+      ...prev,
+      [block.block_id]: [...(prev[block.block_id] || []), newBe],
+    }));
+    if (setCount > 0 && prescription_value) {
+      const targetReps = parseInt(prescription_value, 10);
+      if (!isNaN(targetReps)) {
+        const { data: newSets } = await supabase.from('prescribed_sets').insert(
+          Array.from({ length: setCount }, (_, i) => ({
+            set_id: `SET-${Date.now()}-${i}`,
+            block_exercise_id: beId,
+            set_number: i + 1,
+            target_reps: targetReps,
+          }))
+        ).select();
+        setSetsByBlockExercise((prev) => ({ ...prev, [beId]: newSets || [] }));
+      }
+    }
+    await recomputeAndSaveFormatLabel(selected);
+    setPickerBlock(null);
   };
 
   return (
@@ -367,142 +548,174 @@ export default function Workouts() {
                   <Tag className="capitalize">{selected.workout_category}</Tag>
                 </div>
 
+                {isAdmin && (
+                  <div className="rounded-2xl border border-border">
+                    <button onClick={() => setShowWorkoutEdit(!showWorkoutEdit)} className="w-full flex items-center justify-between p-3">
+                      <span className="text-sm font-medium">Workout details</span>
+                      <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', showWorkoutEdit && 'rotate-180')} />
+                    </button>
+                    {showWorkoutEdit && (
+                      <div className="p-3 pt-0 space-y-3">
+                        <div>
+                          <Label>Name</Label>
+                          <Input value={wForm.name} onChange={(e) => setWForm({ ...wForm, name: e.target.value })} className="mt-1" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label>Difficulty</Label>
+                            <Select value={wForm.difficulty || undefined} onValueChange={(v) => setWForm({ ...wForm, difficulty: v })}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Select…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(WORKOUT_DIFFICULTY_META).map(([value, meta]) => (
+                                  <SelectItem key={value} value={value}>{meta.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Category</Label>
+                            <Select value={wForm.workout_category || undefined} onValueChange={(v) => setWForm({ ...wForm, workout_category: v })}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Select…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {WORKOUT_CATEGORIES.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label>Duration (min)</Label>
+                          <Input type="number" value={wForm.est_duration_min} onChange={(e) => setWForm({ ...wForm, est_duration_min: e.target.value })} className="mt-1" />
+                        </div>
+                        <div>
+                          <Label>Description</Label>
+                          <textarea value={wForm.description} onChange={(e) => setWForm({ ...wForm, description: e.target.value })} className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm min-h-[60px] focus:outline-none focus:ring-1 focus:ring-ring" />
+                        </div>
+                        <div>
+                          <Label>Notes</Label>
+                          <textarea value={wForm.notes} onChange={(e) => setWForm({ ...wForm, notes: e.target.value })} placeholder="Coach notes, cues, or reminders…" className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm min-h-[60px] focus:outline-none focus:ring-1 focus:ring-ring" />
+                        </div>
+                        <Button onClick={handleSaveWorkout} disabled={savingWorkout} size="sm" className="w-full rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">
+                          {savingWorkout ? 'Saving…' : 'Save details'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-2">
                     {getWorkoutMetaLine(selected, blocksByWorkout, blockExercisesByBlock)}
                   </p>
-                  <div className="rounded-xl border border-border bg-muted/40 p-3 mb-2">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
-                    {selected.notes ? (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{selected.notes}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground/70 italic">No notes yet.</p>
-                    )}
-                  </div>
-                  <DragDropContext onDragEnd={handleDragEnd}>
-                  <div className="space-y-4">
-                    {(blocksByWorkout[selected.workout_id] || [])
-                      .filter((block) => {
-                        const blockExs = (blockExercisesByBlock[block.block_id] || []).filter(
-                          (be) => be.step_type === 'exercise' || be.step_type === 'rest'
-                        );
-                        return blockExs.length > 0;
-                      })
-                      .map((block, index, visibleBlocks) => {
-                        const blockExs = (blockExercisesByBlock[block.block_id] || []).filter(
-                          (be) => be.step_type === 'exercise' || be.step_type === 'rest'
-                        );
-                        return (
-                        <div key={block.block_id}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="h-6 w-6 rounded-full bg-brand text-brand-foreground text-xs font-semibold flex items-center justify-center">
-                              {block.block_label}
-                            </span>
-                            <span className="text-xs font-medium text-muted-foreground capitalize">
-                              {isAMRAPBlock(block) ? 'AMRAP' : block.block_type?.replace(/_/g, ' ')}
-                            </span>
-                            {!isEMOMBlock(block) && (
-                              <>
-                                {block.rounds > 1 && !isAMRAPBlock(block) && (
-                                  <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>
-                                )}
-                                {block.time_cap_sec > 0 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    · {Math.round(block.time_cap_sec / 60)} min cap
-                                  </span>
-                                )}
-                              </>
-                            )}
-                            {isAdmin && (
-                              <div className="ml-auto flex items-center gap-0.5">
-                                <button onClick={() => handleMoveBlock(block, 'up')} disabled={index === 0} className="p-1 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none">
-                                  <ChevronUp className="h-3.5 w-3.5" />
-                                </button>
-                                <button onClick={() => handleMoveBlock(block, 'down')} disabled={index === visibleBlocks.length - 1} className="p-1 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:pointer-events-none">
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          <Droppable droppableId={block.block_id} type="exercise">
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.droppableProps} className="relative ml-8">
-                                {blockExs.length > 1 && (
-                                  <div className="absolute left-3 top-6 bottom-6 w-px bg-border" />
-                                )}
-                                {blockExs.map((be, index) => {
-                                  const isRest = be.step_type === 'rest';
-                                  const sets = setsByBlockExercise[be.block_exercise_id] || [];
-                                  const setCount = sets.length || 1;
-                                  const reps =
-                                    sets[0]?.target_reps?.toString() || be.prescription_value || '';
-                                  const stepLabel = blockExs.length > 1 ? `${block.block_label}${index + 1}` : null;
-                                  if (isAdmin) {
-                                    return (
-                                      <Draggable key={be.block_exercise_id} draggableId={be.block_exercise_id} index={index}>
-                                        {(p) => (
-                                          <div ref={p.innerRef} {...p.draggableProps} className="flex items-center gap-2 mb-2 last:mb-0">
-                                            {stepLabel && (
-                                              <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
-                                            )}
-                                            <div className="flex-1 min-w-0 flex items-center gap-2 rounded-xl border border-border p-3 bg-card">
-                                              <span {...p.dragHandleProps} className="cursor-grab text-muted-foreground touch-none shrink-0">
-                                                <GripVertical className="h-4 w-4" />
-                                              </span>
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{isRest ? 'Rest' : be.exercise_title_raw}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                  {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
-                                                </p>
-                                              </div>
-                                              <div className="flex items-center gap-1">
-                                                <IconButton onClick={() => setEditingBe(be)} icon={Pencil} />
-                                                <button onClick={() => setDeletingBe(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                                                  <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  }
-                                  return (
-                                    <div key={be.block_exercise_id} className="flex items-center gap-2 mb-2 last:mb-0">
-                                      {stepLabel && (
-                                        <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
-                                      )}
-                                      <div className="flex-1 min-w-0 flex items-center gap-3 rounded-xl border border-border p-3">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium truncate">{isRest ? 'Rest' : be.exercise_title_raw}</p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
-                                          </p>
-                                        </div>
+                  {!isAdmin && (
+                    <div className="rounded-xl border border-border bg-muted/40 p-3 mb-2">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
+                      {selected.notes ? (
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{selected.notes}</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground/70 italic">No notes yet.</p>
+                      )}
+                    </div>
+                  )}
+                  {isAdmin ? (
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <div className="space-y-3">
+                        {(blocksByWorkout[selected.workout_id] || []).map((block, index, blocks) => (
+                          <BlockEditor
+                            key={block.id}
+                            block={block}
+                            exercises={(blockExercisesByBlock[block.block_id] || []).filter((be) => be.step_type === 'exercise' || be.step_type === 'rest')}
+                            setsByBlockExercise={setsByBlockExercise}
+                            onUpdateBlock={handleUpdateBlock}
+                            onDeleteBlock={setDeletingBlock}
+                            onEditExercise={setEditingBe}
+                            onDeleteExercise={setDeletingBe}
+                            onAddExercise={() => setPickerBlock(block)}
+                            onMoveBlock={handleMoveBlock}
+                            isFirst={index === 0}
+                            isLast={index === blocks.length - 1}
+                          />
+                        ))}
+                      </div>
+                      <button onClick={handleAddBlock} className="w-full mt-3 rounded-2xl border border-dashed border-border py-3 text-sm text-muted-foreground hover:border-foreground/20 flex items-center justify-center gap-1.5">
+                        <Plus className="h-4 w-4" /> Add block
+                      </button>
+                    </DragDropContext>
+                  ) : (
+                    <div className="space-y-4">
+                      {(blocksByWorkout[selected.workout_id] || [])
+                        .filter((block) => {
+                          const blockExs = (blockExercisesByBlock[block.block_id] || []).filter(
+                            (be) => be.step_type === 'exercise' || be.step_type === 'rest'
+                          );
+                          return blockExs.length > 0;
+                        })
+                        .map((block) => {
+                          const blockExs = (blockExercisesByBlock[block.block_id] || []).filter(
+                            (be) => be.step_type === 'exercise' || be.step_type === 'rest'
+                          );
+                          return (
+                          <div key={block.block_id}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="h-6 w-6 rounded-full bg-brand text-brand-foreground text-xs font-semibold flex items-center justify-center">
+                                {block.block_label}
+                              </span>
+                              <span className="text-xs font-medium text-muted-foreground capitalize">
+                                {isAMRAPBlock(block) ? 'AMRAP' : block.block_type?.replace(/_/g, ' ')}
+                              </span>
+                              {!isEMOMBlock(block) && (
+                                <>
+                                  {block.rounds > 1 && !isAMRAPBlock(block) && (
+                                    <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>
+                                  )}
+                                  {block.time_cap_sec > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      · {Math.round(block.time_cap_sec / 60)} min cap
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                            <div className="relative ml-8">
+                              {blockExs.length > 1 && (
+                                <div className="absolute left-3 top-6 bottom-6 w-px bg-border" />
+                              )}
+                              {blockExs.map((be, index) => {
+                                const isRest = be.step_type === 'rest';
+                                const sets = setsByBlockExercise[be.block_exercise_id] || [];
+                                const setCount = sets.length || 1;
+                                const reps =
+                                  sets[0]?.target_reps?.toString() || be.prescription_value || '';
+                                const stepLabel = blockExs.length > 1 ? `${block.block_label}${index + 1}` : null;
+                                return (
+                                  <div key={be.block_exercise_id} className="flex items-center gap-2 mb-2 last:mb-0">
+                                    {stepLabel && (
+                                      <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
+                                    )}
+                                    <div className="flex-1 min-w-0 flex items-center gap-3 rounded-xl border border-border p-3">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{isRest ? 'Rest' : be.exercise_title_raw}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
+                                        </p>
                                       </div>
                                     </div>
-                                  );
-                                })}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  </DragDropContext>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {isAdmin && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditingWorkout(selected)}
-                    className="w-full rounded-xl h-12"
-                  >
-                    <Pencil className="h-4 w-4 mr-2" /> Edit workout
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   onClick={() => setAddingToPlan(selected)}
@@ -540,12 +753,15 @@ export default function Workouts() {
         onSave={handleSaveBe}
       />
 
-      <WorkoutEditorSheet
-        workout={editingWorkout}
-        open={!!editingWorkout}
-        onOpenChange={(o) => !o && setEditingWorkout(null)}
-        onChanged={refreshData}
+      <ConfirmDeleteDialog
+        open={!!deletingBlock}
+        onOpenChange={(o) => !o && setDeletingBlock(null)}
+        title="Delete block?"
+        description="Delete this block and all its exercises? This cannot be undone."
+        onConfirm={handleDeleteBlock}
       />
+
+      <ExercisePickerSheet open={!!pickerBlock} onOpenChange={(o) => !o && setPickerBlock(null)} onPick={handleAddExercise} />
 
       <CreateWorkoutSheet
         open={creatingWorkout}
