@@ -96,6 +96,10 @@ export default function WorkoutExecution() {
   const [workoutPaused, setWorkoutPaused] = useState(false);
   const [warmup, setWarmup] = useState(null);
   const [warmupDismissed, setWarmupDismissed] = useState(false);
+  // In-set/round/rest-timer snapshot for the active SupersetPanel, keyed by
+  // block_id (superset) or exercise key (solo) so it survives navigating away
+  // and back — otherwise the panel remounts and restarts the current set.
+  const [panelProgress, setPanelProgress] = useState({});
 
   const fullExerciseMapRef = useRef(null);
   const sessionIdRef = useRef(null);
@@ -157,10 +161,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, panel: panelProgress } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed]);
+  }, [index, completedBlockTimers, warmupDismissed, panelProgress]);
 
   const pendingLoadRef = useRef(null);
 
@@ -304,6 +308,7 @@ export default function WorkoutExecution() {
       setIndex(resumeIdx);
       indexRef.current = resumeIdx;
       if (savedProgress?.warmupDismissed) setWarmupDismissed(true);
+      if (savedProgress?.panel && typeof savedProgress.panel === 'object') setPanelProgress(savedProgress.panel);
     }
 
     progressHydratedRef.current = true;
@@ -1286,6 +1291,8 @@ export default function WorkoutExecution() {
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
                 onSwap={requestSubstitute}
+                initialState={panelProgress[current.block_id] ?? null}
+                onStateChange={(s) => setPanelProgress((prev) => ({ ...prev, [current.block_id]: s }))}
               />
             ) : isBlockActive ? (
               <WorkoutTimerPanel
@@ -1317,6 +1324,8 @@ export default function WorkoutExecution() {
                 onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
                 weightLoading={weightLoading}
                 onWeightClick={calcWeight}
+                initialState={panelProgress[current.key] ?? null}
+                onStateChange={(s) => setPanelProgress((prev) => ({ ...prev, [current.key]: s }))}
               />
             )}
           </>

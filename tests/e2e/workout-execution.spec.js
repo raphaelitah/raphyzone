@@ -197,6 +197,68 @@ test.describe('Running a workout (regression)', () => {
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
   });
 
+  test('leaving mid-set and coming back resumes the running timer instead of restarting it', async ({ page }) => {
+    // Regression test for: starting a set's timer, navigating out via the
+    // breadcrumb/back chevron and back in, used to remount SupersetPanel from
+    // scratch and lose the in-progress set (back to "Set 1"/"GET READY"),
+    // forcing the athlete to redo the lead-in countdown. The panel's
+    // round/set/phase/timer snapshot must now be persisted to
+    // workout_sessions.progress.panel and restored on remount.
+    const setupApi = makeApiClient();
+    await setupApi.auth.signInWithPassword(ATHLETE);
+    const workoutId = await findMultiExerciseWorkoutId(setupApi);
+
+    await login(page);
+    await page.goto(`/workout/${workoutId}`);
+    await dismissWarmupIfPresent(page);
+    await dismissCalibrationPromptIfPresent(page);
+
+    // "Start set" (solo/superset) and "Start <block>" (EMOM/Tabata) both match
+    // /^start /i — either one begins the lead-in countdown, then the running
+    // timer, on a fresh block/exercise.
+    const startButton = page.getByRole('button', { name: /^start /i });
+    if (await startButton.isVisible().catch(() => false)) {
+      await clickThroughCalibration(page, startButton);
+    }
+
+    // Wait out the lead-in so the panel is actually in the "running" phase
+    // (an elapsed-time clock, not a countdown) before leaving.
+    await expect(page.getByRole('button', { name: /^done$/i })).toBeVisible({ timeout: 15000 });
+
+    // Let a couple of seconds of real elapsed time accrue so we can assert it
+    // wasn't reset to zero on return.
+    await page.waitForTimeout(2500);
+
+    // The panel snapshot is persisted the moment the timer starts (not
+    // debounced) — wait for it to land before leaving, same reasoning as the
+    // index-persistence wait above.
+    const progressApi = makeApiClient();
+    await progressApi.auth.signInWithPassword(ATHLETE);
+    await expect.poll(async () => {
+      const { data } = await progressApi.from('workout_sessions').select('progress').eq('workout_id', workoutId).eq('status', 'in_progress').maybeSingle();
+      return data?.progress?.panel && Object.keys(data.progress.panel).length > 0;
+    }, { timeout: 10000 }).toBe(true);
+
+    // Leave via the header back chevron and return via the resume banner.
+    await clickThroughCalibration(page, page.locator('header button').first());
+    await page.waitForURL((url) => !/\/workout\//.test(url.pathname), { timeout: 10000 });
+    const resumeBanner = page.getByRole('button', { name: /^Resume /i });
+    await expect(resumeBanner).toBeVisible({ timeout: 10000 });
+    await resumeBanner.click();
+    await page.waitForURL(/\/workout\//, { timeout: 10000 });
+    await dismissCalibrationPromptIfPresent(page);
+
+    // Still mid-set with a running clock (not back at "Start set"/lead-in),
+    // and the elapsed time reflects the real time that passed, not zero.
+    const doneButton = page.getByRole('button', { name: /^done$/i });
+    await expect(doneButton).toBeVisible({ timeout: 10000 });
+    // The panel's own running-elapsed clock (distinct from the header's total
+    // session clock, which also shows mm:ss) is the big text right above Done.
+    const clockText = await page.locator('.text-5xl').first().textContent();
+    const [minutes, seconds] = clockText.split(':').map(Number);
+    expect(minutes * 60 + seconds).toBeGreaterThanOrEqual(2);
+  });
+
   test('restarting mid-workout replaces the session instead of leaving a duplicate or crashing', async ({ page }) => {
     // See the previous test for why we navigate straight to a known
     // multi-exercise workout instead of clicking "the first card".

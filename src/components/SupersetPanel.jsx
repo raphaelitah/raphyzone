@@ -40,10 +40,12 @@ export default function SupersetPanel({
   unitLabel = 'Round',
   weightLoading = false,
   onWeightClick = null,
+  initialState = null,
+  onStateChange = null,
 }) {
-  const [round, setRound] = useState(1);
-  const [exIndex, setExIndex] = useState(0);
-  const [phase, setPhase] = useState('ready'); // ready | leadin | running | resting
+  const [round, setRound] = useState(() => initialState?.round ?? 1);
+  const [exIndex, setExIndex] = useState(() => initialState?.exIndex ?? 0);
+  const [phase, setPhase] = useState(() => initialState?.phase ?? 'ready'); // ready | leadin | running | resting
   const [, setTick] = useState(0);
   const [muted, setMuted] = useState(() => isTimerAudioMuted());
 
@@ -53,16 +55,34 @@ export default function SupersetPanel({
     setMuted(next);
   };
 
-  const startAtRef = useRef(null);
-  const roundElapsedRef = useRef(0);
-  const restEndAtRef = useRef(null);
-  const leadInEndAtRef = useRef(null);
-  const hasStartedBlockRef = useRef(false);
+  const startAtRef = useRef(initialState?.startAt ?? null);
+  const roundElapsedRef = useRef(initialState?.roundElapsed ?? 0);
+  const restEndAtRef = useRef(initialState?.restEndAt ?? null);
+  const leadInEndAtRef = useRef(initialState?.leadInEndAt ?? null);
+  const hasStartedBlockRef = useRef(initialState?.hasStartedBlock ?? false);
+
+  // Reports the full resumable snapshot up to the parent (persisted into
+  // workout_sessions.progress) so navigating away and back — or the app
+  // reloading mid-set — restores this exact round/set/timer instead of
+  // resetting to the top of the block.
+  const emitState = (overrides = {}) => {
+    onStateChange?.({
+      round: overrides.round ?? round,
+      exIndex: overrides.exIndex ?? exIndex,
+      phase: overrides.phase ?? phase,
+      restEndAt: restEndAtRef.current,
+      leadInEndAt: leadInEndAtRef.current,
+      startAt: startAtRef.current,
+      roundElapsed: roundElapsedRef.current,
+      hasStartedBlock: hasStartedBlockRef.current,
+    });
+  };
 
   const startSetActual = () => {
     onStartTimer?.();
     startAtRef.current = Date.now();
     setPhase('running');
+    emitState({ phase: 'running' });
   };
 
   useEffect(() => {
@@ -89,6 +109,7 @@ export default function SupersetPanel({
           roundElapsedRef.current = 0;
           setPhase('ready');
           playGoBeep();
+          emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
           return;
         }
         if (remaining === 3 || remaining === 2 || remaining === 1) playCountdownBeep();
@@ -122,6 +143,7 @@ export default function SupersetPanel({
       hasStartedBlockRef.current = true;
       leadInEndAtRef.current = Date.now() + LEAD_IN_SEC * 1000;
       setPhase('leadin');
+      emitState({ phase: 'leadin' });
       return;
     }
     startSetActual();
@@ -141,21 +163,25 @@ export default function SupersetPanel({
       if (restSec > 0) {
         restEndAtRef.current = Date.now() + restSec * 1000;
         setPhase('resting');
+        emitState({ phase: 'resting' });
       } else {
         setRound((r) => r + 1);
         setExIndex(0);
         roundElapsedRef.current = 0;
         setPhase('ready');
+        emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
       }
     } else {
       setExIndex((i) => i + 1);
       setPhase('ready');
+      emitState({ phase: 'ready', exIndex: exIndex + 1 });
     }
   };
 
   const adjustRest = (delta) => {
     if (restEndAtRef.current != null) {
       restEndAtRef.current = Math.max(Date.now(), restEndAtRef.current + delta * 1000);
+      emitState({});
     }
     onAdjustRest?.(delta);
   };
@@ -163,7 +189,10 @@ export default function SupersetPanel({
   const selectExercise = (key) => {
     if (phase !== 'ready') return; // don't disrupt a running set or rest countdown
     const idx = exercises.findIndex((e) => e.key === key);
-    if (idx !== -1) setExIndex(idx);
+    if (idx !== -1) {
+      setExIndex(idx);
+      emitState({ exIndex: idx });
+    }
   };
 
   const skipRest = () => {
@@ -172,6 +201,7 @@ export default function SupersetPanel({
     setExIndex(0);
     roundElapsedRef.current = 0;
     setPhase('ready');
+    emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
   };
 
   return (
