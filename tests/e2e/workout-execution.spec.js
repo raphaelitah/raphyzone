@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { login, ATHLETE } from './fixtures/auth';
 import { makeApiClient, findMultiExerciseWorkoutId } from './fixtures/apiClient';
+import { seedSupersetWorkout, cleanupSupersetWorkout } from './fixtures/supersetSeed';
 
 // The workout page shows a "Warm Up" screen (with its own "Skip warm up" /
 // "Start Workout" buttons) before the first exercise whenever the athlete's
@@ -257,6 +258,65 @@ test.describe('Running a workout (regression)', () => {
     const clockText = await page.locator('.text-5xl').first().textContent();
     const [minutes, seconds] = clockText.split(':').map(Number);
     expect(minutes * 60 + seconds).toBeGreaterThanOrEqual(2);
+  });
+
+  test('finishing the last block (a superset) saves the workout once and shows Workout Completed, not a re-entered exercise', async ({ page }) => {
+    // Regression test for: saving the feedback screen for the LAST block used
+    // to mark it done (completedBlockTimers) and call the async finish() save
+    // in the same tick — but finish() awaiting the network gave a window
+    // where the UI, no longer treating the block as active, fell back to
+    // rendering `current` (still pointing at the block's first exercise) as
+    // a brand new standalone exercise. The athlete could then "do" it (and
+    // the next one) a second time before the real completion ever landed.
+    // completeWorkout() now sets `completion` synchronously up front so no
+    // exercise UI can render again once the last block is done.
+    const seeded = await seedSupersetWorkout();
+    try {
+      await login(page);
+      await page.goto(`/workout/${seeded.workoutUuid}`);
+      await dismissWarmupIfPresent(page);
+      await dismissCalibrationPromptIfPresent(page);
+
+      // Exercise A: first "Start set" arms the fixed lead-in countdown.
+      await clickThroughCalibration(page, page.getByRole('button', { name: /^start set$/i }));
+      const doneButton = page.getByRole('button', { name: /^done$/i });
+      await expect(doneButton).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('paragraph').filter({ hasText: 'E2E Superset Move A' })).toBeVisible();
+      await clickThroughCalibration(page, doneButton);
+
+      // Exercise B: same round, no lead-in this time (block already armed).
+      await clickThroughCalibration(page, page.getByRole('button', { name: /^start set$/i }));
+      await expect(doneButton).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('paragraph').filter({ hasText: 'E2E Superset Move B' })).toBeVisible();
+      await clickThroughCalibration(page, doneButton);
+
+      // The block's single round is done — the shared feedback screen for
+      // both exercises should appear (this is "the last feedback screen").
+      await expect(page.getByText('E2E Superset Move A, E2E Superset Move B')).toBeVisible({ timeout: 10000 });
+      const saveButton = page.getByRole('button', { name: /save.*continue/i });
+      await clickThroughCalibration(page, saveButton);
+
+      // Must land on "Workout Completed", never back on either exercise as a
+      // standalone panel (no "Start set" / "E2E Superset Move A" heading).
+      await expect(page.getByText(/workout completed/i)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: /^start set$/i })).not.toBeVisible();
+
+      // Then it should actually navigate to Progress on its own.
+      await page.waitForURL(/\/progress/, { timeout: 10000 });
+
+      // Saved as completed exactly once, with exactly the two logged exercises.
+      const api = makeApiClient();
+      const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
+      const { data: sessions } = await api
+        .from('workout_sessions')
+        .select('id, status')
+        .eq('workout_id', seeded.workoutUuid)
+        .eq('user_id', signInData.user.id);
+      expect(sessions?.length).toBe(1);
+      expect(sessions?.[0]?.status).toBe('completed');
+    } finally {
+      await cleanupSupersetWorkout(seeded);
+    }
   });
 
   test('restarting mid-workout replaces the session instead of leaving a duplicate or crashing', async ({ page }) => {

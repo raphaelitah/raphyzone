@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { toast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import {
@@ -572,7 +571,12 @@ export default function WorkoutExecution() {
     const blockId = armedTimerConfig.blockId;
     timer.reset();
     setArmedTimerConfig(null);
-    advancePastBlock(blockId);
+    if (isLastBlock(blockId)) {
+      setCompletedBlockTimers((prev) => new Set(prev).add(blockId));
+      completeWorkout();
+    } else {
+      advancePastBlock(blockId);
+    }
   };
 
   // Accumulates the time spent on one superset exercise's set (tracked by
@@ -635,7 +639,7 @@ export default function WorkoutExecution() {
     if (!current) return;
     if (isLastBlock(current.block_id)) {
       setCompletedBlockTimers((prev) => new Set(prev).add(current.block_id));
-      finish();
+      completeWorkout();
     } else {
       advancePastBlock(current.block_id);
     }
@@ -654,7 +658,7 @@ export default function WorkoutExecution() {
     if (!current) return;
     flushCurrentTime();
     updateLog(current.key, { skipped: true });
-    if (isLast) finish(); else goNext();
+    if (isLast) completeWorkout(); else goNext();
   };
 
   const handleSaveLogPrompt = () => {
@@ -681,12 +685,12 @@ export default function WorkoutExecution() {
     if (blockId) {
       if (isLastBlock(blockId)) {
         setCompletedBlockTimers((prev) => new Set(prev).add(blockId));
-        finish();
+        completeWorkout();
       } else {
         advancePastBlock(blockId);
       }
     } else if (isLast) {
-      finish();
+      completeWorkout();
     } else {
       goNext();
     }
@@ -1038,14 +1042,29 @@ export default function WorkoutExecution() {
     </Card>
   );
 
-  const finish = async () => {
+  // The single path to ending a workout, for every block type (superset,
+  // EMOM/Tabata, AMRAP, circuit, or a plain standalone exercise) and every way
+  // of reaching the end (saving the final feedback screen, or skipping past
+  // the final block/exercise). Setting `completion` to 'saving' as the very
+  // first thing — synchronously, before any caller's own state updates for
+  // "block done" — means React batches them into one render that shows the
+  // dedicated completion screen instead of ever flashing the real exercise UI
+  // again while this save is in flight. See the `completion` state comment.
+  const completeWorkout = async () => {
+    if (completion === 'saving' || completion === 'done') return;
+    setCompletion('saving');
     setSaving(true);
     try {
       flushCurrentTime();
       await Promise.all(exercises.map((e) => flushSave(e.key)));
       const sid = sessionIdRef.current;
-      const completedExercises = exercises.filter((e) => logs[e.key] && !logs[e.key].skipped);
-      const overallDiff = completedExercises.length ? modeDifficulty(completedExercises.map((e) => logs[e.key].difficulty)) : 'normal';
+      // logsRef.current (not the `logs` state closed over here) so the
+      // difficulty/note the athlete just submitted on the final feedback
+      // screen — saved via updateLog synchronously right before this was
+      // called — is actually reflected in overall_difficulty.
+      const finalLogs = logsRef.current;
+      const completedExercises = exercises.filter((e) => finalLogs[e.key] && !finalLogs[e.key].skipped);
+      const overallDiff = completedExercises.length ? modeDifficulty(completedExercises.map((e) => finalLogs[e.key].difficulty)) : 'normal';
       const clockStartMs = sessionStartMsRef.current ?? sessionCreatedMsRef.current;
       const total = clockStartMs ? (Date.now() - clockStartMs) / 1000 : 0;
       const { data: updated, error } = await supabase.from('workout_sessions')
@@ -1056,15 +1075,26 @@ export default function WorkoutExecution() {
         // Either the write failed outright, or it matched zero rows (a stale/deleted
         // session id, or a row-level-security policy silently excluding it) — Supabase
         // doesn't throw for the latter, so we have to check the returned rows ourselves.
-        // Never navigate to /progress on unconfirmed success: that would show the athlete
-        // a "completed" workout that was never actually saved as one.
-        toast({ title: "Couldn't save your workout", description: 'Please check your connection and try finishing again.', variant: 'destructive' });
+        // Never show "completed" or navigate to /progress on unconfirmed success.
+        setCompletion('error');
         return;
       }
       try { await supabase.functions.invoke('learnFromSessionFeedback', { body: { workout_session_id: sid } }); } catch {}
-      navigate('/progress');
-    } finally { setSaving(false); }
+      setCompletion('done');
+    } catch {
+      setCompletion('error');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  // Give the athlete a beat to see the "Workout Completed" screen, then move
+  // on to Progress — the same destination the old code navigated to directly.
+  useEffect(() => {
+    if (completion !== 'done') return;
+    const id = setTimeout(() => navigate('/progress'), 1400);
+    return () => clearTimeout(id);
+  }, [completion]);
 
   if (conflictSession) {
     return (
@@ -1142,6 +1172,39 @@ export default function WorkoutExecution() {
           <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl border border-border text-muted-foreground font-medium">Skip warm up</button>
           <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl bg-brand text-brand-foreground font-medium flex items-center justify-center gap-2"><Dumbbell className="h-4 w-4" /> Start Workout</button>
         </div>
+      </div>
+    );
+  }
+
+  // Takes over the screen the instant the last block/exercise is done —
+  // saving, then success or a retryable error — instead of ever falling back
+  // to an exercise panel while completeWorkout() is still in flight.
+  if (completion) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-6 text-center">
+        {completion === 'saving' && (
+          <>
+            <Loader2 className="h-10 w-10 text-brand animate-spin" />
+            <p className="font-semibold">Saving your workout…</p>
+          </>
+        )}
+        {completion === 'done' && (
+          <>
+            <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+            <h1 className="text-xl font-semibold">Workout Completed!</h1>
+            <p className="text-sm text-muted-foreground">Nice work. Taking you to your progress…</p>
+          </>
+        )}
+        {completion === 'error' && (
+          <>
+            <AlertTriangle className="h-10 w-10 text-destructive" />
+            <h1 className="text-lg font-semibold">Couldn't save your workout</h1>
+            <p className="text-sm text-muted-foreground">Please check your connection and try again.</p>
+            <Button onClick={completeWorkout} className="mt-2 rounded-xl bg-brand text-brand-foreground hover:bg-brand/90">
+              Retry
+            </Button>
+          </>
+        )}
       </div>
     );
   }
