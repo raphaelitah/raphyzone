@@ -18,7 +18,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, resolveCalibrationPatternKey } from '@/lib/fitness';
+import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
 import QuickCalibrationSheet from '@/components/QuickCalibrationSheet';
@@ -983,7 +983,9 @@ export default function WorkoutExecution() {
         // No suggestion came back — if it's because this movement pattern has never
         // been calibrated, ask the one question needed instead of leaving it blank.
         const movementPattern = exercise.details?.movement_pattern;
-        const patternKey = resolveCalibrationPatternKey(movementPattern);
+        const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+          (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+        );
         const alreadyCalibrated = (profile?.strength_calibration || []).some((c) => c.pattern === patternKey);
         if (patternKey && !alreadyCalibrated) {
           calibrationExerciseRef.current = exercise;
@@ -1013,7 +1015,9 @@ export default function WorkoutExecution() {
       const requiresWeight = !isRunningExercise(ex.details) && ex.details?.requires_load !== false;
       if (!requiresWeight || ex.target_weight) continue;
       const movementPattern = ex.details?.movement_pattern;
-      const patternKey = resolveCalibrationPatternKey(movementPattern);
+      const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+        (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+      );
       const alreadyCalibrated = (profile.strength_calibration || []).some((c) => c.pattern === patternKey);
       if (patternKey && !alreadyCalibrated) {
         calibrationExerciseRef.current = ex;

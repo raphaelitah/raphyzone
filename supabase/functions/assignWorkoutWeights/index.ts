@@ -45,28 +45,6 @@ const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN: Record<string, string> = {
   olympic_power: 'Olympic / Power',
 };
 
-// Loadable movement_pattern values with no calibration question of their own
-// (see src/lib/fitness.js MOVEMENT_PATTERN_FALLBACK, kept in sync with this
-// table): their baseline is derived from a related calibrated pattern instead
-// of asking the athlete another question. Ratios are a rough accessory-vs-
-// compound load fraction (e.g. a lateral raise is loaded far lighter than an
-// overhead press), not a precise conversion — good enough for a starting
-// suggestion, which the athlete can still override per-exercise.
-const MOVEMENT_PATTERN_FALLBACK: Record<string, { from: string; ratio: number }> = {
-  'Shoulder Isolation': { from: 'Vertical Push', ratio: 0.3 },
-  'Elbow Flexion': { from: 'Horizontal Pull', ratio: 0.35 },
-  'Elbow Extension': { from: 'Horizontal Push', ratio: 0.35 },
-  'Lunge / Step': { from: 'Squat', ratio: 0.5 },
-  'Knee / Ankle Isolation': { from: 'Squat', ratio: 0.3 },
-  'Hip Isolation': { from: 'Hinge', ratio: 0.4 },
-  Carry: { from: 'Hinge', ratio: 0.7 },
-  'Full Body Complex': { from: 'Olympic / Power', ratio: 0.6 },
-  'Core - Rotation': { from: 'Hinge', ratio: 0.2 },
-  'Core - Flexion': { from: 'Hinge', ratio: 0.2 },
-  'Core - Anti-extension': { from: 'Hinge', ratio: 0.2 },
-  'Core - Extension': { from: 'Hinge', ratio: 0.2 },
-};
-
 function avgReps(reps: string | number): number {
   const nums = String(reps).split(/[-–]/).map((s) => parseFloat(s)).filter((x) => !isNaN(x));
   if (!nums.length) return 8;
@@ -270,12 +248,8 @@ Deno.serve(async (req: Request) => {
     const weights = rows
       .filter((r) => r.requires_load)
       .map((r) => {
-        const fallback = MOVEMENT_PATTERN_FALLBACK[r.movement_pattern || ''];
-        const baseline = overrideMap[r.exercise_id]
-          ?? calibrationByPattern[r.movement_pattern || '']?.weight_kg
-          ?? (fallback ? calibrationByPattern[fallback.from]?.weight_kg * fallback.ratio : null)
-          ?? null;
-        if (baseline == null || isNaN(baseline)) return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: null };
+        const baseline = overrideMap[r.exercise_id] ?? calibrationByPattern[r.movement_pattern || '']?.weight_kg ?? null;
+        if (baseline == null) return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: null };
         const target = baseline * factor * repMultiplier(r.reps) * goalFactor * feedbackMultiplier(recentByExercise[r.exercise_id]);
         return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: target };
       });
