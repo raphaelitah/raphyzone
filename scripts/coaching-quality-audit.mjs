@@ -345,7 +345,16 @@ async function main() {
   const profileByUser = new Map(profiles.map((p) => [p.user_id, p]));
   const workoutById = new Map(workouts.map((w) => [w.id, w]));
   let equipmentChecks = 0;
+  const todayMs = Date.now();
   for (const plan of plans) {
+    // A week that has fully ended can't be un-assigned — flagging it every
+    // run forever is pure noise once there's nothing left to act on. Only
+    // check plans whose week hasn't finished yet (this run's "today" vs. the
+    // last day of the week, week_start_date + 6 days). Code fixes made this
+    // session (full_gym bypass, Bodyweight handling, Adjustable Dumbbells
+    // equivalency) already prevent new plans from repeating this.
+    const weekStart = plan.week_start_date ? new Date(`${plan.week_start_date}T00:00:00Z`) : null;
+    if (weekStart && weekStart.getTime() + 7 * 86400000 <= todayMs) continue;
     const profile = profileByUser.get(plan.user_id);
     if (!profile) continue;
     if (profile.equipment_profile === 'full_gym') continue; // everything assumed available, same as plan generation
