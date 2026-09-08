@@ -17,7 +17,6 @@
 - ⚠️ Did "You Go I Go - Partner" — execution ran smooth, no block transitions to check, but: UI redirected to finish, but the session is "missing" in the database, not "completed"; had to fall back to the plain "Skip" button 2 time(s) — an unrecognized screen state; "Burpee" is immediately followed by "Burpee" — same core movement back-to-back, a coach would swap one out; took ~10 min if you follow every prescribed set and rest, while the catalog says 42 min.
 
 ---
-<<<<<<< Updated upstream
 ## Run 2026-09-06T11:31:56.043Z
 
 **Result: 258 anomaly(ies) found.**
@@ -292,7 +291,6 @@
 - ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Seated Row" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
 - ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
 - ✓ checked 27 plan-day workout assignments across 7 weekly plans
-=======
 ## Agent run 2026-09-06T11:42:31.461Z
 
 **Reviewed 15 workout(s), 15 flagged.**
@@ -312,10 +310,8 @@
 - ⚠️ Did "Ned" — execution ran smooth, 0/6 rest transitions felt natural, but: transition (between rounds): rest counted down naturally from 00:00; transition (between rounds): rest counted down naturally from 00:01; transition (between rounds): rest counted down naturally from 00:03; transition (between rounds): rest counted down naturally from 00:04; transition (between rounds): rest counted down naturally from 00:05; transition (between rounds): rest counted down naturally from 00:07; "Back Squat" is immediately followed by "Back Squat" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~8 min if you follow every prescribed set and rest, while the catalog says 42 min.
 - ⚠️ Did "Pull Strength A" — execution had problems, no block transitions to check, but: got stuck after 0 steps and never reached the finish screen; took ~10 min if you follow every prescribed set and rest, while the catalog says 48 min.
 - ⚠️ Did "Leg Strength A" — execution ran smooth, no block transitions to check, but: tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; "Standing Calf Raise" is immediately followed by "Standing Calf Raise" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~10 min if you follow every prescribed set and rest, while the catalog says 48 min.
->>>>>>> Stashed changes
 
 ---
-<<<<<<< Updated upstream
 ## Run 2026-09-07T13:17:59.907Z
 
 **Result: 264 anomaly(ies) found.**
@@ -596,7 +592,6 @@
 - ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
 - ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Barbara" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
 - ✓ checked 31 plan-day workout assignments across 8 weekly plans
-=======
 ## Agent run 2026-09-07T13:33:54.086Z
 
 **Reviewed 15 workout(s), 15 flagged.**
@@ -616,10 +611,8 @@
 - ⚠️ Did "Omar" — execution ran smooth, no block transitions to check, but: tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; "Bar Facing Burpee" is immediately followed by "Bar Facing Burpee" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~4 min if you follow every prescribed set and rest, while the catalog says 15 min.
 - ⚠️ Did "Whitten" — execution ran smooth, no block transitions to check, but: "American Kettlebell Swing" is immediately followed by "American Kettlebell Swing" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~15 min if you follow every prescribed set and rest, while the catalog says 48 min.
 - ⚠️ Did "Nate" — execution ran smooth, no block transitions to check, but: "Muscle-Up" is immediately followed by "Muscle-Up" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~2 min if you follow every prescribed set and rest, while the catalog says 20 min.
->>>>>>> Stashed changes
 
 ---
-<<<<<<< Updated upstream
 ## Run 2026-09-08T11:59:49.520Z
 
 **Result: 264 anomaly(ies) found.**
@@ -900,7 +893,6 @@
 - ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
 - ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Barbara" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
 - ✓ checked 31 plan-day workout assignments across 8 weekly plans
-=======
 ## Agent run 2026-09-08T12:18:10.492Z
 
 **Reviewed 15 workout(s), 15 flagged.**
@@ -920,7 +912,6 @@
 - ⚠️ Did "Magnificent Nine" — execution ran smooth, no block transitions to check, but: tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; tapped the weight-suggestion refresh but no value came back and no calibration prompt appeared — a coach would expect one or the other here; "Dumbbell Thruster" is immediately followed by "Dumbbell Thruster" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; "Dumbbell Thruster" is immediately followed by "Dumbbell Thruster" again right after it was just completed — either the content repeats the movement back-to-back, or the session didn't advance properly; took ~5 min if you follow every prescribed set and rest, while the catalog says 42 min.
 - ⚠️ Did "Deadweight Six" — execution had problems, 0/4 rest transitions felt natural, but: got stuck after 10 steps and never reached the finish screen; transition (between rounds): rest counted down naturally from 00:00; transition (between rounds): rest counted down naturally from 00:01; transition (between rounds): rest counted down naturally from 00:02; transition (between rounds): rest counted down naturally from 00:04; took ~15 min if you follow every prescribed set and rest, while the catalog says 42 min.
 - ⚠️ Did "Lucky Seven" — execution had problems, no block transitions to check, but: got stuck after 0 steps and never reached the finish screen; took ~31 min if you follow every prescribed set and rest, while the catalog says 60 min.
->>>>>>> Stashed changes
 
 ---
 ## Run 2026-09-08T14:38:53.910Z
@@ -9715,7 +9706,6 @@
 - ✓ checked 13 plan-day workout assignments across 8 weekly plans
 
 ---
-<<<<<<< Updated upstream
 ## Run 2026-09-08T19:42:44.331Z
 
 **Result: 7 anomaly(ies) found.**
@@ -9742,7 +9732,6 @@
 - ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
 - ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Seated Row" which needs [Cable] — not in the athlete's equipment (profile: custom)
 - ✓ checked 13 plan-day workout assignments across 8 weekly plans
-=======
 ## Agent run 2026-09-08T20:00:20.970Z
 
 **Reviewed 15 workout(s), 13 flagged.**
@@ -9780,6 +9769,5 @@ Call log:
 - ⚠️ Did "Bare Cove Travel" — execution ran smooth, no block transitions to check, but: took ~9 min if you follow every prescribed set and rest, while the catalog says 27 min.
 - ⚠️ Did "Bear Complex" — execution ran smooth, no block transitions to check, but: took ~3 min if you follow every prescribed set and rest, while the catalog says 17 min.
 - ⚠️ Did "The Hopper" — execution ran smooth, no block transitions to check, but: took ~15 min if you follow every prescribed set and rest, while the catalog says 28 min.
->>>>>>> Stashed changes
 
 ---

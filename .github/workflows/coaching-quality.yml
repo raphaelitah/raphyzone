@@ -34,6 +34,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Record report log baseline
+        run: .github/scripts/record-coaching-log-baseline.sh
       - run: npm run audit:coaching-quality
         id: audit
         continue-on-error: true
@@ -41,14 +43,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - name: Commit updated report log
-        run: |
-          if [ -n "$(git status --porcelain reports/coaching-quality-log.md)" ]; then
-            git config user.name "coaching-quality-bot"
-            git config user.email "actions@github.com"
-            git add reports/coaching-quality-log.md
-            git commit -m "Coaching quality audit: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            git push
-          fi
+        run: .github/scripts/commit-coaching-log.sh "Coaching quality audit"
       - name: Fail the job if the audit found anomalies
         if: steps.audit.outcome == 'failure'
         run: exit 1
@@ -81,6 +76,8 @@ jobs:
           done
           echo "Dev server did not come up in time" >&2
           exit 1
+      - name: Record report log baseline
+        run: .github/scripts/record-coaching-log-baseline.sh
       - run: node scripts/coaching-quality-agent.mjs
         id: agent
         continue-on-error: true
@@ -88,17 +85,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BASE_URL: http://localhost:5173
-      - name: Pull latest before committing (audit job may have pushed already)
-        run: git pull --rebase --autostash
       - name: Commit updated report log
-        run: |
-          if [ -n "$(git status --porcelain reports/coaching-quality-log.md)" ]; then
-            git config user.name "coaching-quality-bot"
-            git config user.email "actions@github.com"
-            git add reports/coaching-quality-log.md
-            git commit -m "Coaching quality agent run: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            git push
-          fi
+        run: .github/scripts/commit-coaching-log.sh "Coaching quality agent run"
       - name: Fail the job if the agent flagged anything
         if: steps.agent.outcome == 'failure'
         run: exit 1
