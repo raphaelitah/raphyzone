@@ -9,11 +9,21 @@ name: Coaching Quality Expert
 #     and actually executes real catalog workouts through the UI like a human athlete
 #     would (scripts/coaching-quality-agent.mjs) — real weight/feedback logging, real
 #     rest-transition checks — and narrates a verdict per workout.
-# Both run nightly and on demand. Neither duplicates the regular e2e job, which only
-# checks that the UI/DB mechanically work, not whether a workout makes sense.
+# Both run weekly and on demand. Neither duplicates the regular e2e job, which
+# only checks that the UI/DB mechanically work, not whether a workout makes
+# sense.
+#
+# Weekly, not nightly: the workout catalog is static (edited deliberately,
+# not on any schedule), so the duration/prescription/sequencing/structure
+# checks only produce a new finding when someone edits the catalog — nightly
+# runs were just re-confirming "still 0". The equipment check here still has
+# real ongoing value (it checks whatever weekly_plans real usage generates),
+# but the stronger check for that is scripts/coaching-quality-equipment-fuzz.mjs
+# (TODO), which deliberately generates plans across a range of equipment
+# profiles instead of relying on whichever one a real athlete happens to have.
 on:
   schedule:
-    - cron: '0 7 * * *' # 07:00 UTC daily
+    - cron: '0 7 * * 1' # 07:00 UTC every Monday
   workflow_dispatch:
 
 concurrency:
