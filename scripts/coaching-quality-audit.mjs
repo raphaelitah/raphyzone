@@ -215,9 +215,14 @@ async function main() {
   //     singles dwarfs the "3s/rep" assumption built for higher-rep work.
   //   - Jason: mixes air squats with muscle-ups; a single flat seconds/rep
   //     pace can't represent how much slower muscle-ups are than squats.
+  //   - Drew: 6 rounds of DB push press/KB swing/burpee + 13 tire flips +
+  //     a 1300m run buy-out. "Tire" isn't in the equipment vocabulary at
+  //     all, so tire flips never get the weighted-movement penalty even
+  //     though they're clearly a slow, heavy rep — estimate tops out ~26min
+  //     against a declared 40min the author knows from experience.
   // If the estimator later grows a per-movement-difficulty or loading-time
   // model, these are exactly the candidates to remove from this list first.
-  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83']);
+  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007']);
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
