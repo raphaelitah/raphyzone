@@ -18,7 +18,43 @@ const EMOM_SECONDS_PER_SLOT = 60;
 // "Jason" (100/75/50/25 Air Squat + 5/10/15/20 Muscle-Up) vs "Bellzebub"
 // (no prescription_value recorded at all) in the coaching-quality audit.
 const SECONDS_PER_REP = 3;
-const SECONDS_PER_METER = 0.3;
+// 6:00/km (~9:39/mile) — a realistic pace for an average recreational runner,
+// not an elite one. Applied to every distance-based prescription regardless
+// of modality (running/rowing/biking/carries), so it's still a blend, just a
+// more honest one for the common case (running) than a faster generic pace.
+const SECONDS_PER_METER = 0.36;
+// A loaded rep (anything needing real equipment — barbell, dumbbells,
+// kettlebell, etc.) takes noticeably longer than a bodyweight rep: grip,
+// setup, and a more controlled tempo. "Bodyweight" and "Resistance Bands" are
+// excluded — they aren't the kind of load that slows a rep down the way an
+// external weight does.
+const WEIGHTED_REP_MULTIPLIER = 1.5;
+const UNWEIGHTED_EQUIPMENT = new Set(['Bodyweight', 'Resistance Bands']);
+function isWeighted(equipmentTags) {
+  return (equipmentTags || []).some((t) => !UNWEIGHTED_EQUIPMENT.has(t));
+}
+// Later rounds run slower than earlier ones — fatigue is real and a flat
+// per-round estimate ignores it entirely. Linear, not compounding: round i
+// (1-indexed) runs at (1 + 5% * (i-1)) of the base pace, so round 3 of a
+// 3-round block is already 10% slower than round 1 — but capped at +50%,
+// since real fatigue plateaus into a sustainable pace rather than climbing
+// forever; left uncapped, a 44-round workout ("The Lou", a partner "you go/I
+// go" grinder) came out at ~91x the base rate, roughly double its real
+// length. Deliberately simple, not a physiological model — see "Helton" (3
+// rounds of 800m run + 30 squat cleans + 30 burpees) in the coaching-quality
+// audit for the case this was built for.
+const FATIGUE_RATE_PER_ROUND = 0.05;
+const FATIGUE_CAP_MULTIPLIER = 1.5;
+// Round at which the linear ramp reaches the cap: 1 + rate*(k-1) = cap.
+const FATIGUE_CAP_ROUND = Math.ceil((FATIGUE_CAP_MULTIPLIER - 1) / FATIGUE_RATE_PER_ROUND) + 1;
+function fatigueMultiplierSum(rounds) {
+  // sum_{i=1}^{k} (1 + rate*(i-1)) = k + rate*k*(k-1)/2, for the rounds
+  // still on the ramp; anything past the cap round just adds the flat cap.
+  const k = Math.min(rounds, FATIGUE_CAP_ROUND);
+  const rampSum = k + FATIGUE_RATE_PER_ROUND * (k * (k - 1)) / 2;
+  const cappedRounds = Math.max(0, rounds - FATIGUE_CAP_ROUND);
+  return rampSum + cappedRounds * FATIGUE_CAP_MULTIPLIER;
+}
 
 function parseNumber(value) {
   if (value == null) return null;
@@ -64,7 +100,9 @@ function estimateStepSeconds(step) {
   switch (step?.prescription_type) {
     case 'reps': {
       const reps = parseNumber(value);
-      return reps != null ? reps * SECONDS_PER_REP : null;
+      if (reps == null) return null;
+      const perRep = isWeighted(step?.equipment_tags) ? SECONDS_PER_REP * WEIGHTED_REP_MULTIPLIER : SECONDS_PER_REP;
+      return reps * perRep;
     }
     case 'time':
       return parseSecondsFromTimeValue(value);
@@ -145,9 +183,12 @@ export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
     }
 
     const perRoundRest = (b.rest_seconds || 0) * exCount;
+    // Fatigue slows down the WORK, not the rest — a prescribed rest period
+    // doesn't get longer just because the athlete is tired, so the multiplier
+    // only applies to perRoundWork.
     // rest_between_rounds_sec happens BETWEEN rounds, so an N-round block has
     // N-1 of them, not one flat addition regardless of round count.
-    seconds += rounds * (perRoundWork + perRoundRest) + Math.max(0, rounds - 1) * (b.rest_between_rounds_sec || 0);
+    seconds += perRoundWork * fatigueMultiplierSum(rounds) + perRoundRest * rounds + Math.max(0, rounds - 1) * (b.rest_between_rounds_sec || 0);
   }
   return { minutes: seconds / 60, reliable };
 }

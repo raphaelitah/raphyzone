@@ -103,7 +103,10 @@ async function main() {
   for (const be of blockExercises) {
     if (be.step_type !== 'exercise') continue;
     if (!exercisesByBlock.has(be.block_id)) exercisesByBlock.set(be.block_id, []);
-    exercisesByBlock.get(be.block_id).push(be);
+    // Attach equipment_tags so estimateWorkoutMinutes can apply its weighted-
+    // movement penalty (a loaded squat clean takes longer per rep than a
+    // bodyweight burpee) without needing its own exercise-catalog lookup.
+    exercisesByBlock.get(be.block_id).push({ ...be, equipment_tags: be.exercise_id ? exerciseByCode.get(be.exercise_id)?.equipment_tags : null });
   }
   for (const list of exercisesByBlock.values()) list.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0));
 

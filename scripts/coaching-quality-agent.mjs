@@ -128,11 +128,17 @@ async function selectWorkoutsToReview(limit) {
 
 async function fetchExercisesForBlocks(blockIds) {
   if (!blockIds.length) return new Map();
-  const { data } = await db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise');
+  const [{ data }, { data: exercises }] = await Promise.all([
+    db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise'),
+    db.from('exercises').select('exercise_code, equipment_tags'),
+  ]);
+  // estimateWorkoutMinutes' weighted-movement penalty needs each step's
+  // equipment_tags — attach them here rather than change its call signature.
+  const equipmentByCode = new Map((exercises || []).filter((e) => e.exercise_code).map((e) => [e.exercise_code, e.equipment_tags]));
   const byBlock = new Map();
   for (const be of data || []) {
     if (!byBlock.has(be.block_id)) byBlock.set(be.block_id, []);
-    byBlock.get(be.block_id).push(be);
+    byBlock.get(be.block_id).push({ ...be, equipment_tags: be.exercise_id ? equipmentByCode.get(be.exercise_id) : null });
   }
   for (const list of byBlock.values()) list.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0));
   return byBlock;
