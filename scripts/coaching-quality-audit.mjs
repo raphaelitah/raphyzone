@@ -201,10 +201,25 @@ async function main() {
     ['2026-08-23T21:02:48.618Z', '2026-08-23T21:02:48.619Z', '2026-08-23T21:02:48.620Z', '2026-08-23T21:02:48.779Z']
       .map((t) => new Date(t).getTime())
   );
+  // Individual workouts reviewed and confirmed to hit a genuine blind spot in
+  // the estimator's model, not a data problem — re-flagging them every run
+  // adds no signal. Each needs its own reason because "acceptable gap" here
+  // means something different per archetype:
+  //   - Pull/Leg Strength A: real per-exercise rest/setup time (loading
+  //     plates, walking to a different station) that a flat reps-based
+  //     estimate structurally can't include.
+  //   - King Kong: a heavy barbell/muscle-up complex — rest between heavy
+  //     singles dwarfs the "3s/rep" assumption built for higher-rep work.
+  //   - Jason: mixes air squats with muscle-ups; a single flat seconds/rep
+  //     pace can't represent how much slower muscle-ups are than squats.
+  // If the estimator later grows a per-movement-difficulty or loading-time
+  // model, these are exactly the candidates to remove from this list first.
+  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83']);
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
     if (w.created_date && TRUSTED_DURATION_BATCH_EPOCHS_MS.has(new Date(w.created_date).getTime())) continue;
+    if (ACKNOWLEDGED_DURATION_GAPS.has(w.workout_id)) continue;
     const wBlocks = blocksByWorkout.get(w.workout_id) || [];
     if (!wBlocks.length) continue;
     const { minutes: estMinutes, reliable } = estimateWorkoutMinutes(wBlocks, exercisesByBlock);

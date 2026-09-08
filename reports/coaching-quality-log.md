@@ -4653,3 +4653,146 @@
 - ✓ checked 13 plan-day workout assignments across 8 weekly plans
 
 ---
+## Run 2026-09-08T15:33:59.148Z
+
+**Result: 116 anomaly(ies) found.**
+
+### prescription
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecce2 block A: "Single Arm Dumbbell Clean and Jerk" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecce3 block A: "Single Arm Dumbbell Clean and Jerk" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca9 block A: "Dual Dumbbell Power Clean" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc89 block D: "Kettlebell Farmers Hold" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc89 block D: "Kettlebell Farmers Hold" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc9f block C: "Dumbbell Thruster" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 0be5dd2c720f4e434b3aa1a5 block A: timed block (emom) has work_seconds = null
+- ⚠️ dfafdfb351c873959317f43f block A: "Single Arm Renegade Row" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ dfafdfb351c873959317f43f block B: "Single Arm Renegade Row" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 45ddce507e60749bd55015c8 block A: "Renegade Row" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 9933b237cd5277e8e8900fba block A: "Side Plank Hip LIft" repeats back-to-back in a circuit block (rotation defeats the purpose)
+
+### sequencing
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecce2: "Single Arm Dumbbell Clean and Jerk" is immediately followed by "Single Arm Dumbbell Clean and Jerk" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecce3: "Single Arm Dumbbell Clean and Jerk" is immediately followed by "Single Arm Dumbbell Clean and Jerk" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca9: "Dual Dumbbell Power Clean" is immediately followed by "Dual Dumbbell Power Clean" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc89: "Kettlebell Farmers Hold" is immediately followed by "Kettlebell Farmers Hold" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc89: "Kettlebell Farmers Hold" is immediately followed by "Kettlebell Farmers Hold" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc9f: "Dumbbell Thruster" is immediately followed by "Dumbbell Thruster" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ dfafdfb351c873959317f43f: "Single Arm Renegade Row" is immediately followed by "Single Arm Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ dfafdfb351c873959317f43f: "Single Arm Renegade Row" is immediately followed by "Single Arm Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 45ddce507e60749bd55015c8: "Renegade Row" is immediately followed by "Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 9933b237cd5277e8e8900fba: "Side Plank Hip LIft" is immediately followed by "Side Plank Hip LIft" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 5c5eeb48ecc51b950cb9432c: "Treadmill Run" is immediately followed by "Treadmill Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 5c5eeb48ecc51b950cb9432c: "Treadmill Run" is immediately followed by "Treadmill Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 5c5eeb48ecc51b950cb9432c: "Treadmill Run" is immediately followed by "Treadmill Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 5c5eeb48ecc51b950cb9432c: "Treadmill Run" is immediately followed by "Treadmill Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 5c5eeb48ecc51b950cb9432c: "Treadmill Run" is immediately followed by "Treadmill Run" — same core movement back-to-back across the workout, a coach would swap one out
+
+### structure
+- ⚠️ 6a8b5ff82f65fc56923ecca8: 4 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccb6: 4 consecutive standalone single-exercise blocks all with rounds=6 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccbe: 3 consecutive standalone single-exercise blocks all with rounds=5 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-PUSH: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-PULL: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-LEGS: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc9b: 4 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecca2: 5 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 5-exercise circuit block instead of 5 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecca6: 3 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc84: 4 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc85: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc88: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccbf: 4 consecutive standalone single-exercise blocks all with rounds=10 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+
+### duration
+- ⚠️ 3a5cdb521ff429cd361a84c9 "Helton": declared 30 min but structure implies ~21 min — worth a human check
+- ⚠️ 6ed8d7efbc7c5c41015cd01a "The Lou": declared 50 min but structure implies ~35 min — worth a human check
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 11 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ acc140157df21209ccb8a007 "Drew": declared 40 min but structure implies ~9 min — worth a human check
+- ⚠️ bdfff5da07b2e4824675c802 "Durante Core": declared 15 min but structure implies ~8 min — worth a human check
+- ⚠️ 0b75d1071c0929a6284b6049 "Glen": declared 10 min but structure implies ~23 min — worth a human check
+- ⚠️ efde7411145e8bfff210842a "Grettel": declared 30 min but structure implies ~3 min — worth a human check
+- ⚠️ 828c30fbbc7d5db4a6c30246 "I GO YOU GO": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 04fcbe4729a6aa78c2edd129 "Triple 3": declared 10 min but structure implies ~54 min — worth a human check
+- ⚠️ b81ce76a6efc8728cc596d4c "Abbate": declared 10 min but structure implies ~22 min — worth a human check
+- ⚠️ 5ab77370d14ac75192279feb "Andi": declared 10 min but structure implies ~20 min — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ 0be5dd2c720f4e434b3aa1a5 "Flint": declared 30 min but structure implies ~15 min — worth a human check
+- ⚠️ 27543d2aa271b31304f6c681 "Death Race": declared 15 min but structure implies ~5 min — worth a human check
+- ⚠️ 5ee2d556d7b93fefea5c6c44 "Fortitude": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 9ff3071a751a33e4464eec62 "Ingrid": declared 30 min but structure implies ~3 min — worth a human check
+- ⚠️ 31eb5b9ecfcf266602ee289c "Dork": declared 18 min but structure implies ~32 min — worth a human check
+- ⚠️ 1bc5961a1e766bbe9e377f59 "The Don": declared 10 min but structure implies ~33 min — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ 7601cc06fbf0c4e7790f880b "Celiz": declared 10 min but structure implies ~31 min — worth a human check
+- ⚠️ a35122c69e98eb442996f4dd "Mickey Mouse": declared 10 min but structure implies ~22 min — worth a human check
+- ⚠️ 831f54420e7719cb7626bdb6 "Fatal 40": declared 10 min but structure implies ~26 min — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 12 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ fdce292d15033509f88334b1 "Lumberjack 20": declared 35 min but structure implies ~21 min — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~6 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e22d42f5b541a7ef79ed8a4b "The Ghost": declared 23 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ d366ce942f9ce77f44aebfa3 "12 Days of Christmas": declared 35 min but structure implies ~4 min — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+
+### equipment
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Lucky Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Lucky Pull" includes "Wide Grip Seated Cable Row" which needs [Cable, Seated Cable Row] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Lucky Pull" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Pull (Back + Biceps)" includes "Bent Over Dumbbell Row" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Pull (Back + Biceps)" includes "Chest Supported Incline DB Row" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Run - continuous" includes "Run" which needs [Treadmill] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Dumbbell Ground to Overhead" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Dual Kettlebell Front Squat" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Dual Kettlebell Push-Up" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Kettlebell Marching Farmer Carry" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Run day - middle effort" includes "Run" which needs [Treadmill] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Thruster" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Power Snatch" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Power Snatch" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Overhead Carry" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Kettlebell Hang Power Snatch" which needs [Kettlebell, Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Overhead Carry" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Single Arm Seated Dumbbell Press" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Dumbbell Turkish Get-Up" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Run - Zone 2" includes "Run" which needs [Treadmill] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Single Arm Dumbbell Bent Over Row" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Single Arm Banded Seated Chest Fly" which needs [Resistance Bands] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Crunch" which needs [Treadmill] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Box Step-Up" which needs [Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Barbara" includes "Strict Pronated Pull-up" which needs [Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Dumbbell Hip Thrust" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Single Arm Dumbbell Romanian Deadlift" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Goblet Lunge" which needs [Dumbbells, Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Run - Zone 2" includes "Run" which needs [Treadmill] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Incline Barbell Bench Press" which needs [Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Dumbbell Power Snatch" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ✓ checked 13 plan-day workout assignments across 8 weekly plans
+
+---
