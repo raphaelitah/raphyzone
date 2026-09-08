@@ -234,9 +234,17 @@ async function main() {
   //     reps/time/distance value represents "a ladder that runs until a
   //     background task finishes"; the schema has no way to encode this
   //     structure at all, not just the pace of it.
+  //   - "12. Nightmare Before Christmas", "12 Days of Christmas": both a
+  //     "12 Days of Christmas" style cumulative ladder (round N repeats
+  //     every movement from round 1 through N, not just movement N) — see
+  //     the first one's notes for the full mechanic. Each block_exercises
+  //     row stores only that movement's OWN increment (e.g. "3" for Push
+  //     Jerk), not its true cumulative total across all the rounds it
+  //     repeats in (27, once you sum it out by hand), so the estimator is
+  //     working off numbers roughly half of the real volume.
   // If the estimator later grows a per-movement-difficulty or loading-time
   // model, these are exactly the candidates to remove from this list first.
-  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a', '233e162cdf5a69165e57f961']);
+  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a', '233e162cdf5a69165e57f961', 'b0517c45ebdb71c2926334ad', 'd366ce942f9ce77f44aebfa3']);
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
