@@ -36,27 +36,39 @@ const WEIGHTED_EQUIPMENT = new Set(['Barbell', 'EZ Bar', 'Dumbbells', 'Adjustabl
 function isWeighted(equipmentTags) {
   return (equipmentTags || []).some((t) => WEIGHTED_EQUIPMENT.has(t));
 }
-// Later rounds run slower than earlier ones — fatigue is real and a flat
-// per-round estimate ignores it entirely. Linear, not compounding: round i
-// (1-indexed) runs at (1 + 5% * (i-1)) of the base pace, so round 3 of a
-// 3-round block is already 10% slower than round 1 — but capped at +50%,
+// Later work runs slower than earlier work — fatigue is real and a flat
+// estimate ignores it entirely. Linear, not compounding: the i-th work unit
+// (1-indexed) runs at (1 + 5% * (i-1)) of the base pace — capped at +50%,
 // since real fatigue plateaus into a sustainable pace rather than climbing
 // forever; left uncapped, a 44-round workout ("The Lou", a partner "you go/I
 // go" grinder) came out at ~91x the base rate, roughly double its real
-// length. Deliberately simple, not a physiological model — see "Helton" (3
-// rounds of 800m run + 30 squat cleans + 30 burpees) in the coaching-quality
-// audit for the case this was built for.
-const FATIGUE_RATE_PER_ROUND = 0.05;
+// length. Deliberately simple, not a physiological model.
+//
+// What counts as a "unit" differs by structure, and conflating them
+// over-penalizes multi-exercise circuits: for a block with real repeated
+// ROUNDS, one unit = one round (Helton: 3 units for 3 rounds of 800m run +
+// 30 squat cleans + 30 burpees each) — that's validated and stays as-is.
+// For a single un-rounded chipper, one unit = one exercise in the sequence
+// ("The Don": 10 units for its 10 movements, ONE pass, no repeated rounds at
+// all) — fatigue still accumulates over a long chipper, just not via
+// "rounds" since there are none. Using per-EXERCISE units on a rounds-based
+// block would make a round with 9 quick movements rack up 9x the fatigue-
+// ramp of a round with 1 movement, which isn't real — see "Charleston 9" (9
+// rounds x 9 exercises) overshooting badly under that approach.
+const FATIGUE_RATE_PER_UNIT = 0.05;
 const FATIGUE_CAP_MULTIPLIER = 1.5;
-// Round at which the linear ramp reaches the cap: 1 + rate*(k-1) = cap.
-const FATIGUE_CAP_ROUND = Math.ceil((FATIGUE_CAP_MULTIPLIER - 1) / FATIGUE_RATE_PER_ROUND) + 1;
-function fatigueMultiplierSum(rounds) {
-  // sum_{i=1}^{k} (1 + rate*(i-1)) = k + rate*k*(k-1)/2, for the rounds
-  // still on the ramp; anything past the cap round just adds the flat cap.
-  const k = Math.min(rounds, FATIGUE_CAP_ROUND);
-  const rampSum = k + FATIGUE_RATE_PER_ROUND * (k * (k - 1)) / 2;
-  const cappedRounds = Math.max(0, rounds - FATIGUE_CAP_ROUND);
-  return rampSum + cappedRounds * FATIGUE_CAP_MULTIPLIER;
+// Unit at which the linear ramp reaches the cap: 1 + rate*(k-1) = cap.
+const FATIGUE_CAP_UNIT = Math.ceil((FATIGUE_CAP_MULTIPLIER - 1) / FATIGUE_RATE_PER_UNIT) + 1;
+function fatigueMultiplier(unitIndex) {
+  return Math.min(1 + FATIGUE_RATE_PER_UNIT * (unitIndex - 1), FATIGUE_CAP_MULTIPLIER);
+}
+// sum_{i=1}^{units} fatigueMultiplier(i), closed-form: units on the ramp
+// (1..min(units, cap unit)) plus anything past the cap at the flat rate.
+function fatigueMultiplierSum(units) {
+  const k = Math.min(units, FATIGUE_CAP_UNIT);
+  const rampSum = k + FATIGUE_RATE_PER_UNIT * (k * (k - 1)) / 2;
+  const cappedUnits = Math.max(0, units - FATIGUE_CAP_UNIT);
+  return rampSum + cappedUnits * FATIGUE_CAP_MULTIPLIER;
 }
 
 function parseNumber(value) {
@@ -137,18 +149,24 @@ export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
     const hasRounds = b.rounds != null;
     const rounds = b.rounds || 1;
 
-    // Plain EMOM: every prescribed exercise is done within the SAME 60-second
-    // round (e.g. "EMOM 30: 5 pull-ups, 10 push-ups, 15 squats" = 30 minutes
+    // Plain EMOM: every prescribed exercise is done within the SAME round
+    // (e.g. "EMOM 30: 5 pull-ups, 10 push-ups, 15 squats" = 30 minutes
     // total, not 30 x 3 exercises). emom_alternating instead rotates ONE
-    // exercise per minute-long slot (e.g. 6 exercises x 4 rounds = 24
-    // separate minutes) — the two aren't interchangeable, so they need
-    // different math despite both being "EMOM".
-    if (b.workout_format === 'emom') {
-      seconds += rounds * EMOM_SECONDS_PER_SLOT;
-      continue;
-    }
-    if (b.workout_format === 'emom_alternating') {
-      seconds += rounds * exCount * EMOM_SECONDS_PER_SLOT;
+    // exercise per round-long slot (e.g. 6 exercises x 4 rounds = 24
+    // separate slots) — the two aren't interchangeable, so they need
+    // different math despite both being "EMOM". Either way, an authored
+    // time_cap_sec is the ground truth (same precedent as AMRAP below) —
+    // it's needed for an "E2MOM" (every 2 min) or any other non-1-minute
+    // round length, which a flat 60s/round assumption can't represent; see
+    // "Flint" (15 E2MOM rounds, time_cap_sec 1800 = 30 min, not 15 min).
+    if (b.workout_format === 'emom' || b.workout_format === 'emom_alternating') {
+      if (b.time_cap_sec) {
+        seconds += b.time_cap_sec;
+      } else if (b.workout_format === 'emom') {
+        seconds += rounds * EMOM_SECONDS_PER_SLOT;
+      } else {
+        seconds += rounds * exCount * EMOM_SECONDS_PER_SLOT;
+      }
       continue;
     }
 
@@ -167,31 +185,39 @@ export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
     // block or an un-rounded "for time" chipper. An explicit authored
     // work_seconds (a timed interval/circuit) is the coach's own stated
     // timing and takes priority over guessing from reps.
-    let perRoundWork;
-    if (b.work_seconds) {
-      perRoundWork = b.work_seconds * exCount;
+    const baseStepSeconds = steps.map((step) => (b.work_seconds ? b.work_seconds : estimateStepSeconds(step)));
+    const hasStepData = baseStepSeconds.some((s) => s != null);
+    if (!hasStepData && !hasRounds) {
+      // Nothing structural (rounds) or reps-based to go on for this block —
+      // e.g. a workout whose real scheme, like a descending ladder, isn't
+      // captured in the prescription fields at all. The number below is a
+      // pure guess; mark the whole estimate unreliable rather than
+      // asserting it as a confident mismatch.
+      reliable = false;
+    }
+
+    // Rest is tracked separately from work below — a tired athlete doesn't
+    // get MORE rest, only slower work.
+    const stepsForFatigue = baseStepSeconds.length ? baseStepSeconds : [null]; // exCount's "|| 1" equivalent
+    const perRoundWorkUnfatigued = stepsForFatigue.reduce((sum, base) => sum + (base ?? ASSUMED_SECONDS_PER_SET), 0);
+    let workSeconds;
+    if (rounds > 1) {
+      // Real repeated rounds: one fatigue unit = one round.
+      workSeconds = perRoundWorkUnfatigued * fatigueMultiplierSum(rounds);
     } else {
-      const stepSeconds = steps.map(estimateStepSeconds);
-      if (stepSeconds.some((s) => s != null)) {
-        perRoundWork = stepSeconds.reduce((sum, s) => sum + (s ?? ASSUMED_SECONDS_PER_SET), 0);
-      } else {
-        perRoundWork = ASSUMED_SECONDS_PER_SET * exCount;
-        // Nothing structural (rounds) or reps-based to go on for this block —
-        // e.g. a workout whose real scheme, like a descending ladder, isn't
-        // captured in the prescription fields at all. The number below is a
-        // pure guess; mark the whole estimate unreliable rather than
-        // asserting it as a confident mismatch.
-        if (!hasRounds) reliable = false;
-      }
+      // A single un-rounded pass (a chipper): one fatigue unit = one
+      // exercise in the sequence, since there are no rounds to key off.
+      let unitIndex = 0;
+      workSeconds = stepsForFatigue.reduce((sum, base) => {
+        unitIndex += 1;
+        return sum + (base ?? ASSUMED_SECONDS_PER_SET) * fatigueMultiplier(unitIndex);
+      }, 0);
     }
 
     const perRoundRest = (b.rest_seconds || 0) * exCount;
-    // Fatigue slows down the WORK, not the rest — a prescribed rest period
-    // doesn't get longer just because the athlete is tired, so the multiplier
-    // only applies to perRoundWork.
     // rest_between_rounds_sec happens BETWEEN rounds, so an N-round block has
     // N-1 of them, not one flat addition regardless of round count.
-    seconds += perRoundWork * fatigueMultiplierSum(rounds) + perRoundRest * rounds + Math.max(0, rounds - 1) * (b.rest_between_rounds_sec || 0);
+    seconds += workSeconds + perRoundRest * rounds + Math.max(0, rounds - 1) * (b.rest_between_rounds_sec || 0);
   }
   return { minutes: seconds / 60, reliable };
 }
