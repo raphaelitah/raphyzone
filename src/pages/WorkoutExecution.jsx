@@ -916,26 +916,34 @@ export default function WorkoutExecution() {
     try { await supabase.from('weekly_plans').update({ workouts: updatedWorkouts }).eq('id', plan.id); } catch { /* silent */ }
   };
 
-  const calcWeight = async () => {
-    const requiresWeight = current && !isRunningExercise(current.details) && current.details?.requires_load !== false;
-    if (!current?.exercise_id || !requiresWeight) return;
+  const calibrationExerciseRef = useRef(null);
+
+  // Accepts any exercise (standalone, or a specific member of an active
+  // superset/EMOM block) so the refresh affordance works no matter which
+  // block type is currently on screen, not just the top-level `current`.
+  const calcWeight = async (exercise = current) => {
+    const requiresWeight = exercise && !isRunningExercise(exercise.details) && exercise.details?.requires_load !== false;
+    if (!exercise?.exercise_id || !requiresWeight) return;
     setWeightLoading(true);
     try {
-      const extraCodes = current.exercise_id ? [current.exercise_id] : [];
+      const extraCodes = exercise.exercise_id ? [exercise.exercise_id] : [];
       const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: extraCodes } });
       const ew = res.data?.exercise_weights || {};
-      if (ew[current.exercise_id] != null) {
-        setExercises((prev) => prev.map((e, i) => i === index ? { ...e, target_weight: ew[current.exercise_id] } : e));
-        persistWeight(current.exercise_id, ew[current.exercise_id]);
+      if (ew[exercise.exercise_id] != null) {
+        setExercises((prev) => prev.map((e) => e.key === exercise.key ? { ...e, target_weight: ew[exercise.exercise_id] } : e));
+        persistWeight(exercise.exercise_id, ew[exercise.exercise_id]);
       } else {
         // No suggestion came back — if it's because this movement pattern has never
         // been calibrated, ask the one question needed instead of leaving it blank.
-        const movementPattern = current.details?.movement_pattern;
+        const movementPattern = exercise.details?.movement_pattern;
         const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
           (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
         );
         const alreadyCalibrated = (profile?.strength_calibration || []).some((c) => c.pattern === patternKey);
-        if (patternKey && !alreadyCalibrated) setCalibrationPrompt(patternKey);
+        if (patternKey && !alreadyCalibrated) {
+          calibrationExerciseRef.current = exercise;
+          setCalibrationPrompt(patternKey);
+        }
       }
     } catch { /* silent */ }
     setWeightLoading(false);
@@ -943,22 +951,31 @@ export default function WorkoutExecution() {
 
   const handleCalibrationSaved = async () => {
     await reloadProfile();
-    await calcWeight();
+    await calcWeight(calibrationExerciseRef.current || current);
   };
 
   // Surface the quick calibration prompt as soon as the screen loads an exercise
   // with no weight and no calibration for its pattern, instead of waiting for a
-  // manual reload click.
+  // manual reload click. Runs over every exercise in the active block (not just
+  // the top-level `current`) so superset/EMOM members get the same treatment.
   useEffect(() => {
-    if (!current || !profile || calibrationPrompt) return;
-    const requiresWeight = !isRunningExercise(current.details) && current.details?.requires_load !== false;
-    if (!requiresWeight || current.target_weight) return;
-    const movementPattern = current.details?.movement_pattern;
-    const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
-      (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
-    );
-    const alreadyCalibrated = (profile.strength_calibration || []).some((c) => c.pattern === patternKey);
-    if (patternKey && !alreadyCalibrated) setCalibrationPrompt(patternKey);
+    if (!profile || calibrationPrompt) return;
+    const candidates = currentBlockExercises.length ? currentBlockExercises : (current ? [current] : []);
+    for (const ex of candidates) {
+      const requiresWeight = !isRunningExercise(ex.details) && ex.details?.requires_load !== false;
+      if (!requiresWeight || ex.target_weight) continue;
+      const movementPattern = ex.details?.movement_pattern;
+      const patternKey = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+        (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+      );
+      const alreadyCalibrated = (profile.strength_calibration || []).some((c) => c.pattern === patternKey);
+      if (patternKey && !alreadyCalibrated) {
+        calibrationExerciseRef.current = ex;
+        setCalibrationPrompt(patternKey);
+        break;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.key, profile]);
 
   const applySubstitute = async (alt) => {
@@ -1291,6 +1308,8 @@ export default function WorkoutExecution() {
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
                 onSwap={requestSubstitute}
+                weightLoading={weightLoading}
+                onWeightClick={calcWeight}
                 initialState={panelProgress[current.block_id] ?? null}
                 onStateChange={(s) => setPanelProgress((prev) => ({ ...prev, [current.block_id]: s }))}
               />
@@ -1309,6 +1328,8 @@ export default function WorkoutExecution() {
                 isPreviewExercise={isPreviewExercise}
                 nextUpName={nextUpName}
                 onSwap={requestSubstitute}
+                weightLoading={weightLoading}
+                onWeightClick={calcWeight}
               />
             ) : (
               <SupersetPanel

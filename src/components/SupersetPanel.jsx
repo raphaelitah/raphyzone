@@ -250,7 +250,7 @@ export default function SupersetPanel({
             <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
           )}
           <div className="w-full">
-            <ExerciseSpecRow exercise={current} weightLoading={weightLoading} onWeightClick={onWeightClick} />
+            <ExerciseSpecRow exercise={current} weightLoading={weightLoading} onWeightClick={onWeightClick ? () => onWeightClick(current) : null} />
           </div>
           {phase === 'running' ? (
             <>
