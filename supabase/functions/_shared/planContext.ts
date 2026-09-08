@@ -1,7 +1,7 @@
 // Ported from base44/shared/planContext.ts — pure logic, no Base44 dependency,
 // so this moved over unchanged.
 
-import { requiredEquipment } from './warmupGenerator.ts';
+import { requiredEquipment, expandEquipmentEquivalents } from './warmupGenerator.ts';
 
 const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -138,9 +138,8 @@ export function filterCatalogForSelection(workouts: any[], profile: any, neededM
   let list = workouts || [];
 
   if (profile?.equipment_profile !== 'full_gym') {
-    const available = new Set(
-      [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])].map((e: string) => e.toLowerCase().trim())
-    );
+    const owned = [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])];
+    const available = new Set([...expandEquipmentEquivalents(owned)].map((e) => e.toLowerCase().trim()));
     list = list.filter((w) => requiredEquipment(w.equipment).every((eq: string) => available.has((eq || '').toLowerCase().trim())));
   }
 

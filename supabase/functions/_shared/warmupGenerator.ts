@@ -136,6 +136,25 @@ export function requiredEquipment(tags: string[] | null | undefined): string[] {
   return (tags || []).filter((t) => t !== 'Bodyweight');
 }
 
+// A broader piece of equipment satisfies anything the narrower one would —
+// an athlete who owns Adjustable Dumbbells can do anything "Dumbbells" is
+// tagged for (they just set the weight), but the catalog uses these as two
+// distinct equipment_tags values, so an athlete who only selected "Adjustable
+// Dumbbells" was failing every "needs [Dumbbells]" check. Expands an athlete's
+// owned-equipment list with what it implies, rather than touching the
+// catalog's tags (which stay accurate — a plain-Dumbbells exercise really
+// doesn't need the adjustable kind specifically).
+const EQUIPMENT_IMPLIES: Record<string, string[]> = {
+  'Adjustable Dumbbells': ['Dumbbells'],
+};
+export function expandEquipmentEquivalents(owned: string[] | null | undefined): Set<string> {
+  const set = new Set((owned || []).map((e) => (e || '').trim()));
+  for (const item of [...set]) {
+    for (const implied of EQUIPMENT_IMPLIES[item] || []) set.add(implied);
+  }
+  return set;
+}
+
 function equipmentSatisfied(exercise: ExerciseRow, available: Set<string>): boolean {
   const tags = requiredEquipment(exercise.equipment_tags);
   if (!tags.length) return true; // no real equipment requirement — always fine
@@ -194,7 +213,7 @@ export function generateWarmup(
   resolvedExercises: ExerciseRow[] = []
 ): WarmupResult {
   const duration = prefs.warmup_duration_minutes ?? 10;
-  const available = new Set((availableEquipment || []).map((e) => e.trim()));
+  const available = expandEquipmentEquivalents(availableEquipment);
   const focus = deriveWorkoutFocus(workout, resolvedExercises);
 
   const result: WarmupResult = {

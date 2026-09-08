@@ -349,7 +349,12 @@ async function main() {
     const profile = profileByUser.get(plan.user_id);
     if (!profile) continue;
     if (profile.equipment_profile === 'full_gym') continue; // everything assumed available, same as plan generation
+    // Adjustable Dumbbells can do anything plain "Dumbbells" is tagged for
+    // (an athlete just sets the weight) — same equivalency planContext.ts's
+    // real filter and the warm-up generator apply, so this audit doesn't
+    // flag the same false positive they were fixed to ignore.
     const available = new Set([...(profile.available_equipment || []), ...(profile.custom_equipment || [])]);
+    if (available.has('Adjustable Dumbbells')) available.add('Dumbbells');
     for (const day of plan.workouts || []) {
       if (!day.workout_id) continue;
       const workout = workoutById.get(day.workout_id);
