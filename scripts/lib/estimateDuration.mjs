@@ -23,15 +23,18 @@ const SECONDS_PER_REP = 3;
 // of modality (running/rowing/biking/carries), so it's still a blend, just a
 // more honest one for the common case (running) than a faster generic pace.
 const SECONDS_PER_METER = 0.36;
-// A loaded rep (anything needing real equipment — barbell, dumbbells,
-// kettlebell, etc.) takes noticeably longer than a bodyweight rep: grip,
-// setup, and a more controlled tempo. "Bodyweight" and "Resistance Bands" are
-// excluded — they aren't the kind of load that slows a rep down the way an
-// external weight does.
+// A loaded rep (an external free weight — barbell, dumbbells, kettlebell,
+// weight plates) takes noticeably longer than an unloaded rep: grip, setup,
+// and a more controlled tempo. This is an ALLOWLIST, not "anything but
+// bodyweight" — apparatus like a Pull-up Bar, Step Box, or Slam Ball doesn't
+// add the kind of external load that slows a rep down, even though it isn't
+// "Bodyweight" either. Charleston 9 (Strict Pull-up, Wall Ball, Box Jump
+// Step Down) is exactly the case an exclude-list gets wrong: only its one
+// genuinely loaded movement (Dumbbell Power Clean) should get the penalty.
 const WEIGHTED_REP_MULTIPLIER = 1.5;
-const UNWEIGHTED_EQUIPMENT = new Set(['Bodyweight', 'Resistance Bands']);
+const WEIGHTED_EQUIPMENT = new Set(['Barbell', 'EZ Bar', 'Dumbbells', 'Adjustable Dumbbells', 'Kettlebell', 'Weight Plates']);
 function isWeighted(equipmentTags) {
-  return (equipmentTags || []).some((t) => !UNWEIGHTED_EQUIPMENT.has(t));
+  return (equipmentTags || []).some((t) => WEIGHTED_EQUIPMENT.has(t));
 }
 // Later rounds run slower than earlier ones — fatigue is real and a flat
 // per-round estimate ignores it entirely. Linear, not compounding: round i
