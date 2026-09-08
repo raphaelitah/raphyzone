@@ -220,7 +220,28 @@ async function main() {
   }
 
   // --- 3. Structure smell: un-rotated circuit authored as standalone blocks --
+  // Reviewed and confirmed false positives: this check assumes "several
+  // standalone blocks in a row" means a circuit was mis-authored as
+  // sequential mini-workouts, but straight-set accessory training (bench
+  // press for 4 sets, then rows for 3 sets, then curls...) is completely
+  // standard programming, not a mistake. These are all real straight-set
+  // strength days (Push/Pull/Leg Strength A; Push/Pull splits; Bolder
+  // Shoulders and Sixshooter's accessory work before a metcon finisher;
+  // Lucky Seven's 7-exercise straight-through session; Posterior Chain; Tug
+  // of War), confirmed by manual review — not touching real bugs the check
+  // also caught (The Chief, Cooper, Hotshots 19, all fixed).
+  const ACKNOWLEDGED_STRUCTURE_FALSE_POSITIVES = new Set([
+    'W-STR-PUSH', 'W-STR-PULL', 'W-STR-LEGS',
+    '6a8b5ff82f65fc56923ecca6', // Bolder Shoulders
+    '6a8b5ff82f65fc56923ecca2', // Lucky Seven
+    '6a8b5ff82f65fc56923ecc88', // Posterior Chain
+    '6a8b5ff82f65fc56923ecc85', // Pull (Back + Biceps)
+    '6a8b5ff82f65fc56923ecc84', // Push (Chest + Triceps)
+    '6a8b5ff82f65fc56923ecca8', // Sixshooter
+    '6a8b5ff82f65fc56923ecc9b', // Tug of War
+  ]);
   for (const [workoutId, wBlocks] of blocksByWorkout) {
+    if (ACKNOWLEDGED_STRUCTURE_FALSE_POSITIVES.has(workoutId)) continue;
     const sorted = [...wBlocks].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
     let run = [];
     const flushRun = () => {
