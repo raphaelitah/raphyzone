@@ -268,7 +268,11 @@ Deno.serve(async (req: Request) => {
       else if (eq.includes('barbell') || eq.includes('ez bar') || eq.includes('plate')) max = maxFor('barbell');
       else if (eq.includes('kettlebell')) max = maxFor('kettlebells');
       if (max != null && kg > max) return max;
-      return Math.round(kg * 10) / 10;
+      // Round to a practical, easy-to-load increment (40, 42, 44...) rather
+      // than an arbitrary one-decimal value like 40.5 — nobody's loading a
+      // barbell/dumbbell/cable stack to a fraction of a kg.
+      const rounded = Math.round(kg / 2) * 2;
+      return rounded > 0 ? rounded : 2;
     };
 
     // weights keyed by workoutEntityId -> exercise_id -> kg

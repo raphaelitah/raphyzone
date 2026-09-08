@@ -270,6 +270,27 @@ export default function WorkoutExecution() {
     }));
     setExercises(finalExercises);
 
+    // A workout reached through a weekly plan already has every exercise's
+    // weight pre-computed (exerciseWeights above). A workout started directly
+    // from the library skips that step, so every exercise would otherwise sit
+    // blank until manually refreshed one at a time. assignWorkoutWeights
+    // already computes weights for every exercise in the workout in a single
+    // call (it isn't scoped to one block), so fetch them all now, in one shot,
+    // rather than lazily block-by-block — that would just mean N round trips
+    // (and N visible loading flickers) for the exact same server-side work.
+    if (!Object.keys(exerciseWeights).length) {
+      const needsWeights = finalExercises.some((e) => e.exercise_id && e.details?.requires_load !== false && !isRunningExercise(e.details));
+      if (needsWeights) {
+        supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId } }).then((res) => {
+          if (!active()) return;
+          const ew = res.data?.exercise_weights || {};
+          if (Object.keys(ew).length) {
+            setExercises((prev) => prev.map((e) => (e.exercise_id && ew[e.exercise_id] != null) ? { ...e, target_weight: ew[e.exercise_id] } : e));
+          }
+        }).catch(() => { /* per-exercise refresh/calibration-prompt fallback still covers this */ });
+      }
+    }
+
     // Hydrate logs + per-exercise time from any previously saved exercise sessions
     const hydrated = {};
     loadedExerciseSessionsRef.current.forEach((es) => {
@@ -717,6 +738,13 @@ export default function WorkoutExecution() {
   }
 
   const startTimer = async () => {
+    // Tapping "Start set" moves on regardless of any rest still owed from the
+    // previous block — no need to also tap "Skip" on the rest banner first.
+    // (EMOM/Tabata's own "Start" already confirms before ever reaching here
+    // while resting — see handleStartBlockTimer/confirmStartWhileResting —
+    // so this is a no-op for that flow and only takes effect for
+    // SupersetPanel's tap-to-start sets.)
+    skipInterBlockRest();
     if (timerStarted) return;
     const startMs = Date.now();
     sessionStartMsRef.current = startMs;
@@ -977,6 +1005,9 @@ export default function WorkoutExecution() {
   // with no weight and no calibration for its pattern, instead of waiting for a
   // manual reload click. Runs over every exercise in the active block (not just
   // the top-level `current`) so superset/EMOM members get the same treatment.
+  // When calibration for the pattern already exists, auto-compute the weight
+  // instead — a blank "—" next to the refresh icon otherwise looks like the
+  // suggestion is unavailable, when really it just hasn't been fetched yet.
   useEffect(() => {
     if (!profile || calibrationPrompt) return;
     const candidates = currentBlockExercises.length ? currentBlockExercises : (current ? [current] : []);
@@ -992,6 +1023,9 @@ export default function WorkoutExecution() {
         calibrationExerciseRef.current = ex;
         setCalibrationPrompt(patternKey);
         break;
+      }
+      if (patternKey && alreadyCalibrated) {
+        calcWeight(ex);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1230,6 +1264,18 @@ export default function WorkoutExecution() {
   );
 
   const isLast = index === exercises.length - 1;
+  // Groups the header breadcrumb by block — consecutive exercises sharing a
+  // block_id (a superset/EMOM/Tabata/circuit's members) collapse into one
+  // segment instead of one per exercise.
+  const breadcrumbGroups = [];
+  exercises.forEach((e, i) => {
+    const lastGroup = breadcrumbGroups[breadcrumbGroups.length - 1];
+    if (lastGroup && e.block_id && lastGroup.block_id === e.block_id) {
+      lastGroup.items.push({ e, i });
+    } else {
+      breadcrumbGroups.push({ block_id: e.block_id, items: [{ e, i }] });
+    }
+  });
   // Leaving the screen (back chevron, bottom nav, etc.) doesn't end the
   // session — it stays in_progress so the athlete resumes exactly where they
   // left off. Only "Stop workout" or "Restart" actually give up progress.
@@ -1279,8 +1325,19 @@ export default function WorkoutExecution() {
           <button onClick={() => setStopOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><XCircle className="h-4 w-4" /></button>
         </div>
         <div className="flex gap-1 mt-2">
-          {exercises.map((e, i) => (
-            <button key={e.key} onClick={() => goToExercise(i)} className={cn('h-1 flex-1 rounded-full transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
+          {breadcrumbGroups.map((group) => (
+            // One pill per block (or per standalone exercise) instead of one per
+            // exercise — members of the same block lead to the same place when
+            // tapped (goToExercise renders the whole block either way), so they
+            // read as a single continuous segment with a hairline gap between
+            // members instead of looking like separate, individually-navigable
+            // steps. Sized by member count so total width still matches the
+            // exercise count, same as before.
+            <div key={group.block_id ?? group.items[0].e.key} className="rounded-full overflow-hidden flex gap-[2px]" style={{ flex: `${group.items.length} 1 0%` }}>
+              {group.items.map(({ e, i }) => (
+                <button key={e.key} onClick={() => goToExercise(i)} className={cn('h-1 flex-1 transition-colors', i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted')} />
+              ))}
+            </div>
           ))}
         </div>
       </header>
