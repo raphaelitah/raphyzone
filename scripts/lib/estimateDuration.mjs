@@ -108,6 +108,19 @@ function parseMetersFromDistanceValue(value) {
   return n; // 'm'
 }
 
+// A handful of bodyweight movements are consistently slower per rep than the
+// generic baseline regardless of load — a burpee is a multi-phase, full-body
+// movement (drop, push-up, jump, stand), not a quick single-plane rep like a
+// squat or sit-up. Matched by substring against exercise_title_raw, checked
+// before the weighted-equipment pace.
+const MOVEMENT_SECONDS_PER_REP_OVERRIDES = [{ match: /burpee/i, seconds: 4 }];
+function repSecondsFor(step) {
+  const title = step?.exercise_title_raw;
+  const override = title && MOVEMENT_SECONDS_PER_REP_OVERRIDES.find((o) => o.match.test(title));
+  if (override) return override.seconds;
+  return isWeighted(step?.equipment_tags) ? SECONDS_PER_REP * WEIGHTED_REP_MULTIPLIER : SECONDS_PER_REP;
+}
+
 // Seconds for one exercise step based on its own prescription, or null when
 // there's nothing recorded to go on (no reps/time/distance value at all).
 function estimateStepSeconds(step) {
@@ -116,8 +129,7 @@ function estimateStepSeconds(step) {
     case 'reps': {
       const reps = parseNumber(value);
       if (reps == null) return null;
-      const perRep = isWeighted(step?.equipment_tags) ? SECONDS_PER_REP * WEIGHTED_REP_MULTIPLIER : SECONDS_PER_REP;
-      return reps * perRep;
+      return reps * repSecondsFor(step);
     }
     case 'time':
       return parseSecondsFromTimeValue(value);
