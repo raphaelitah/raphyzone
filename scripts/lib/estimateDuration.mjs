@@ -23,6 +23,12 @@ const SECONDS_PER_REP = 3;
 // of modality (running/rowing/biking/carries), so it's still a blend, just a
 // more honest one for the common case (running) than a faster generic pace.
 const SECONDS_PER_METER = 0.36;
+// ~10-12 cal/min at a moderate recreational effort on an Assault Bike, Row,
+// or Ski Erg. "Death Race" (5 rounds of 15-cal Assault Bike + 10 Burpee)
+// surfaced this: prescription_type for calorie-based cardio steps is
+// inconsistently recorded (null, mislabeled 'reps', or 'cal'), so this is
+// detected from the value text itself rather than trusted from the type.
+const SECONDS_PER_CALORIE = 5;
 // A loaded rep (an external free weight — barbell, dumbbells, kettlebell,
 // weight plates) takes noticeably longer than an unloaded rep: grip, setup,
 // and a more controlled tempo. This is an ALLOWLIST, not "anything but
@@ -122,9 +128,18 @@ function repSecondsFor(step) {
 }
 
 // Seconds for one exercise step based on its own prescription, or null when
-// there's nothing recorded to go on (no reps/time/distance value at all).
+// there's nothing recorded to go on (no reps/time/distance/calorie value).
 function estimateStepSeconds(step) {
   const value = step?.prescription_value;
+  // Checked first, independent of prescription_type: calorie-based cardio
+  // steps ("15 cals" on a Row/Assault Bike/Ski Erg) show up tagged null,
+  // 'reps', or 'cal' inconsistently, so the value text itself is the only
+  // reliable signal — trusting prescription_type here would silently treat
+  // "20 cals" as 20 reps at the bodyweight-rep pace (60s instead of 100s).
+  if (typeof value === 'string' && /cal/i.test(value)) {
+    const cals = parseNumber(value);
+    return cals != null ? cals * SECONDS_PER_CALORIE : null;
+  }
   switch (step?.prescription_type) {
     case 'reps': {
       const reps = parseNumber(value);
