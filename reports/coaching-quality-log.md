@@ -619,3 +619,285 @@
 >>>>>>> Stashed changes
 
 ---
+## Run 2026-09-08T11:59:49.520Z
+
+**Result: 264 anomaly(ies) found.**
+
+### prescription
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923eccdf block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecce2 block A: "Single Arm Dumbbell Clean and Jerk" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecce3 block A: "Single Arm Dumbbell Clean and Jerk" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca9 block A: "Dual Dumbbell Power Clean" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc89 block D: "Kettlebell Farmers Hold" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc89 block D: "Kettlebell Farmers Hold" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecc9f block C: "Dumbbell Thruster" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 6a8b5ff82f65fc56923ecca5 block A: "Run" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ dfafdfb351c873959317f43f block A: "Single Arm Renegade Row" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ dfafdfb351c873959317f43f block B: "Single Arm Renegade Row" repeats back-to-back in a superset block (rotation defeats the purpose)
+- ⚠️ 45ddce507e60749bd55015c8 block A: "Renegade Row" repeats back-to-back in a circuit block (rotation defeats the purpose)
+- ⚠️ 9933b237cd5277e8e8900fba block A: "Side Plank Hip LIft" repeats back-to-back in a circuit block (rotation defeats the purpose)
+
+### sequencing
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923eccdf: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecce2: "Single Arm Dumbbell Clean and Jerk" is immediately followed by "Single Arm Dumbbell Clean and Jerk" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecce3: "Single Arm Dumbbell Clean and Jerk" is immediately followed by "Single Arm Dumbbell Clean and Jerk" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca9: "Dual Dumbbell Power Clean" is immediately followed by "Dual Dumbbell Power Clean" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc89: "Kettlebell Farmers Hold" is immediately followed by "Kettlebell Farmers Hold" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc89: "Kettlebell Farmers Hold" is immediately followed by "Kettlebell Farmers Hold" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecc9f: "Dumbbell Thruster" is immediately followed by "Dumbbell Thruster" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 6a8b5ff82f65fc56923ecca5: "Run" is immediately followed by "Run" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ dfafdfb351c873959317f43f: "Single Arm Renegade Row" is immediately followed by "Single Arm Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ dfafdfb351c873959317f43f: "Single Arm Renegade Row" is immediately followed by "Single Arm Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 45ddce507e60749bd55015c8: "Renegade Row" is immediately followed by "Renegade Row" — same core movement back-to-back across the workout, a coach would swap one out
+- ⚠️ 9933b237cd5277e8e8900fba: "Side Plank Hip LIft" is immediately followed by "Side Plank Hip LIft" — same core movement back-to-back across the workout, a coach would swap one out
+
+### structure
+- ⚠️ 6a8b5ff82f65fc56923ecca8: 3 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccb6: 4 consecutive standalone single-exercise blocks all with rounds=6 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccbe: 3 consecutive standalone single-exercise blocks all with rounds=5 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923eccbf: 4 consecutive standalone single-exercise blocks all with rounds=10 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc9b: 4 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecca2: 5 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 5-exercise circuit block instead of 5 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecca6: 3 consecutive standalone single-exercise blocks all with rounds=4 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc84: 4 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 4-exercise circuit block instead of 4 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc85: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ 6a8b5ff82f65fc56923ecc88: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-PUSH: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-PULL: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-STR-LEGS: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+
+### duration
+- ⚠️ W-STR-PUSH "Push Strength A": declared 48 min but structure implies ~10 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce0 "Barbara": declared 35 min but structure implies ~72 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce1 "4th of July 1776": declared 32 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce2 "You Go I Go": declared 42 min but structure implies ~10 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce3 "You Go I Go - Partner": declared 42 min but structure implies ~10 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce4 "Oscar": declared 23 min but structure implies ~93 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce5 "Linchpin Test 13": declared 80 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce6 "Lynne": declared 25 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecce7 "Telliskivi": declared 42 min but structure implies ~4 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc0 "Linda": declared 35 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc1 "Jennifer": declared 26 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc2 "Elizabeth": declared 15 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc3 "Murph": declared 48 min but structure implies ~3 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc4 "Helen": declared 15 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc5 "Nancy": declared 20 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc6 "Mogadishu Mile": declared 40 min but structure implies ~9 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc7 "Ned": declared 42 min but structure implies ~8 min — worth a human check
+- ⚠️ W-STR-PULL "Pull Strength A": declared 48 min but structure implies ~10 min — worth a human check
+- ⚠️ W-STR-LEGS "Leg Strength A": declared 48 min but structure implies ~10 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccc9 "Burpee Annie": declared 35 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccca "Christine": declared 15 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecccb "Filthy Fifty": declared 25 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecccc "Bert": declared 53 min but structure implies ~8 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecccd "Holleyman": declared 35 min but structure implies ~53 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccce "The Happening": declared 35 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecccf "Wyck": declared 37 min but structure implies ~8 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd0 "Super Legs": declared 20 min but structure implies ~12 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd1 "Kelly": declared 26 min but structure implies ~9 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd2 "Omar": declared 15 min but structure implies ~4 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd4 "Whitten": declared 48 min but structure implies ~15 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd5 "Nate": declared 20 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd7 "Bordesley": declared 25 min but structure implies ~7 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd8 "Ellen": declared 18 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd9 "JT": declared 25 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccda "Fat Amy": declared 16 min but structure implies ~10 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccdb "Wilhelm Tell": declared 35 min but structure implies ~8 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccdc "The End": declared 26 min but structure implies ~14 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccdd "Roy": declared 15 min but structure implies ~9 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccde "Diane": declared 25 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccdf "The Payne Train": declared 32 min but structure implies ~4 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9c "Legsy Legs": declared 38 min but structure implies ~19 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9e "The Sixer": declared 44 min but structure implies ~19 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9f "Magnificent Nine": declared 42 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca1 "Deadweight Six": declared 42 min but structure implies ~15 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca2 "Lucky Seven": declared 60 min but structure implies ~31 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca3 "Half Dozen Hustle": declared 41 min but structure implies ~21 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca0 "Run - continuous": declared 45 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca4 "Half Hour Hero": declared 30 min but structure implies ~11 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca6 "Bolder Shoulders": declared 42 min but structure implies ~18 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca7 "The Hour Glass": declared 60 min but structure implies ~26 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca9 "Farmer Barnaby": declared 40 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccaf "Hyrox w/o equipment - 45min Time Cap": declared 45 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb0 "Bare Cove Travel": declared 27 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb2 "The Hopper": declared 28 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb3 "Zachary Tellier": declared 30 min but structure implies ~8 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb5 "Cindy": declared 25 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb6 "Hotshots 19": declared 52 min but structure implies ~14 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb7 "DT": declared 20 min but structure implies ~9 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccb8 "Fibonacci": declared 20 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccba "Team 1776 - Solo": declared 60 min but structure implies ~7 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccbb "Team 1776": declared 45 min but structure implies ~7 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccbc "Fran": declared 15 min but structure implies ~1 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc7c "50x Workout": declared 30 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc7e "Super Calisthenics": declared 47 min but structure implies ~12 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc7f "Calisthenics Tri-set": declared 42 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccae "10 rounds for time": declared 46 min but structure implies ~30 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecca5 "Run - 4-3-2-1": declared 36 min but structure implies ~15 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccaa "Run - short": declared 27 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc81 "Bodyweight workout": declared 34 min but structure implies ~22 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc82 "Every 3 minutes Workout": declared 42 min but structure implies ~23 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc83 "Pump it": declared 43 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc84 "Push (Chest + Triceps)": declared 36 min but structure implies ~19 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc85 "Pull (Back + Biceps)": declared 30 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc86 "Legs (Quads Focus)": declared 33 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc87 "Shoulders + Core": declared 36 min but structure implies ~22 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc88 "Posterior Chain": declared 31 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc8a "The Nickel": declared 43 min but structure implies ~7 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc8b "Ben's Therapy": declared 40 min but structure implies ~6 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc8c "Half Dozen": declared 31 min but structure implies ~7 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc8d "1 min work - 30 sec rest": declared 28 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc8e "40' Calisthenics": declared 40 min but structure implies ~9 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc90 "Lonestar Lunge": declared 40 min but structure implies ~4 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc91 "Upper Push / Pull": declared 35 min but structure implies ~23 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc94 "Lower Body Day": declared 36 min but structure implies ~19 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc98 "leg day": declared 45 min but structure implies ~19 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc99 "Balthazar": declared 43 min but structure implies ~22 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9a "Ignatius": declared 42 min but structure implies ~17 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9b "Tug of War": declared 35 min but structure implies ~16 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc92 "Run day - middle effort": declared 41 min but structure implies ~5 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc96 "Run day - short": declared 39 min but structure implies ~5 min — worth a human check
+- ⚠️ acc140157df21209ccb8a007 "Drew": declared 10 min but structure implies ~3 min — worth a human check
+- ⚠️ a813131a3805599631ed332a "Mary": declared 20 min but structure implies ~2 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923eccd3 "Macho Man": declared 16 min but structure implies ~28 min — worth a human check
+- ⚠️ c023bd25e2686d7e8249e1f3 "Nicole": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ 468b02faa64201687efc1860 "Eva": declared 15 min but structure implies ~9 min — worth a human check
+- ⚠️ f3131dd89e502587b9068adb "Amanda": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ e3c35bfeb3555ea6354b84d5 "Chelsea": declared 30 min but structure implies ~53 min — worth a human check
+- ⚠️ a926f6b75a27ad8e8094fc36 "Chipper": declared 10 min but structure implies ~3 min — worth a human check
+- ⚠️ d2ff939057676c2ec35b7c39 "Jackie": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ b19cfd89f039dbb8b633410f "Eva Strong": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 912a9cca59ff7abc13b8ac2a "Angie": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ dfafdfb351c873959317f43f "Asgard Strength": declared 19 min but structure implies ~35 min — worth a human check
+- ⚠️ 45ddce507e60749bd55015c8 "Goddessmaker": declared 18 min but structure implies ~28 min — worth a human check
+- ⚠️ W-MOB-YOGA "Mobility Flow": declared 45 min but structure implies ~9 min — worth a human check
+- ⚠️ W-RUN-Z2-7dd1cf09 "Run - Zone 2": declared 60 min but structure implies ~1 min — worth a human check
+- ⚠️ W-CYC-RUN "Easy Run": declared 45 min but structure implies ~1 min — worth a human check
+- ⚠️ 0b75d1071c0929a6284b6049 "Glen": declared 10 min but structure implies ~3 min — worth a human check
+- ⚠️ 18dd37d5b28fda2283eb7364 "Orbison": declared 20 min but structure implies ~35 min — worth a human check
+- ⚠️ 6fde350e2090eef268855871 "Randy": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ f203215fc4cbfbe84eecba37 "Open 22.2": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ efde7411145e8bfff210842a "Grettel": declared 30 min but structure implies ~12 min — worth a human check
+- ⚠️ 83782be9f481b866c3ce0d41 "Chad": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ a19e635264b66d84f1f0aea8 "Goose": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 828c30fbbc7d5db4a6c30246 "I GO YOU GO": declared 10 min but structure implies ~3 min — worth a human check
+- ⚠️ 5b27153c66e0f71e59827998 "Bertha": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ f6af81d1cd13bf51d1403c3a "Blackjack": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ 531981e72223830bf51d5412 "Deck of Fitness": declared 20 min but structure implies ~3 min — worth a human check
+- ⚠️ 99df5eb540f3282974fed6ec "Jack": declared 20 min but structure implies ~2 min — worth a human check
+- ⚠️ c4de75e85db0b49a9c0a80b0 "31 Heroes": declared 31 min but structure implies ~2 min — worth a human check
+- ⚠️ 04fcbe4729a6aa78c2edd129 "Triple 3": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 264f33ca51aef9c2a9f66d13 "1775": declared 60 min but structure implies ~1 min — worth a human check
+- ⚠️ 8866b8d8b067231216ce81ea "Jerry": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ b81ce76a6efc8728cc596d4c "Abbate": declared 10 min but structure implies ~3 min — worth a human check
+- ⚠️ bd0260be8b101640e79f4c8e "Manion": declared 21 min but structure implies ~8 min — worth a human check
+- ⚠️ 05dba72633250c682b90c920 "Hotel Hell": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ ba58392e8208242bb0d83789 "Poitras": declared 31 min but structure implies ~2 min — worth a human check
+- ⚠️ 5c54b88b57ebe15b4fe671b7 "Beverly Hills": declared 25 min but structure implies ~6 min — worth a human check
+- ⚠️ 0be5dd2c720f4e434b3aa1a5 "Flint": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 57d846d8ce7622129e06805e "Laura": declared 21 min but structure implies ~2 min — worth a human check
+- ⚠️ 5ab77370d14ac75192279feb "Andi": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ d04887f2e11dd1155d23f992 "Only 30 min": declared 15 min but structure implies ~5 min — worth a human check
+- ⚠️ 8c442e26a942eb4db0e0bddf "Berry": declared 30 min but structure implies ~18 min — worth a human check
+- ⚠️ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 27543d2aa271b31304f6c681 "Death Race": declared 15 min but structure implies ~6 min — worth a human check
+- ⚠️ 1ae99eea6c964cf2e082c567 "The Longest Mile": declared 12 min but structure implies ~19 min — worth a human check
+- ⚠️ d8c56a46bff0a5d6713e3420 "It's a Trap!": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ c072df7bbb3eec6369f8a52e "Open 12.1": declared 7 min but structure implies ~1 min — worth a human check
+- ⚠️ 5ee2d556d7b93fefea5c6c44 "Fortitude": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ e22d42f5b541a7ef79ed8a4b "The Ghost": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 86226ab40e863cbd2f1a2401 "Commcorr 7 (Ready to turn up?)": declared 24 min but structure implies ~84 min — worth a human check
+- ⚠️ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ 518069b2b424c62309415ec3 "Chaos": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 32d84320b903ca8848172a6b "Georgie": declared 21 min but structure implies ~2 min — worth a human check
+- ⚠️ c914903226653fe382fc44d0 "Open 17.1": declared 31 min but structure implies ~5 min — worth a human check
+- ⚠️ 9ff3071a751a33e4464eec62 "Ingrid": declared 30 min but structure implies ~12 min — worth a human check
+- ⚠️ 8fa2425333829ec9050bc340 "McGhee": declared 30 min but structure implies ~2 min — worth a human check
+- ⚠️ 68db602084988b8b7c141171 "Open 20.5": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ fa47a3855cd53bbabb873d8f "Dan Kennedy": declared 35 min but structure implies ~6 min — worth a human check
+- ⚠️ a45974425cfeb5200c7b7b52 "Joseph Grzelak": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 1dc236020ef44444466b1dd2 "Oh No Curtis P": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ aaafd56b816195bebb68c9fb "Open 22.1": declared 15 min but structure implies ~2 min — worth a human check
+- ⚠️ e91c0408a6b0baac8f979bdd "Open 21.1": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ 31eb5b9ecfcf266602ee289c "Dork": declared 18 min but structure implies ~11 min — worth a human check
+- ⚠️ 955111fd4e9d0b1623ac9d65 "Answering the Call": declared 35 min but structure implies ~6 min — worth a human check
+- ⚠️ 266e08210bc16955b00c429e "Charleston 9": declared 27 min but structure implies ~47 min — worth a human check
+- ⚠️ a5f24c7e4cceee4193f8f4f6 "2007": declared 10 min but structure implies ~2 min — worth a human check
+- ⚠️ 151de26bfb5fae1e8443fa6b "Gale Force": declared 30 min but structure implies ~2 min — worth a human check
+- ⚠️ 399e60038c384e9d38845733 "1LT Derek Hines": declared 45 min but structure implies ~33 min — worth a human check
+- ⚠️ c5229541c61f0e7f551c852e "Bellzebub": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ bd54a876163d91ead63abb83 "Jason": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 233e162cdf5a69165e57f961 "Death Swing": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ d8eabaed28964efc2c004584 "Naughty Nancy": declared 12 min but structure implies ~5 min — worth a human check
+- ⚠️ 7ab9c9fde98c3cd4abf9d3b8 "Rankel": declared 20 min but structure implies ~2 min — worth a human check
+- ⚠️ 136f11bdd1f0074714379643 "King Kettlebell": declared 15 min but structure implies ~3 min — worth a human check
+- ⚠️ b550c23a870c8e72e5ed1c03 "Sean Hanley": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 56155961dd9bf10a58ec8a79 "Coffland": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ f48ab2637bf1ea2423bf27c3 "Changning": declared 30 min but structure implies ~1 min — worth a human check
+- ⚠️ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min — worth a human check
+- ⚠️ 7601cc06fbf0c4e7790f880b "Celiz": declared 10 min but structure implies ~4 min — worth a human check
+- ⚠️ fdce292d15033509f88334b1 "Lumberjack 20": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ a35122c69e98eb442996f4dd "Mickey Mouse": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ 009cb7d465034a08eb8970fa "Incredible Hulk": declared 20 min but structure implies ~1 min — worth a human check
+- ⚠️ 831f54420e7719cb7626bdb6 "Fatal 40": declared 10 min but structure implies ~1 min — worth a human check
+- ⚠️ W-CARRYON-1788364767643 "Carry On": declared 40 min but structure implies ~3 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc80 "Barnabus": declared 38 min but structure implies ~17 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc95 "Salazar": declared 38 min but structure implies ~13 min — worth a human check
+- ⚠️ 6a8b5ff82f65fc56923ecc9d "Run - Long": declared 42 min but structure implies ~5 min — worth a human check
+- ⚠️ 5c5eeb48ecc51b950cb9432c "Treadmill Incline Fat Burn": declared 28 min but structure implies ~1 min — worth a human check
+
+### warmup
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" is dominantly "Horizontal Pull" but its warm-up first-movement pick "Banded Bar Muscle-Up" is "Vertical Pull"
+
+### equipment
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Lucky Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Lucky Pull" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Pull (Back + Biceps)" includes "Bent Over Dumbbell Row" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Pull (Back + Biceps)" includes "Chest Supported Incline DB Row" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Dumbbell Ground to Overhead" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-09-07): "Mogadishu Mile" includes "Dual Kettlebell Front Squat" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "The Sixer" includes "Russian Twist" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Kettlebell Hang Power Snatch" which needs [Kettlebell, Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Band Pull Apart" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Single Arm Banded Seated Chest Fly" which needs [Resistance Bands] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Jump Squat" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Plank Walk-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Wall Sit" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "V-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Barbara" includes "Strict Pronated Pull-up" which needs [Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Barbara" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Single Arm Dumbbell Romanian Deadlift" which needs [Dumbbells] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Goblet Lunge" which needs [Dumbbells, Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Dumbbell Bench Press" which needs [Dumbbells, Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Seated Row" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 7f8992c5-8a3a-4b43-bb5e-b38311312003 (week 2026-08-24): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Leg Strength A" includes "Standing Calf Raise" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-08-24): "Barbara" includes "Butterfly Sit-Up" which needs [Bodyweight] — not in the athlete's equipment (profile: full_gym)
+- ✓ checked 31 plan-day workout assignments across 8 weekly plans
+
+---
