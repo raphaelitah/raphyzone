@@ -227,9 +227,16 @@ async function main() {
   //     distinguish "3 light reps" from "3 near-max-effort reps" that each
   //     take ~30+ seconds. Set aside pending a real load-intensity model
   //     rather than reverse-engineering a multiplier from one workout.
+  //   - Death Swing: an ascending EMOM burpee ladder (1, 2, 3... burpees
+  //     each minute, capped once under 30s remains for that minute's
+  //     swings) layered on top of a continuous 300-swing background task —
+  //     see the workout's notes for the full mechanic. No single
+  //     reps/time/distance value represents "a ladder that runs until a
+  //     background task finishes"; the schema has no way to encode this
+  //     structure at all, not just the pace of it.
   // If the estimator later grows a per-movement-difficulty or loading-time
   // model, these are exactly the candidates to remove from this list first.
-  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a']);
+  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a', '233e162cdf5a69165e57f961']);
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
