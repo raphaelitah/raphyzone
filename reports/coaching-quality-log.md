@@ -9715,3 +9715,31 @@
 - ✓ checked 13 plan-day workout assignments across 8 weekly plans
 
 ---
+## Run 2026-09-08T19:42:44.331Z
+
+**Result: 7 anomaly(ies) found.**
+
+### duration
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 33 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 12 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~9 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e22d42f5b541a7ef79ed8a4b "The Ghost": declared 23 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+
+### equipment
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Big Snatch Six" includes "Kettlebell Hang Power Snatch" which needs [Kettlebell, Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Balthazar" includes "Single Arm Banded Seated Chest Fly" which needs [Resistance Bands] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "40-20 Workout" includes "Box Step-Up" which needs [Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-31): "Barbara" includes "Strict Pronated Pull-up" which needs [Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Posterior Chain" includes "Goblet Lunge" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-08-24): "Upper Push / Pull" includes "Seated Row" which needs [Cable] — not in the athlete's equipment (profile: custom)
+- ✓ checked 13 plan-day workout assignments across 8 weekly plans
+
+---
