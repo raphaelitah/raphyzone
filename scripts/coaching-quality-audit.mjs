@@ -160,8 +160,18 @@ async function main() {
     if (b.rounds != null && b.rounds <= 0) flag('prescription', `${label}: rounds is ${b.rounds} (must be >= 1)`);
     if (b.rest_seconds != null && b.rest_seconds < 0) flag('prescription', `${label}: rest_seconds is negative (${b.rest_seconds})`);
     if (b.rest_between_rounds_sec != null && b.rest_between_rounds_sec < 0) flag('prescription', `${label}: rest_between_rounds_sec is negative (${b.rest_between_rounds_sec})`);
-    const isTimed = ['emom', 'emom_alternating', 'tabata'].includes((b.block_type || '').toLowerCase());
-    if (isTimed && (b.work_seconds == null || b.work_seconds <= 0)) flag('prescription', `${label}: timed block (${b.block_type}) has work_seconds = ${b.work_seconds}`);
+    // EMOM/emom_alternating blocks with an authored time_cap_sec don't need
+    // work_seconds at all — the real app (src/lib/workoutStructure.js's
+    // deriveBlockTimerConfig) derives the live timer's interval as
+    // time_cap_sec / rounds for those, same as the duration estimator
+    // trusts time_cap_sec directly. Tabata has no such fallback in the real
+    // app (its timer always reads work_seconds), so it still needs one.
+    const blockType = (b.block_type || '').toLowerCase();
+    const isTimed = ['emom', 'emom_alternating', 'tabata'].includes(blockType);
+    const hasTimeCapFallback = (blockType === 'emom' || blockType === 'emom_alternating') && b.time_cap_sec > 0;
+    if (isTimed && !hasTimeCapFallback && (b.work_seconds == null || b.work_seconds <= 0)) {
+      flag('prescription', `${label}: timed block (${b.block_type}) has work_seconds = ${b.work_seconds}`);
+    }
 
     const exs = exercisesByBlock.get(b.block_id) || [];
     for (const be of exs) {
