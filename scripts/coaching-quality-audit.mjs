@@ -145,7 +145,11 @@ async function main() {
   function isGenuineRepeat(prev, cur) {
     if (!prev.exercise_id || prev.exercise_id !== cur.exercise_id) return false;
     if (cur.precededByRest) return false;
-    if (UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) return false;
+    if (UNILATERAL_PATTERN.test(prev.exercise_title_raw || '') || UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) return false;
+    // Different displayed titles (e.g. "... (Left)" vs "... (Bilateral)")
+    // mean an athlete sees two distinguishable steps even if they share a
+    // catalog exercise_id — not an indistinguishable duplicate.
+    if ((prev.exercise_title_raw || '') !== (cur.exercise_title_raw || '')) return false;
     if (prev.prescription_type !== cur.prescription_type) return false;
     return String(prev.prescription_value ?? '') === String(cur.prescription_value ?? '');
   }
@@ -198,7 +202,7 @@ async function main() {
       // between reps, unilateral one-per-side movements) — this check just
       // matches on core movement name instead of exact exercise_id.
       if (cur.precededByRest) continue;
-      if (UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) continue;
+      if (UNILATERAL_PATTERN.test(prev.exercise_title_raw || '') || UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) continue;
       if (prev.prescription_type === cur.prescription_type && String(prev.prescription_value ?? '') === String(cur.prescription_value ?? '')) {
         flag('sequencing', `${workoutId}: "${prev.exercise_title_raw}" is immediately followed by "${cur.exercise_title_raw}" — same core movement back-to-back across the workout, a coach would swap one out`);
       }
