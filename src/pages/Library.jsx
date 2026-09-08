@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Search, Dumbbell, Loader2, Pencil, Trash2, Footprints, Plus } from 'lucide-react';
+import { Search, Dumbbell, Loader2, Pencil, Trash2, Footprints, Plus, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
@@ -178,6 +178,16 @@ export default function Library() {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search exercises…" className="pl-9 pr-9 rounded-xl h-11" />
           {isSearchPending && (
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+          {!isSearchPending && query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
 

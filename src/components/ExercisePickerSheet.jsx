@@ -187,9 +187,19 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search exercises…"
-                  className="pl-9"
+                  className="pl-9 pr-9"
                   autoFocus
                 />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <button onClick={() => setRestMode(true)} className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground hover:border-foreground/20 hover:text-foreground flex items-center justify-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" /> Add rest

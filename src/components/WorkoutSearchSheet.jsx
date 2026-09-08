@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Search, Loader2, Clock } from 'lucide-react';
+import { Search, Loader2, Clock, X } from 'lucide-react';
 import { roundToFive } from '@/lib/workoutStructure';
 import { isRunningWorkout, WORKOUT_FORMATS, workoutFormatMatches } from '@/lib/fitness';
 import WorkoutFilters from '@/components/WorkoutFilters';
@@ -141,7 +141,17 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
         <div className="px-5 pb-3 shrink-0 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 rounded-xl h-11" autoFocus />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 pr-9 rounded-xl h-11" autoFocus />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <WorkoutFilters
             region={region} setRegion={setRegion}
