@@ -95,7 +95,7 @@ const TIMER_DRIVEN_TYPES = new Set(['circuit', 'emom', 'emom_alternating', 'taba
 async function selectWorkoutsToReview(limit) {
   const [{ data: workouts }, { data: blocks }, { data: reviews }] = await Promise.all([
     db.from('workouts').select('id, workout_id, name, est_duration_min, duration_minutes, updated_date').eq('status', 'approved'),
-    db.from('workout_blocks').select('block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, updated_date'),
+    db.from('workout_blocks').select('block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, time_cap_sec, updated_date'),
     db.from('coaching_agent_reviews').select('workout_id, content_updated_at'),
   ]);
 
@@ -128,7 +128,7 @@ async function selectWorkoutsToReview(limit) {
 
 async function fetchExercisesForBlocks(blockIds) {
   if (!blockIds.length) return new Map();
-  const { data } = await db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block').in('block_id', blockIds).eq('step_type', 'exercise');
+  const { data } = await db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise');
   const byBlock = new Map();
   for (const be of data || []) {
     if (!byBlock.has(be.block_id)) byBlock.set(be.block_id, []);
@@ -447,8 +447,8 @@ async function runWorkout(page, candidate, qaCoachId) {
     page.off('pageerror', onPageError);
   }
 
-  const exerciseCountByBlock = new Map(candidate.blocks.map((b) => [b.block_id, (candidate.exercisesByBlock.get(b.block_id) || []).length]));
-  const estimatedMinutes = Math.round(estimateWorkoutMinutes(candidate.blocks, exerciseCountByBlock));
+  const { minutes: rawEstimatedMinutes, reliable: durationEstimateReliable } = estimateWorkoutMinutes(candidate.blocks, candidate.exercisesByBlock);
+  const estimatedMinutes = Math.round(rawEstimatedMinutes);
   const declaredMinutes = candidate.workout.est_duration_min ?? candidate.workout.duration_minutes ?? null;
 
   // workout_sessions.workout_id stores the workout's UUID (candidate.workout.id, same
@@ -470,7 +470,7 @@ async function runWorkout(page, candidate, qaCoachId) {
   let durationNote = null;
   if (declaredMinutes != null) {
     const declared = Number(declaredMinutes);
-    if (isDurationMismatch(estimatedMinutes, declared)) {
+    if (isDurationMismatch(estimatedMinutes, declared) && durationEstimateReliable) {
       durationNote = `took ~${estimatedMinutes} min if you follow every prescribed set and rest, while the catalog says ${declared} min`;
       problems.push(durationNote);
     } else {

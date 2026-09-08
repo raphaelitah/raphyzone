@@ -1,6 +1,8 @@
 // Ported from base44/shared/planContext.ts — pure logic, no Base44 dependency,
 // so this moved over unchanged.
 
+import { requiredEquipment } from './warmupGenerator.ts';
+
 const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export { WEEK_DAYS };
@@ -64,7 +66,7 @@ export function buildProfileContext(profile: any, feedback: any[]) {
 - Program difficulty: ${profile?.program_difficulty || 'challenger'} (recruit=easy … apex=maximal)
 - Resistance priority: ${profile?.resistance_priority ?? 70}/100
 - Conditioning priority: ${profile?.conditioning_priority ?? 30}/100
-- Equipment profile: ${profile?.equipment_profile === 'full_gym' ? 'Full gym (standard commercial gym — all common equipment available)' : 'CUSTOM — the athlete has ONLY the specific equipment listed below; this is NOT a full gym. Do NOT assume any equipment beyond what is listed.'}
+- Equipment profile: ${profile?.equipment_profile === 'full_gym' ? 'Full gym (standard commercial gym — all common equipment available)' : 'CUSTOM — the athlete has ONLY the specific equipment listed below, plus their own bodyweight (always available); this is NOT a full gym. Do NOT assume any equipment beyond what is listed.'}
 - Available equipment (ONLY these items, nothing else): ${[...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])].join(', ') || 'none'}
 - Weight setup: dumbbells ${ws.dumbbells?.max_kg ?? '?'}kg, barbell ${ws.barbell?.max_kg ?? '?'}kg, kettlebells ${ws.kettlebells?.max_kg ?? '?'}kg
 - Weight unit: ${profile?.weight_unit || 'kg'}
@@ -139,7 +141,7 @@ export function filterCatalogForSelection(workouts: any[], profile: any, neededM
     const available = new Set(
       [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])].map((e: string) => e.toLowerCase().trim())
     );
-    list = list.filter((w) => (w.equipment || []).every((eq: string) => available.has((eq || '').toLowerCase().trim())));
+    list = list.filter((w) => requiredEquipment(w.equipment).every((eq: string) => available.has((eq || '').toLowerCase().trim())));
   }
 
   if (!hasActivityDays && neededModalities.length) {

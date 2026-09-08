@@ -3,6 +3,7 @@ import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { generateWarmup } from '../_shared/warmupGenerator.ts';
+import { resolveWorkoutExercises } from '../_shared/resolveWorkoutExercises.ts';
 
 // Ported from base44/functions/applySwap. No LLM call — pure data update, so this
 // one needs no provider wiring and can be deployed/tested immediately.
@@ -25,7 +26,7 @@ Deno.serve(async (req: Request) => {
       supabase.from('workouts').select('*').eq('id', old_workout_id).maybeSingle(),
       supabase.from('workouts').select('*').eq('id', new_workout_id).maybeSingle(),
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
-      supabase.from('exercises').select('id, name, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
+      supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
     ]);
 
     if (!plan || plan.user_id !== user.id) return Response.json({ error: 'Plan not found' }, { status: 404, headers: corsHeaders });
@@ -34,11 +35,13 @@ Deno.serve(async (req: Request) => {
     let warmup = null;
     if (newWorkout && profile) {
       try {
+        const resolvedExercises = await resolveWorkoutExercises(supabase, newWorkout.workout_id, exerciseCatalog || []);
         warmup = generateWarmup(
           profile,
           [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
           newWorkout,
-          exerciseCatalog || []
+          exerciseCatalog || [],
+          resolvedExercises
         );
       } catch {
         warmup = null;

@@ -25,7 +25,6 @@ export interface WorkoutLike {
   workout_category?: string | null;
   split?: string | null;
   modality?: string | null;
-  exercises?: { exercise_name?: string; exercise_id?: string }[] | null;
 }
 
 export interface WarmupPrefs {
@@ -93,18 +92,15 @@ export interface WorkoutFocus {
 }
 
 // Derive the workout's dominant body_region/muscle_group/movement_pattern by
-// tallying its actual exercises. Falls back to workout_category/split/modality
-// when the workout has no resolvable exercise list (common in this catalog —
-// many benchmark-style workouts store only a name/description, not a
-// structured exercise breakdown).
-export function deriveWorkoutFocus(workout: WorkoutLike, exerciseCatalog: ExerciseRow[]): WorkoutFocus {
-  const byName = new Map(exerciseCatalog.map((e) => [e.name.trim().toLowerCase(), e]));
-  const byId = new Map(exerciseCatalog.map((e) => [e.id, e]));
-  const resolved: ExerciseRow[] = [];
-  for (const e of workout.exercises || []) {
-    const match = (e.exercise_id && byId.get(e.exercise_id)) || (e.exercise_name && byName.get(e.exercise_name.trim().toLowerCase()));
-    if (match) resolved.push(match);
-  }
+// tallying its actual exercises. `resolvedExercises` must come from the
+// workout's real block structure (workout_blocks + block_exercises), not the
+// legacy workouts.exercises jsonb snapshot — see resolveWorkoutExercises.ts.
+// Falls back to workout_category/split/modality when the workout has no
+// resolvable exercise list (common in this catalog — many benchmark-style
+// workouts store only a name/description, not a structured exercise
+// breakdown).
+export function deriveWorkoutFocus(workout: WorkoutLike, resolvedExercises: ExerciseRow[]): WorkoutFocus {
+  const resolved = resolvedExercises || [];
 
   if (resolved.length) {
     return {
@@ -132,9 +128,17 @@ export function deriveWorkoutFocus(workout: WorkoutLike, exerciseCatalog: Exerci
   };
 }
 
+// "Bodyweight" is a descriptive tag (used elsewhere to skip weight-load
+// calculations), not gear an athlete needs to own — every athlete has their
+// own body regardless of equipment profile, so it's excluded from the
+// equipment-ownership check here and in every other equipment match below.
+export function requiredEquipment(tags: string[] | null | undefined): string[] {
+  return (tags || []).filter((t) => t !== 'Bodyweight');
+}
+
 function equipmentSatisfied(exercise: ExerciseRow, available: Set<string>): boolean {
-  const tags = exercise.equipment_tags || [];
-  if (!tags.length) return true; // no equipment requirement (e.g. bodyweight) — always fine
+  const tags = requiredEquipment(exercise.equipment_tags);
+  if (!tags.length) return true; // no real equipment requirement — always fine
   return tags.every((t) => available.has(t));
 }
 
@@ -186,11 +190,12 @@ export function generateWarmup(
   prefs: WarmupPrefs,
   availableEquipment: string[],
   workout: WorkoutLike,
-  exerciseCatalog: ExerciseRow[]
+  exerciseCatalog: ExerciseRow[],
+  resolvedExercises: ExerciseRow[] = []
 ): WarmupResult {
   const duration = prefs.warmup_duration_minutes ?? 10;
   const available = new Set((availableEquipment || []).map((e) => e.trim()));
-  const focus = deriveWorkoutFocus(workout, exerciseCatalog);
+  const focus = deriveWorkoutFocus(workout, resolvedExercises);
 
   const result: WarmupResult = {
     generated_at: new Date().toISOString(),

@@ -2,6 +2,7 @@ import { callLLM } from './llm.ts';
 import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, WEEK_DAYS } from './planContext.ts';
 import { verifyWorkoutReasons } from './verifyWorkoutReasons.ts';
 import { generateWarmup } from './warmupGenerator.ts';
+import { resolveWorkoutExercises } from './resolveWorkoutExercises.ts';
 
 export interface GeneratePlanRequest {
   week_start_date: string;
@@ -29,7 +30,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
     supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
     supabase.from('workout_feedback').select('*').eq('user_id', user.id),
     supabase.from('workouts').select('*').eq('status', 'approved'),
-    supabase.from('exercises').select('id, name, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
+    supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
     supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStartDate),
   ]);
 
@@ -216,7 +217,7 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
     }
   }
 
-  const mapped = finalSlots.map((slot) => {
+  const mapped = await Promise.all(finalSlots.map(async (slot) => {
     if ((slot as any).locked) {
       return { ...existingByDay[slot.day], locked: true };
     }
@@ -245,11 +246,13 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
         if (slot.slot_type === 'train' && wo?.modality) entry.modality = wo.modality;
         if (wo) {
           try {
+            const resolvedExercises = await resolveWorkoutExercises(supabase, wo.workout_id, exerciseCatalog || []);
             entry.warmup = generateWarmup(
               profile,
               [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
               wo,
-              exerciseCatalog || []
+              exerciseCatalog || [],
+              resolvedExercises
             );
           } catch {
             entry.warmup = null;
@@ -262,7 +265,7 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
       }
     }
     return entry;
-  });
+  }));
 
   const usedWorkoutIds = new Set(mapped.map((m: any) => m.workout_id).filter(Boolean));
   for (const entry of mapped) {
@@ -279,11 +282,13 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
         : 'Assigned automatically — closest match; equipment may not fully match your setup for this week.';
       usedWorkoutIds.add(fallback.id);
       try {
+        const resolvedExercises = await resolveWorkoutExercises(supabase, fallback.workout_id, exerciseCatalog || []);
         entry.warmup = generateWarmup(
           profile,
           [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])],
           fallback,
-          exerciseCatalog || []
+          exerciseCatalog || [],
+          resolvedExercises
         );
       } catch {
         entry.warmup = null;

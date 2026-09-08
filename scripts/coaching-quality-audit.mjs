@@ -57,21 +57,35 @@ function firstNumber(value) {
 // equipmentSatisfied mirrors supabase/functions/_shared/generatePlan.ts's matching
 // rule: an exercise with no equipment_tags is always fine; otherwise every tag it
 // needs must be in the athlete's combined available set.
+// "Bodyweight" is a descriptive tag (used elsewhere to skip weight-load
+// calculations), not gear an athlete needs to own — every athlete has their
+// own body regardless of equipment profile, so it never counts as missing.
 function missingEquipment(exercise, availableSet) {
-  const tags = exercise?.equipment_tags || [];
+  const tags = (exercise?.equipment_tags || []).filter((t) => t !== 'Bodyweight');
   if (!tags.length) return [];
   return tags.filter((t) => !availableSet.has(t));
 }
 
+// Supabase caps a single request at 1000 rows by default. Several tables here
+// (exercises: ~2900 rows, block_exercises: ~1100) exceed that, so a plain
+// .select() silently truncates — any block/exercise past row 1000 vanishes
+// from every check in this script (equipment, duration, sequencing, ...)
+// with no error. Page through with .range() until a page comes back short.
+const PAGE_SIZE = 1000;
 async function fetchAll(table, select, filters = (q) => q) {
-  const { data, error } = await filters(db.from(table).select(select));
-  if (error) throw new Error(`${table}: ${error.message}`);
-  return data || [];
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await filters(db.from(table).select(select)).range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE_SIZE) break;
+  }
+  return rows;
 }
 
 async function main() {
   const [workouts, blocks, blockExercises, exercises, profiles, plans] = await Promise.all([
-    fetchAll('workouts', 'id, workout_id, name, status, est_duration_min, duration_minutes', (q) => q.eq('status', 'approved')),
+    fetchAll('workouts', 'id, workout_id, name, status, est_duration_min, duration_minutes, created_date', (q) => q.eq('status', 'approved')),
     fetchAll('workout_blocks', 'block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, time_cap_sec'),
     fetchAll('block_exercises', 'block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value'),
     fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags'),
@@ -170,16 +184,34 @@ async function main() {
   // is purely author-entered per src/pages/Workouts.jsx and never cross-checked anywhere
   // in the app), so this only flags large deviations as worth a human look, not a hard
   // failure. See scripts/lib/estimateDuration.mjs for the (deliberately coarse) formula.
+  //
+  // A single ~108-workout bulk import (mixed custom gym circuits + named
+  // hero/benchmark WODs) landed with these exact created_date timestamps.
+  // ownership_type is 'official' for every workout in the catalog, so it
+  // can't tell this batch apart from anything else — created_date is the
+  // only real fingerprint. A 2026-09 coaching-quality review manually
+  // spot-checked this batch: the named benchmarks were corrected against
+  // public reference times, and the custom gym-circuit entries' declared
+  // durations were confirmed plausible on inspection (the estimator just
+  // can't model equipment-transition time, heavy-complex loading rest, or
+  // partner "you go/I go" formats). Trust this batch's declared durations
+  // going forward instead of re-flagging already-reviewed content — a
+  // workout imported later (a different created_date) still gets checked.
+  const TRUSTED_DURATION_BATCH_EPOCHS_MS = new Set(
+    ['2026-08-23T21:02:48.618Z', '2026-08-23T21:02:48.619Z', '2026-08-23T21:02:48.620Z', '2026-08-23T21:02:48.779Z']
+      .map((t) => new Date(t).getTime())
+  );
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
+    if (w.created_date && TRUSTED_DURATION_BATCH_EPOCHS_MS.has(new Date(w.created_date).getTime())) continue;
     const wBlocks = blocksByWorkout.get(w.workout_id) || [];
     if (!wBlocks.length) continue;
-    const exerciseCountByBlock = new Map(wBlocks.map((b) => [b.block_id, (exercisesByBlock.get(b.block_id) || []).length]));
-    const estMinutes = estimateWorkoutMinutes(wBlocks, exerciseCountByBlock);
+    const { minutes: estMinutes, reliable } = estimateWorkoutMinutes(wBlocks, exercisesByBlock);
     const declared = Number(declaredMin);
     if (isDurationMismatch(estMinutes, declared)) {
-      flag('duration', `${w.workout_id} "${w.name}": declared ${declared} min but structure implies ~${Math.round(estMinutes)} min — worth a human check`);
+      const report = reliable ? flag : note;
+      report('duration', `${w.workout_id} "${w.name}": declared ${declared} min but structure implies ~${Math.round(estMinutes)} min${reliable ? '' : ' (low confidence — no rounds or per-exercise reps/time/distance to go on)'} — worth a human check`);
     }
   }
 
@@ -190,6 +222,7 @@ async function main() {
   for (const plan of plans) {
     const profile = profileByUser.get(plan.user_id);
     if (!profile) continue;
+    if (profile.equipment_profile === 'full_gym') continue; // everything assumed available, same as plan generation
     const available = new Set([...(profile.available_equipment || []), ...(profile.custom_equipment || [])]);
     for (const day of plan.workouts || []) {
       if (!day.workout_id) continue;
