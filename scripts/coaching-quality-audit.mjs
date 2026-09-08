@@ -99,18 +99,56 @@ async function main() {
     if (!blocksByWorkout.has(b.workout_id)) blocksByWorkout.set(b.workout_id, []);
     blocksByWorkout.get(b.workout_id).push(b);
   }
-  const exercisesByBlock = new Map();
+  const allStepsByBlock = new Map();
   for (const be of blockExercises) {
-    if (be.step_type !== 'exercise') continue;
-    if (!exercisesByBlock.has(be.block_id)) exercisesByBlock.set(be.block_id, []);
-    // Attach equipment_tags so estimateWorkoutMinutes can apply its weighted-
-    // movement penalty (a loaded squat clean takes longer per rep than a
-    // bodyweight burpee) without needing its own exercise-catalog lookup.
-    exercisesByBlock.get(be.block_id).push({ ...be, equipment_tags: be.exercise_id ? exerciseByCode.get(be.exercise_id)?.equipment_tags : null });
+    if (!allStepsByBlock.has(be.block_id)) allStepsByBlock.set(be.block_id, []);
+    allStepsByBlock.get(be.block_id).push(be);
   }
-  for (const list of exercisesByBlock.values()) list.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0));
+  for (const list of allStepsByBlock.values()) list.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0));
+
+  const exercisesByBlock = new Map();
+  for (const [blockId, allSteps] of allStepsByBlock) {
+    const exs = [];
+    for (let i = 0; i < allSteps.length; i++) {
+      const be = allSteps[i];
+      if (be.step_type !== 'exercise') continue;
+      exs.push({
+        ...be,
+        // Attach equipment_tags so estimateWorkoutMinutes can apply its
+        // weighted-movement penalty (a loaded squat clean takes longer per
+        // rep than a bodyweight burpee) without needing its own
+        // exercise-catalog lookup.
+        equipment_tags: be.exercise_id ? exerciseByCode.get(be.exercise_id)?.equipment_tags : null,
+        // Anything non-exercise between two identical exercise rows — a
+        // rest step ("N reps, walk-back rest, repeat"), or a
+        // workout_reference step embedding another named workout between
+        // reps — means there's a real structural gap there, not a
+        // rotation-defeating duplicate. See "The Payne Train" (6x300m Run
+        // with descending "Rounds of Cindy" workout_reference steps between
+        // each rep, not literally 'rest').
+        precededByRest: i > 0 && allSteps[i - 1].step_type !== 'exercise',
+      });
+    }
+    exercisesByBlock.set(blockId, exs);
+  }
 
   const ROTATING_TYPES = new Set(['superset', 'circuit', 'emom', 'emom_alternating', 'tabata']);
+  const UNILATERAL_PATTERN = /single[- ]?arm|single[- ]?leg|unilateral/i;
+  // Two adjacent same-exercise rows are only a genuine "rotation defeated"
+  // mistake when they're truly identical prescriptions with nothing between
+  // them. A different prescription_value is an interval/ladder scheme (Run
+  // 400m, then Run 100m jog, then Run 300m...), a rest step between them is
+  // "N reps, rest, repeat", and a "Single Arm"/unilateral name is almost
+  // always one entry per side, not a duplicate — see "Run - 4-3-2-1",
+  // "Farmer Barnaby", "The Payne Train", and "Asgard Strength" respectively
+  // in the coaching-quality audit for real examples of each.
+  function isGenuineRepeat(prev, cur) {
+    if (!prev.exercise_id || prev.exercise_id !== cur.exercise_id) return false;
+    if (cur.precededByRest) return false;
+    if (UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) return false;
+    if (prev.prescription_type !== cur.prescription_type) return false;
+    return String(prev.prescription_value ?? '') === String(cur.prescription_value ?? '');
+  }
 
   // --- 1. Nonsensical prescriptions -----------------------------------------
   for (const b of blocks) {
@@ -131,7 +169,7 @@ async function main() {
     // Same exercise back-to-back within a rotating block defeats the point of rotating.
     if (ROTATING_TYPES.has((b.block_type || '').toLowerCase())) {
       for (let i = 1; i < exs.length; i++) {
-        if (exs[i].exercise_id && exs[i].exercise_id === exs[i - 1].exercise_id) {
+        if (isGenuineRepeat(exs[i - 1], exs[i])) {
           flag('prescription', `${label}: "${exs[i].exercise_title_raw}" repeats back-to-back in a ${b.block_type} block (rotation defeats the purpose)`);
         }
       }
@@ -151,10 +189,18 @@ async function main() {
     const sorted = [...wBlocks].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
     const sequence = sorted.flatMap((b) => exercisesByBlock.get(b.block_id) || []);
     for (let i = 1; i < sequence.length; i++) {
-      const prevCore = coreMovementName(sequence[i - 1].exercise_title_raw);
-      const curCore = coreMovementName(sequence[i].exercise_title_raw);
-      if (prevCore && prevCore === curCore) {
-        flag('sequencing', `${workoutId}: "${sequence[i - 1].exercise_title_raw}" is immediately followed by "${sequence[i].exercise_title_raw}" — same core movement back-to-back across the workout, a coach would swap one out`);
+      const prev = sequence[i - 1];
+      const cur = sequence[i];
+      const prevCore = coreMovementName(prev.exercise_title_raw);
+      const curCore = coreMovementName(cur.exercise_title_raw);
+      if (!prevCore || prevCore !== curCore) continue;
+      // Same exemptions as isGenuineRepeat (interval/ladder schemes, rest
+      // between reps, unilateral one-per-side movements) — this check just
+      // matches on core movement name instead of exact exercise_id.
+      if (cur.precededByRest) continue;
+      if (UNILATERAL_PATTERN.test(cur.exercise_title_raw || '')) continue;
+      if (prev.prescription_type === cur.prescription_type && String(prev.prescription_value ?? '') === String(cur.prescription_value ?? '')) {
+        flag('sequencing', `${workoutId}: "${prev.exercise_title_raw}" is immediately followed by "${cur.exercise_title_raw}" — same core movement back-to-back across the workout, a coach would swap one out`);
       }
     }
   }
