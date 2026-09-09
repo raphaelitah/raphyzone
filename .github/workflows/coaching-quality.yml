@@ -15,26 +15,37 @@ name: Coaching Quality Expert
 #     equipment-matching bug that only manifests for an unusual gear combo no
 #     real athlete happens to have gets caught — the audit job's equipment check
 #     only ever sees whichever profile real athletes already have.
-# All three run weekly and on demand. None duplicates the regular e2e job, which
-# only checks that the UI/DB mechanically work, not whether a workout makes
-# sense.
+# audit/agent run weekly and on demand; equipment-fuzz runs daily (one
+# profile/day, see below) and on demand. None duplicates the regular e2e job,
+# which only checks that the UI/DB mechanically work, not whether a workout
+# makes sense.
 #
-# Weekly, not nightly: the workout catalog is static (edited deliberately,
-# not on any schedule), so the duration/prescription/sequencing/structure
-# checks only produce a new finding when someone edits the catalog — nightly
-# runs were just re-confirming "still 0". The equipment check here still has
-# real ongoing value (it checks whatever weekly_plans real usage generates),
-# but the stronger check for that is the equipment-fuzz job below
-# (scripts/coaching-quality-equipment-fuzz.mjs), which deliberately generates
-# plans across a range of equipment profiles instead of relying on whichever
-# one a real athlete happens to have. It's testing generator code
-# (supabase/functions/_shared/planContext.ts), not catalog content, so it has
-# the same "only useful when something changes" property as the audit job —
-# weekly matches.
+# audit/agent are weekly, not nightly: the workout catalog is static (edited
+# deliberately, not on any schedule), so the duration/prescription/sequencing/
+# structure checks only produce a new finding when someone edits the catalog
+# — nightly runs were just re-confirming "still 0".
+#
+# equipment-fuzz has NO schedule for now: it's testing generator code
+# (supabase/functions/_shared/planContext.ts) and equipment taxonomy
+# (EQUIPMENT_GROUPS / exercise.equipment_tags) for regressions, but during the
+# beta the workout/exercise catalog and equipment taxonomy are frozen (real
+# users run on the existing catalog only) — nothing exercises that code path,
+# so a recurring run would just re-confirm "still 0". Trigger it manually
+# (workflow_dispatch) once catalog/generator work resumes, or any time
+# planContext.ts changes. The script itself still only runs 1 of its 9
+# profiles per invocation by default (date-rotated) to stay under the LLM
+# provider's daily request cap; use the equipment_profile input below to
+# force a specific one, or re-dispatch on 9 consecutive days to sweep all of
+# them.
 on:
   schedule:
-    - cron: '0 7 * * 1' # 07:00 UTC every Monday
+    - cron: '0 7 * * 1' # audit + agent: 07:00 UTC every Monday
   workflow_dispatch:
+    inputs:
+      equipment_profile:
+        description: 'equipment-fuzz: force a specific profile (name from ALL_PROFILES in the script); leave blank to use the date-rotated default'
+        required: false
+        type: string
 
 concurrency:
   group: coaching-quality
@@ -46,6 +57,7 @@ permissions:
 jobs:
   audit:
     name: Run static catalog audit
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 7 * * 1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +82,7 @@ jobs:
 
   agent:
     name: Run live workout-execution agent
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 7 * * 1'
     runs-on: ubuntu-latest
     # Runs in parallel with `audit`/`equipment-fuzz`, not after them:
     # commit-coaching-log.sh already handles concurrent commits to
@@ -136,6 +149,7 @@ jobs:
 
   equipment-fuzz:
     name: Run plan-generator equipment fuzz test
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Runs in parallel with `audit`/`agent` — see the comment on the `agent`
     # job for why serializing on report-log commits isn't needed.
@@ -155,6 +169,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FUZZ_PROFILE: ${{ github.event.inputs.equipment_profile }}
       - name: Commit updated report log
         run: .github/scripts/commit-coaching-log.sh "Coaching quality equipment fuzz run"
       - name: Fail the job if the fuzz run found anomalies

@@ -1,8 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { getUserFromRequest } from './_shared/auth.ts';
-import { getServiceClient } from './_shared/supabaseAdmin.ts';
-import { callLLM } from './_shared/llm.ts';
-import { corsHeaders } from './_shared/cors.ts';
+import { getUserFromRequest } from '../_shared/auth.ts';
+import { getServiceClient } from '../_shared/supabaseAdmin.ts';
+import { callLLM } from '../_shared/llm.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 // Ported from the Base44-era base44/functions/classifyWorkoutCatalog/entry.ts,
 // which used base44.asServiceRole.entities.* and base44.integrations.Core.InvokeLLM.

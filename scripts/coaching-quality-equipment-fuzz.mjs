@@ -26,6 +26,12 @@
 // in the future (year 2099) that they can never collide with a real week, and
 // are deleted again at the end of the run regardless of outcome.
 //
+// Runs ONE profile per invocation (rotated deterministically by calendar
+// date across ALL_PROFILES below) rather than all of them, to stay well
+// under the LLM provider's 20-requests/day cap when run daily. Pass
+// FUZZ_PROFILE=<name> to force a specific profile (e.g. for manual/on-demand
+// runs).
+//
 // Run with:
 //   SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/coaching-quality-equipment-fuzz.mjs
 
@@ -104,7 +110,7 @@ const NON_CARDIO_EQUIPMENT = EQUIPMENT_GROUPS.filter((g) => g.label !== 'Cardio'
 // Profiles under test — { name, equipment_profile, available_equipment }.
 // custom_equipment mirrors available_equipment for 'custom' profiles (same
 // pattern src/components/ProfileEditor.jsx saves), empty for full_gym.
-const PROFILES = [
+const ALL_PROFILES = [
   { name: 'full_gym', equipment_profile: 'full_gym', available_equipment: ALL_EQUIPMENT },
   { name: 'bodyweight_only', equipment_profile: 'custom', available_equipment: [] },
   { name: 'only_dumbbells', equipment_profile: 'custom', available_equipment: ['Dumbbells'] },
@@ -115,6 +121,22 @@ const PROFILES = [
   { name: 'home_gym_combo', equipment_profile: 'custom', available_equipment: ['Adjustable Dumbbells', 'Flat Bench', 'Pull-up Bar'] },
   { name: 'commercial_gym_minus_cardio', equipment_profile: 'custom', available_equipment: NON_CARDIO_EQUIPMENT },
 ];
+
+// Runs 1 profile/day (LLM-call budget), not all 9 in one run — rotate through
+// ALL_PROFILES deterministically by calendar date so every profile gets
+// covered roughly once every 9 days, with no state file to maintain. Set
+// FUZZ_PROFILE to a name from ALL_PROFILES to force a specific one (used by
+// workflow_dispatch for on-demand/manual coverage of one profile).
+function selectProfiles() {
+  if (process.env.FUZZ_PROFILE) {
+    const forced = ALL_PROFILES.find((p) => p.name === process.env.FUZZ_PROFILE);
+    if (!forced) throw new Error(`FUZZ_PROFILE "${process.env.FUZZ_PROFILE}" is not one of: ${ALL_PROFILES.map((p) => p.name).join(', ')}`);
+    return [forced];
+  }
+  const daysSinceEpoch = Math.floor(Date.now() / 86400000);
+  return [ALL_PROFILES[daysSinceEpoch % ALL_PROFILES.length]];
+}
+const PROFILES = selectProfiles();
 
 async function callFunction(name, accessToken, body) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {

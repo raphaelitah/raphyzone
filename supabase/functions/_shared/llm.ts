@@ -4,15 +4,21 @@
 // response_json_schema })`, which handled the provider/API key transparently —
 // here you own that choice.
 //
-// Backed by two free-tier providers, tried in order, via forced tool-use for
+// Backed by free-tier providers, tried in order, via forced tool-use for
 // structured JSON output:
 //   1. Groq   (OpenAI-compatible) — GROQ_API_KEY
-//   2. Gemini (OpenAI-compatible endpoint) — GEMINI_API_KEY
+//   2. Gemini (OpenAI-compatible endpoint) — GEMINI_API_KEY, GEMINI_API_KEY_2,
+//      GEMINI_API_KEY_3, ... (any number; each is a separate Google
+//      account/project and therefore has its OWN independent 20
+//      requests/day free-tier bucket — see buildProviders below)
 // Each provider has its own independent rate-limit budget, so when Groq's
 // shared 8000 TPM cap is exhausted, calls fall over to Gemini instead of
-// queuing/retrying against the same exhausted quota. Set the secrets with:
+// queuing/retrying against the same exhausted quota, and if one Gemini key's
+// daily quota is exhausted it falls over to the next Gemini key. Set the
+// secrets with:
 //   supabase secrets set GROQ_API_KEY=gsk_... --project-ref <ref>
 //   supabase secrets set GEMINI_API_KEY=AIza... --project-ref <ref>
+//   supabase secrets set GEMINI_API_KEY_2=AIza... --project-ref <ref>
 // A provider with no key set is skipped rather than failing the request.
 
 import { getServiceClient } from './supabaseAdmin.ts';
@@ -38,6 +44,30 @@ interface Provider {
 // itself — see filterCatalogForSelection and the trimmed buildWorkoutCatalog in
 // planContext.ts. That's also why a second provider (Gemini) with its own
 // separate quota is worth having, rather than just retrying Groq harder.
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+const GEMINI_MODEL = 'gemini-3.6-flash';
+
+// GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, ... — each is expected
+// to be a different Google account/project, so each carries its own separate
+// 20-requests/day free-tier quota. Discovered dynamically (rather than a
+// fixed list of N slots) so adding another backup account is just setting
+// one more secret, no code change. GEMINI_API_KEY (no suffix) sorts first;
+// numbered ones after in numeric order.
+function discoverGeminiProviders(): Provider[] {
+  const envKeys = Object.keys(Deno.env.toObject()).filter((k) => /^GEMINI_API_KEY(_\d+)?$/.test(k));
+  envKeys.sort((a, b) => {
+    const na = a === 'GEMINI_API_KEY' ? 0 : parseInt(a.slice('GEMINI_API_KEY_'.length), 10);
+    const nb = b === 'GEMINI_API_KEY' ? 0 : parseInt(b.slice('GEMINI_API_KEY_'.length), 10);
+    return na - nb;
+  });
+  return envKeys.map((envKey) => ({
+    name: envKey === 'GEMINI_API_KEY' ? 'gemini' : `gemini${envKey.slice('GEMINI_API_KEY'.length)}`,
+    envKey,
+    baseUrl: GEMINI_BASE_URL,
+    model: GEMINI_MODEL,
+  }));
+}
+
 const PROVIDERS: Provider[] = [
   {
     name: 'groq',
@@ -45,12 +75,7 @@ const PROVIDERS: Provider[] = [
     baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
     model: 'openai/gpt-oss-120b',
   },
-  {
-    name: 'gemini',
-    envKey: 'GEMINI_API_KEY',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: 'gemini-3.6-flash',
-  },
+  ...discoverGeminiProviders(),
 ];
 
 // Groq's tool-call validator rejects `null` for a property whose declared type is

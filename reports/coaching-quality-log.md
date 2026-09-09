@@ -10355,3 +10355,48 @@ Call log:
 - ✓ Did "Lynne" — everything is good, no block transitions to check.
 
 ---
+## Equipment Fuzz Run 2026-09-09T14:04:53.211Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ full_gym: generated plan, checked 15 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
+## Equipment Fuzz Run 2026-09-09T14:10:49.542Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_kettlebell: generated plan, checked 23 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
+## Equipment Fuzz Run 2026-09-09T14:13:10.805Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_resistance_bands: generated plan, checked 21 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
+## Equipment Fuzz Run 2026-09-09T14:15:19.741Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ home_gym_combo: generated plan, checked 20 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
+## Equipment Fuzz Run 2026-09-09T14:27:39.209Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_dumbbells: generated plan, checked 24 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
