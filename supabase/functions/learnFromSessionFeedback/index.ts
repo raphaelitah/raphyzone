@@ -19,12 +19,16 @@ function isUpperBody(pattern: string | null): boolean {
 }
 
 // A signal's samples must skew consistently one way (not just a single outlier) to propose anything.
-function proposeAdjustment(recent: { max_weight: number | null; difficulty: string }[]): { direction: 'up' | 'down'; confidence: number } | null {
+function proposeAdjustment(recent: { max_weight: number | null; difficulty: string }[]): { direction: 'up' | 'down'; confidence: number; signal: 'easy' | 'hard' | 'normal_streak' } | null {
   const easy = recent.filter((s) => s.difficulty === 'easy').length;
   const hardOrFailed = recent.filter((s) => s.difficulty === 'hard' || s.difficulty === 'failed').length;
+  const normal = recent.filter((s) => s.difficulty === 'normal').length;
   const total = recent.length;
-  if (easy >= 2 && easy / total >= 0.6) return { direction: 'up', confidence: Math.min(60 + easy * 10, 95) };
-  if (hardOrFailed >= 2 && hardOrFailed / total >= 0.6) return { direction: 'down', confidence: Math.min(60 + hardOrFailed * 10, 95) };
+  if (easy >= 2 && easy / total >= 0.6) return { direction: 'up', confidence: Math.min(60 + easy * 10, 95), signal: 'easy' };
+  if (hardOrFailed >= 2 && hardOrFailed / total >= 0.6) return { direction: 'down', confidence: Math.min(60 + hardOrFailed * 10, 95), signal: 'hard' };
+  // Never felt hard or easy over a long enough stretch — the weight hasn't been
+  // challenging, which is itself a progression signal, just a softer one than "easy".
+  if (normal >= 4 && normal === total) return { direction: 'up', confidence: Math.min(45 + normal * 5, 80), signal: 'normal_streak' };
   return null;
 }
 
@@ -150,9 +154,11 @@ Deno.serve(async (req: Request) => {
         suggested_weight: suggested,
         new_weight_kg: suggested,
         reps: null,
-        reason: proposal.direction === 'up'
-          ? `Recent sessions have felt easy at ${current}kg — time to progress.`
-          : `Recent sessions have felt hard at ${current}kg — dialing it back.`,
+        reason: proposal.signal === 'normal_streak'
+          ? `Recent sessions at ${current}kg haven't felt hard or easy — there's room to push harder.`
+          : proposal.direction === 'up'
+            ? `Recent sessions have felt easy at ${current}kg — time to progress.`
+            : `Recent sessions have felt hard at ${current}kg — dialing it back.`,
         evidence: s.recent.map((r: any) => `${r.max_weight ?? '?'}kg/${r.difficulty}`).join(', '),
         confidence: proposal.confidence,
       });
@@ -176,9 +182,11 @@ Deno.serve(async (req: Request) => {
         suggested_weight: suggested,
         new_weight_kg: suggested,
         reps: cal?.reps ?? 8,
-        reason: proposal.direction === 'up'
-          ? `${s.pattern} sessions have consistently felt easy — raising the baseline.`
-          : `${s.pattern} sessions have consistently felt hard — lowering the baseline.`,
+        reason: proposal.signal === 'normal_streak'
+          ? `${s.pattern} sessions haven't felt hard or easy in a while — raising the baseline.`
+          : proposal.direction === 'up'
+            ? `${s.pattern} sessions have consistently felt easy — raising the baseline.`
+            : `${s.pattern} sessions have consistently felt hard — lowering the baseline.`,
         evidence: s.recent.map((r: any) => `${r.exercise_name}:${r.max_weight ?? '?'}kg/${r.difficulty}`).join(', '),
         confidence: proposal.confidence,
       });
@@ -207,10 +215,26 @@ Deno.serve(async (req: Request) => {
         reps: r.reps ?? null,
       }));
 
+    // Inserted one at a time via an RPC that does ON CONFLICT DO NOTHING against a
+    // partial unique index (user_id + exercise_id/pattern, status='pending'), so two
+    // concurrent invocations of this function can't both insert the same recommendation.
     let created = 0;
-    if (toCreate.length) {
-      await supabase.from('progression_recommendations').insert(toCreate);
-      created = toCreate.length;
+    for (const r of toCreate) {
+      const { data: inserted } = await supabase.rpc('create_progression_recommendation', {
+        p_user_id: user.id,
+        p_exercise_id: r.exercise_id,
+        p_exercise_name: r.exercise_name,
+        p_current_weight: r.current_weight,
+        p_suggested_weight: r.suggested_weight,
+        p_reason: r.reason,
+        p_evidence: r.evidence,
+        p_confidence: r.confidence,
+        p_adjustment_type: r.adjustment_type,
+        p_pattern: r.pattern,
+        p_new_weight_kg: r.new_weight_kg,
+        p_reps: r.reps,
+      });
+      if (inserted) created++;
     }
     return Response.json({ created }, { headers: corsHeaders });
   } catch (error) {
