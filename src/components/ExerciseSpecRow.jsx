@@ -41,7 +41,7 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
       )}
       <Spec label="Rest" value={exercise.rest_seconds ? exercise.rest_seconds + 's' : '—'} />
       {exercise.coach_note && (
-        <p className="col-span-4 text-xs text-muted-foreground italic bg-muted/30 rounded-lg px-3 py-2 -mt-1">
+        <p className="col-span-4 text-xs text-brand italic bg-brand/10 rounded-lg px-3 py-2 -mt-1">
           {exercise.coach_note}
         </p>
       )}

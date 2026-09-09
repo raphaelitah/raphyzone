@@ -713,6 +713,9 @@ export default function Workouts() {
                                         <p className="text-xs text-muted-foreground">
                                           {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
                                         </p>
+                                        {!isRest && be.notes && (
+                                          <p className="text-xs text-brand italic mt-0.5">{be.notes}</p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
