@@ -65,6 +65,13 @@ const MOVEMENT_PATTERN_FALLBACK: Record<string, { from: string; ratio: number }>
   'Core - Flexion': { from: 'Hinge', ratio: 0.2 },
   'Core - Anti-extension': { from: 'Hinge', ratio: 0.2 },
   'Core - Extension': { from: 'Hinge', ratio: 0.2 },
+  // These three patterns are dominated by unloaded entries (stretches, bodyweight
+  // jumps, distance cardio) — requires_load only flips true for the occasional
+  // loaded variant (a weighted carry filed under "Locomotion / Cardio" rather
+  // than "Carry", a weighted box jump, a preacher curl filed under "Mobility").
+  'Locomotion / Cardio': { from: 'Hinge', ratio: 0.7 }, // loaded carries/walks — same ratio as Carry
+  'Jump / Plyometric': { from: 'Squat', ratio: 0.25 }, // weighted jumps load far lighter than a squat
+  Mobility: { from: 'Horizontal Pull', ratio: 0.25 }, // loaded curls/extensions filed here
 };
 
 function avgReps(reps: string | number): number {

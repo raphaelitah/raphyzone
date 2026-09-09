@@ -141,6 +141,13 @@ export const MOVEMENT_PATTERN_FALLBACK = {
   'Core - Flexion': { from: 'hinge', ratio: 0.2 },
   'Core - Anti-extension': { from: 'hinge', ratio: 0.2 },
   'Core - Extension': { from: 'hinge', ratio: 0.2 },
+  // These three patterns are dominated by unloaded entries (stretches, bodyweight
+  // jumps, distance cardio) — requires_load only flips true for the occasional
+  // loaded variant (a weighted carry filed under "Locomotion / Cardio" rather
+  // than "Carry", a weighted box jump, a preacher curl filed under "Mobility").
+  'Locomotion / Cardio': { from: 'hinge', ratio: 0.7 }, // loaded carries/walks — same ratio as Carry
+  'Jump / Plyometric': { from: 'squat', ratio: 0.25 }, // weighted jumps load far lighter than a squat
+  Mobility: { from: 'horizontal_pull', ratio: 0.25 }, // loaded curls/extensions filed here
 };
 
 // Given an exercise's movement_pattern, finds the calibration question (see
