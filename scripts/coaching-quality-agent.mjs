@@ -278,30 +278,32 @@ async function checkWeightSuggestion(page, log) {
   const hasRefreshIcon = (await weightLabel.locator('svg').count().catch(() => 0)) > 0;
   if (!hasRefreshIcon) return; // bodyweight/running exercise, or already has a suggested weight
 
-  await weightLabel.click().catch(() => {});
   // This triggers a real network round trip (assignWorkoutWeights edge function).
-  // A fixed short wait risks moving on before it resolves, leaving its eventual
-  // state update (setExercises/persistWeight) to land later — possibly after we've
-  // already advanced to a different exercise, which could easily explain a session
-  // occasionally looking like it "jumped back" for no reason. Poll for the loading
-  // spinner to actually clear instead of guessing a fixed delay.
+  // Used to infer completion from the loading spinner's CSS animation class
+  // clearing (with a leading waitFor so a zero-lead-time first check couldn't
+  // read an in-flight request as already resolved) — an improvement over the
+  // original zero-wait version, but still an inference from a transient DOM
+  // state whose own mount depends on a React render actually flushing in time.
+  // Still observed live, rarer but not gone: "Goose" flagged "no value came
+  // back and no calibration prompt appeared" even though every exercise in it
+  // was fully covered by the athlete's calibration (Hinge + Full Body Complex,
+  // both present) — the request must still have been in flight past whatever
+  // lead time was given, under CI load slow enough to delay the render itself,
+  // not just the network.
   //
-  // Wait for the spinner to actually appear first. calcWeight's setWeightLoadingKey
-  // update needs a React render to flush before the spinner mounts, so checking for
-  // "not visible" with zero lead time (as this used to) can catch the gap between
-  // the click returning and that render landing, reading a request that's still
-  // in flight as already resolved — confirmed live: "The Lou" (a 44-round rotating
-  // circuit, i.e. the tightest timing of any block) flagged "no value came back
-  // and no calibration prompt appeared" even though the athlete's calibration
-  // fully covered every exercise, so the request must have still been pending
-  // when this checked. A response fast enough to never show a spinner at all
-  // means this wait just no-ops past its own timeout, which is fine.
-  const loadingSpinner = weightLabel.locator('..').locator('svg.animate-spin');
-  await loadingSpinner.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {});
-  for (let waited = 0; waited < 8000; waited += 400) {
-    if (!(await loadingSpinner.isVisible().catch(() => false))) break;
-    await page.waitForTimeout(400);
-  }
+  // Waiting directly on the network response removes the inference entirely:
+  // it's tied to the actual request finishing, not a proxy for it, so no lead
+  // time or poll interval can under-shoot it. Armed before the click so a
+  // response that starts before this line still gets caught.
+  const weightResponse = page.waitForResponse(
+    (res) => res.url().includes('/assignWorkoutWeights') && res.request().method() === 'POST',
+    { timeout: 8000 }
+  ).catch(() => null);
+  await weightLabel.click().catch(() => {});
+  await weightResponse;
+  // One more beat for the response handler's setExercises/persistWeight state
+  // update to actually flush and re-render before reading the DOM below.
+  await page.waitForTimeout(200);
   if (await fillQuickCalibrationIfShown(page, log)) return;
 
   const stillMissing = (await weightLabel.locator('svg').count().catch(() => 0)) > 0;
