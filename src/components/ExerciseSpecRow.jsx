@@ -34,7 +34,7 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
       ) : (
         <Spec
           label="Weight"
-          value={!requiresWeight ? 'Bodyweight' : exercise.target_weight ? exercise.target_weight + 'kg' : '—'}
+          value={!requiresWeight ? 'Bodyweight' : exercise.target_weight ? exercise.target_weight + 'kg' + (exercise.details?.implement_count === 2 ? ' each' : '') : '—'}
           loading={weightLoading}
           onClick={requiresWeight && !exercise.target_weight ? onWeightClick : null}
         />
