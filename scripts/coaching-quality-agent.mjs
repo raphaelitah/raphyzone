@@ -3,9 +3,14 @@
 // scripts/seed-test-data.sql) and actually executes real catalog workouts through the
 // UI the way a human athlete would: real "Start set" / "Done" taps, real rest
 // countdowns (verified, not just skipped past), real weight/feedback/note entry on
-// every completion screen — then reports in plain language whether it ran smoothly,
-// whether every rest transition felt natural, and whether the declared duration
-// holds up against what the prescribed sets and rest actually add up to.
+// every completion screen — then reports in plain language whether it ran smoothly
+// and whether every rest transition felt natural.
+//
+// Declared-duration-vs-structure is checked in scripts/coaching-quality-audit.mjs
+// instead, not here: that check runs off the same static catalog data regardless of
+// which script computes it, and duplicating it here just re-flagged the exact same
+// already-acknowledged mismatches (see ACKNOWLEDGED_DURATION_GAPS there) a second
+// time with no silence-list of its own.
 //
 // This is distinct from tests/e2e/workout-execution.spec.js (a pass/fail regression
 // check that skips through everything to confirm the button works) and
@@ -54,7 +59,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { estimateWorkoutMinutes, isDurationMismatch } from './lib/estimateDuration.mjs';
 import { coreMovementName } from './lib/coreMovementName.mjs';
 
 function loadEnvLocal() {
@@ -124,33 +128,6 @@ async function selectWorkoutsToReview(limit) {
   });
 
   return candidates.slice(0, limit);
-}
-
-async function fetchExercisesForBlocks(blockIds) {
-  if (!blockIds.length) return new Map();
-  const { data } = await db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise');
-  // estimateWorkoutMinutes' weighted-movement penalty needs each step's
-  // equipment_tags — attach them here rather than change its call signature.
-  // Scoped to just the exercise_codes this batch actually references, not
-  // the whole exercises table: an unfiltered select() is silently capped at
-  // PostgREST's default 1000-row page, and with ~2900 rows in exercises,
-  // whichever arbitrary 1000 come back (no ORDER BY = no stable set) miss
-  // most codes — e.g. "Sumo Deadlift High Pull" (EX02571) and "Wide Stance
-  // Front Squat" (EX02842) got silently dropped, isWeighted() defaulted to
-  // false for them, and the weighted-rep-pace penalty never applied,
-  // undercounting the estimate for "Andi" (and similarly "Grettel").
-  const codes = [...new Set((data || []).map((be) => be.exercise_id).filter(Boolean))];
-  const { data: exercises } = codes.length
-    ? await db.from('exercises').select('exercise_code, equipment_tags').in('exercise_code', codes)
-    : { data: [] };
-  const equipmentByCode = new Map((exercises || []).filter((e) => e.exercise_code).map((e) => [e.exercise_code, e.equipment_tags]));
-  const byBlock = new Map();
-  for (const be of data || []) {
-    if (!byBlock.has(be.block_id)) byBlock.set(be.block_id, []);
-    byBlock.get(be.block_id).push({ ...be, equipment_tags: be.exercise_id ? equipmentByCode.get(be.exercise_id) : null });
-  }
-  for (const list of byBlock.values()) list.sort((a, b) => (a.order_in_block || 0) - (b.order_in_block || 0));
-  return byBlock;
 }
 
 async function login(page) {
@@ -288,31 +265,27 @@ async function checkWeightSuggestion(page, log) {
   if (!hasRefreshIcon) return; // bodyweight/running exercise, or already has a suggested weight
 
   // This triggers a real network round trip (assignWorkoutWeights edge function).
-  // Used to infer completion from the loading spinner's CSS animation class
-  // clearing (with a leading waitFor so a zero-lead-time first check couldn't
-  // read an in-flight request as already resolved) — an improvement over the
-  // original zero-wait version, but still an inference from a transient DOM
-  // state whose own mount depends on a React render actually flushing in time.
-  // Still observed live, rarer but not gone: "Goose" flagged "no value came
-  // back and no calibration prompt appeared" even though every exercise in it
-  // was fully covered by the athlete's calibration (Hinge + Full Body Complex,
-  // both present) — the request must still have been in flight past whatever
-  // lead time was given, under CI load slow enough to delay the render itself,
-  // not just the network.
-  //
-  // Waiting directly on the network response removes the inference entirely:
-  // it's tied to the actual request finishing, not a proxy for it, so no lead
-  // time or poll interval can under-shoot it. Armed before the click so a
-  // response that starts before this line still gets caught.
+  // Wait on the actual response rather than inferring completion from a
+  // transient loading-spinner class — armed before the click so a response
+  // that starts before this line still gets caught.
   const weightResponse = page.waitForResponse(
     (res) => res.url().includes('/assignWorkoutWeights') && res.request().method() === 'POST',
     { timeout: 8000 }
   ).catch(() => null);
   await weightLabel.click().catch(() => {});
   await weightResponse;
-  // One more beat for the response handler's setExercises/persistWeight state
-  // update to actually flush and re-render before reading the DOM below.
-  await page.waitForTimeout(200);
+  // The response event above fires on the network reply, not on React having
+  // flushed the resulting re-render — a fixed settle delay here (the previous
+  // approach) could still under-shoot that flush under CI load, which is
+  // exactly how "Chaos"/"Dan Kennedy"/"Answering the Call" got misreported as
+  // missing a suggestion. Wait on the actual DOM outcome instead: either the
+  // refresh icon detaching (a value came back) or the calibration sheet's
+  // save button appearing — whichever happens first, with no arbitrary delay
+  // to under-shoot.
+  await Promise.race([
+    weightLabel.locator('svg').waitFor({ state: 'detached', timeout: 6000 }).catch(() => {}),
+    page.getByRole('button', { name: /^save & get suggested weight$/i }).waitFor({ state: 'visible', timeout: 6000 }).catch(() => {}),
+  ]);
   if (await fillQuickCalibrationIfShown(page, log)) return;
 
   const stillMissing = (await weightLabel.locator('svg').count().catch(() => 0)) > 0;
@@ -510,10 +483,6 @@ async function runWorkout(page, candidate, qaCoachId) {
     page.off('pageerror', onPageError);
   }
 
-  const { minutes: rawEstimatedMinutes, reliable: durationEstimateReliable } = estimateWorkoutMinutes(candidate.blocks, candidate.exercisesByBlock);
-  const estimatedMinutes = Math.round(rawEstimatedMinutes);
-  const declaredMinutes = candidate.workout.est_duration_min ?? candidate.workout.duration_minutes ?? null;
-
   // workout_sessions.workout_id stores the workout's UUID (candidate.workout.id, same
   // as the /workout/:id URL) — not workouts.workout_id, the human-readable text code
   // used elsewhere (e.g. coaching_agent_reviews.workout_id).
@@ -530,17 +499,6 @@ async function runWorkout(page, candidate, qaCoachId) {
   for (const issue of log.weightIssues) problems.push(issue);
   for (const issue of log.movementIssues) problems.push(issue);
 
-  let durationNote = null;
-  if (declaredMinutes != null) {
-    const declared = Number(declaredMinutes);
-    if (isDurationMismatch(estimatedMinutes, declared) && durationEstimateReliable) {
-      durationNote = `took ~${estimatedMinutes} min if you follow every prescribed set and rest, while the catalog says ${declared} min`;
-      problems.push(durationNote);
-    } else {
-      durationNote = `~${estimatedMinutes} min structurally, close to the declared ${declared} min`;
-    }
-  }
-
   const verdict = problems.length ? 'flagged' : 'clean';
   const naturalTransitions = log.transitions.filter((t) => t.natural);
   const feelNote = log.transitions.length
@@ -549,14 +507,14 @@ async function runWorkout(page, candidate, qaCoachId) {
   const executionLine = finished && !consoleErrors.length ? 'execution ran smooth' : 'execution had problems';
   const summary = problems.length
     ? `Did "${candidate.workout.name}" — ${executionLine}, ${feelNote}, but: ${problems.join('; ')}.`
-    : `Did "${candidate.workout.name}" — everything is good, ${feelNote}. ${durationNote ? durationNote[0].toUpperCase() + durationNote.slice(1) + '.' : ''}`;
+    : `Did "${candidate.workout.name}" — everything is good, ${feelNote}.`;
 
   return {
     workoutId: candidate.workout.workout_id,
     verdict,
     summary,
     details: {
-      warmupShown, estimatedMinutes, declaredMinutes, sessionStatus, consoleErrorCount: consoleErrors.length, finished,
+      warmupShown, sessionStatus, consoleErrorCount: consoleErrors.length, finished,
       weightsLogged: log.weightsLogged.length, weightIssues: log.weightIssues, movementIssues: log.movementIssues, transitions: log.transitions, fallbackSkips: log.usedFallbackSkip,
       timerDrivenBlocks: log.timerDrivenBlocks,
     },
@@ -594,10 +552,6 @@ async function main() {
     writeReport([]);
     return 0;
   }
-
-  const blockIds = candidates.flatMap((c) => c.blocks.map((b) => b.block_id));
-  const exercisesByBlock = await fetchExercisesForBlocks(blockIds);
-  for (const c of candidates) c.exercisesByBlock = exercisesByBlock;
 
   const { data: usersPage } = await db.auth.admin.listUsers();
   const qaCoachId = usersPage?.users?.find((u) => u.email === QA_COACH.email)?.id;
