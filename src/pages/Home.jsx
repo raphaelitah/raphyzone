@@ -285,7 +285,7 @@ export default function Home() {
     if (!slot || !plan) return;
     const warmup = await fetchWarmup(workoutId);
     const updated = plan.workouts.map((w) => (w === slot)
-      ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false, warmup }
+      ? { ...w, workout_id: workoutId, workout_name: workoutName, reason: reason || 'Guided session', locked: false, warmup, slot_type: 'train', activity: undefined }
       : w);
     setPlan({ ...plan, workouts: updated });
     try {

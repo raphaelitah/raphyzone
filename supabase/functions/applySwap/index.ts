@@ -58,6 +58,8 @@ Deno.serve(async (req: Request) => {
           reason: reason || w.reason,
           locked: false,
           warmup,
+          slot_type: 'train',
+          activity: undefined,
         };
       }
       return w;
