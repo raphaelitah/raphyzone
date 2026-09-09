@@ -49,7 +49,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
   };
 
   let lockedDays = new Set<string>();
-  if (isRegen && existingPlan) {
+  if (existingPlan) {
     const weekDates = Object.values(existingByDay).map((w: any) => w.date).filter(Boolean);
     const { data: completedSessions } = weekDates.length
       ? await supabase
