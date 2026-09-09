@@ -15,6 +15,10 @@ import {
   buildFlatExerciseList,
   getWorkoutMetaLine,
   roundToFive,
+  getLadderSequence,
+  isLadderBlock,
+  getLadderRounds,
+  getLadderRepsForRound,
 } from './workoutStructure';
 
 describe('isEMOMBlock / isAlternatingEmomBlock / isTabataBlock', () => {
@@ -314,5 +318,66 @@ describe('getWorkoutMetaLine', () => {
       b2: [{ step_type: 'exercise' }, { step_type: 'exercise' }],
     };
     expect(getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlock)).toBe('5 Exercises · 3 Rounds');
+  });
+});
+
+describe('Ladder blocks (Ben\'s Therapy: 10-9-8...-1 devil\'s press paired with a 20-18-16...-2 squat ladder)', () => {
+  const devilsPress = { block_exercise_id: 'be1', block_id: 'b1', ladder_start_reps: 10, ladder_end_reps: 1, ladder_step: 1 };
+  const dbSquat = { block_exercise_id: 'be2', block_id: 'b1', ladder_start_reps: 20, ladder_end_reps: 2, ladder_step: 2 };
+
+  it('builds a descending rep sequence from start/end/step', () => {
+    expect(getLadderSequence(devilsPress)).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    expect(getLadderSequence(dbSquat)).toEqual([20, 18, 16, 14, 12, 10, 8, 6, 4, 2]);
+  });
+
+  it('returns null for a non-ladder exercise', () => {
+    expect(getLadderSequence({})).toBeNull();
+    expect(getLadderSequence({ ladder_start_reps: 10 })).toBeNull();
+    expect(getLadderSequence({ ladder_start_reps: 5, ladder_end_reps: 5 })).toBeNull();
+  });
+
+  it('detects a ladder block and reports its round count from the longest sequence', () => {
+    expect(isLadderBlock([devilsPress, dbSquat])).toBe(true);
+    expect(isLadderBlock([{ block_exercise_id: 'be3' }])).toBe(false);
+    expect(getLadderRounds([devilsPress, dbSquat])).toBe(10);
+  });
+
+  it('looks up the reps due on a given round, clamping past the last rung', () => {
+    expect(getLadderRepsForRound(devilsPress, 1)).toBe(10);
+    expect(getLadderRepsForRound(devilsPress, 5)).toBe(6);
+    expect(getLadderRepsForRound(devilsPress, 10)).toBe(1);
+    expect(getLadderRepsForRound(devilsPress, 99)).toBe(1);
+    expect(getLadderRepsForRound(dbSquat, 3)).toBe(16);
+  });
+
+  it('getEffectiveRounds prefers the ladder round count over block.rounds', () => {
+    const block = { block_type: 'superset', workout_format: 'for_time', rounds: null };
+    expect(getEffectiveRounds(block, 2, [devilsPress, dbSquat])).toBe(10);
+  });
+
+  it('deriveBlockTimerConfig labels a ladder superset and sizes rounds off the ladder', () => {
+    const block = { block_type: 'superset', workout_format: 'for_time', rounds: null, rest_seconds: 60 };
+    const config = deriveBlockTimerConfig(block, 2, [devilsPress, dbSquat]);
+    expect(config).toMatchObject({
+      blockLabel: 'Ladder',
+      isSuperset: true,
+      isLadder: true,
+      timerDefaultConfig: { rounds: 10, restSec: 60 },
+    });
+  });
+
+  it('buildFlatExerciseList surfaces the joined rep sequence and a round-aware ladder array per exercise', () => {
+    const workout = { workout_id: 'w1' };
+    const blocksByWorkout = { w1: [{ block_id: 'b1', workout_id: 'w1', block_type: 'superset', workout_format: 'for_time' }] };
+    const blockExercisesByBlock = {
+      b1: [
+        { ...devilsPress, order_in_block: 1, step_type: 'exercise', exercise_title_raw: "Dumbbell Devil Press" },
+        { ...dbSquat, order_in_block: 2, step_type: 'exercise', exercise_title_raw: 'Dumbbell Squat Clean' },
+      ],
+    };
+    const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesByBlock, {}, {});
+    expect(list.map((e) => e.reps)).toEqual(['10-9-8-7-6-5-4-3-2-1', '20-18-16-14-12-10-8-6-4-2']);
+    expect(list.map((e) => e.rounds)).toEqual([10, 10]);
+    expect(list[0].ladder).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
   });
 });

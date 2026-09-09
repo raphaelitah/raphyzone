@@ -4,6 +4,7 @@ import { Play, Check, RefreshCw, Volume2, VolumeX } from 'lucide-react';
 import YouTubeVideo from '@/components/YouTubeVideo';
 import ExerciseSpecRow from '@/components/ExerciseSpecRow';
 import BlockPanel from '@/components/BlockPanel';
+import { getLadderRepsForRound } from '@/lib/workoutStructure';
 import {
   isTimerAudioMuted,
   setTimerAudioMuted,
@@ -123,6 +124,11 @@ export default function SupersetPanel({
 
   const totalExercises = exercises.length;
   const current = exercises[exIndex] || exercises[0];
+  // A ladder exercise's rep count changes every round (e.g. 10-9-8-...-1), so
+  // the reps shown here must track the live `round` rather than the static
+  // `current.reps` string used everywhere else (workout overview, logs, etc).
+  const ladderReps = current?.ladder ? getLadderRepsForRound(current, round) : null;
+  const displayCurrent = ladderReps != null ? { ...current, reps: ladderReps } : current;
   const isLastInRound = exIndex >= totalExercises - 1;
   const isLastRound = round >= rounds;
 
@@ -250,7 +256,7 @@ export default function SupersetPanel({
             <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
           )}
           <div className="w-full">
-            <ExerciseSpecRow exercise={current} weightLoading={weightLoadingKey === current?.key} onWeightClick={onWeightClick ? () => onWeightClick(current) : null} />
+            <ExerciseSpecRow exercise={displayCurrent} weightLoading={weightLoadingKey === current?.key} onWeightClick={onWeightClick ? () => onWeightClick(current) : null} />
           </div>
           {phase === 'running' ? (
             <>

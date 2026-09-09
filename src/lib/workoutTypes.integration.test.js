@@ -166,6 +166,7 @@ describe('"Barbara" (circuit workout: 5 rounds for time, rest 3 min between roun
       isEmomFamily: false,
       isAlternatingEmom: false,
       isSuperset: true,
+      isLadder: false,
       timerDefaultConfig: { rounds: 5, restSec: 180 },
     });
   });
@@ -199,6 +200,7 @@ describe('"1775" (AMRAP workout: self-paced, 60-minute time cap)', () => {
       isEmomFamily: false,
       isAlternatingEmom: false,
       isSuperset: true,
+      isLadder: false,
       timerDefaultConfig: { rounds: 1, restSec: 90 },
     });
   });
@@ -241,6 +243,7 @@ describe('"40-20 Workout" (combination: 3 supersets, interval work/rest embedded
         isEmomFamily: false,
         isAlternatingEmom: false,
         isSuperset: true,
+        isLadder: false,
         timerDefaultConfig: { rounds: 4, restSec: 180 },
       });
     });

@@ -456,7 +456,8 @@ export default function WorkoutExecution() {
           rounds: current.block_rounds,
           time_cap_sec: current.time_cap_sec,
         },
-        currentBlockExercises.length
+        currentBlockExercises.length,
+        currentBlockExercises
       )
     : null;
   const blockLabel = blockTimerMeta?.blockLabel ?? null;
@@ -1441,6 +1442,7 @@ export default function WorkoutExecution() {
             {isBlockActive && isSuperset ? (
               <SupersetPanel
                 key={current.block_id}
+                label={blockLabel}
                 exercises={currentBlockExercises}
                 rounds={timerDefaultConfig?.rounds || 1}
                 restSec={restOverrides[current.block_id] ?? (timerDefaultConfig?.restSec ?? 0)}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { getLadderSequence } from '@/lib/workoutStructure';
 
 /**
  * Shared block/exercise CRUD used by Workouts.jsx's inline workout editor.
@@ -40,43 +41,69 @@ export function useBlockExerciseCrud({
   };
 
   const handleSaveBe = async (formData) => {
-    const { data: fresh, error } = await supabase.from('block_exercises').update({
-      prescription_value: formData.prescription_value,
+    const ladderSeq = formData.is_ladder
+      ? getLadderSequence({
+          ladder_start_reps: parseFloat(formData.ladder_start_reps),
+          ladder_end_reps: parseFloat(formData.ladder_end_reps),
+          ladder_step: parseFloat(formData.ladder_step) || 1,
+        })
+      : null;
+
+    const update = {
+      prescription_value: ladderSeq ? ladderSeq.join('-') : formData.prescription_value,
       load_value: formData.load_value,
       notes: formData.notes,
       speed: formData.speed === '' ? null : formData.speed,
       incline: formData.incline === '' ? null : formData.incline,
-    }).eq('id', editingBe.id).select().single();
+      ladder_start_reps: ladderSeq ? parseFloat(formData.ladder_start_reps) : null,
+      ladder_end_reps: ladderSeq ? parseFloat(formData.ladder_end_reps) : null,
+      ladder_step: ladderSeq ? (parseFloat(formData.ladder_step) || 1) : null,
+    };
+    const { data: fresh, error } = await supabase.from('block_exercises').update(update)
+      .eq('id', editingBe.id).select().single();
     if (error || !fresh) return;
     let sets = (setsByBlockExercise[editingBe.block_exercise_id] || []).slice().sort(
       (a, b) => (a.set_number || 0) - (b.set_number || 0)
     );
-    const targetReps = parseInt(formData.prescription_value, 10);
-    const targetCount = Math.max(1, formData.set_count || sets.length || 1);
 
-    // Update reps on existing sets when prescription is numeric
-    if (sets.length && !isNaN(targetReps)) {
-      await Promise.all(sets.map((s) => supabase.from('prescribed_sets').update({ target_reps: targetReps }).eq('id', s.id)));
-      sets = sets.map((s) => ({ ...s, target_reps: targetReps }));
-    }
-
-    // Reconcile set count: add or remove PrescribedSet records
-    if (targetCount > sets.length) {
-      const newSets = [];
-      for (let i = sets.length; i < targetCount; i++) {
-        newSets.push({
-          set_id: `${editingBe.block_exercise_id}-S${i + 1}`,
-          block_exercise_id: editingBe.block_exercise_id,
-          set_number: i + 1,
-          target_reps: !isNaN(targetReps) ? targetReps : (sets[0]?.target_reps ?? 8),
-        });
+    if (ladderSeq) {
+      // A ladder's reps vary round to round, so a flat per-set target_reps
+      // (the PrescribedSet model) can't represent it — the round-aware reps
+      // live on the block_exercise's ladder_* columns instead. Drop any
+      // stale prescribed sets left over from before the exercise became a
+      // ladder so nothing shows a now-meaningless constant rep count.
+      if (sets.length) {
+        await Promise.all(sets.map((s) => supabase.from('prescribed_sets').delete().eq('id', s.id)));
+        sets = [];
       }
-      const { data: created } = await supabase.from('prescribed_sets').insert(newSets).select();
-      sets = [...sets, ...(created || [])];
-    } else if (targetCount < sets.length) {
-      const toDelete = sets.slice(targetCount);
-      await Promise.all(toDelete.map((s) => supabase.from('prescribed_sets').delete().eq('id', s.id)));
-      sets = sets.slice(0, targetCount);
+    } else {
+      const targetReps = parseInt(formData.prescription_value, 10);
+      const targetCount = Math.max(1, formData.set_count || sets.length || 1);
+
+      // Update reps on existing sets when prescription is numeric
+      if (sets.length && !isNaN(targetReps)) {
+        await Promise.all(sets.map((s) => supabase.from('prescribed_sets').update({ target_reps: targetReps }).eq('id', s.id)));
+        sets = sets.map((s) => ({ ...s, target_reps: targetReps }));
+      }
+
+      // Reconcile set count: add or remove PrescribedSet records
+      if (targetCount > sets.length) {
+        const newSets = [];
+        for (let i = sets.length; i < targetCount; i++) {
+          newSets.push({
+            set_id: `${editingBe.block_exercise_id}-S${i + 1}`,
+            block_exercise_id: editingBe.block_exercise_id,
+            set_number: i + 1,
+            target_reps: !isNaN(targetReps) ? targetReps : (sets[0]?.target_reps ?? 8),
+          });
+        }
+        const { data: created } = await supabase.from('prescribed_sets').insert(newSets).select();
+        sets = [...sets, ...(created || [])];
+      } else if (targetCount < sets.length) {
+        const toDelete = sets.slice(targetCount);
+        await Promise.all(toDelete.map((s) => supabase.from('prescribed_sets').delete().eq('id', s.id)));
+        sets = sets.slice(0, targetCount);
+      }
     }
 
     setSetsByBlockExercise((prev) => {

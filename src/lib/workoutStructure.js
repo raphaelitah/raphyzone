@@ -72,10 +72,11 @@ export function buildFlatExerciseList(
     blockExs.forEach((be) => {
       const sets = setsByBlockExercise[be.block_exercise_id] || [];
       const setCount = sets.length || 1;
-      const reps = sets[0]?.target_reps?.toString() || be.prescription_value || '';
+      const ladder = getLadderSequence(be);
+      const reps = ladder ? ladder.join('-') : (sets[0]?.target_reps?.toString() || be.prescription_value || '');
       const targetWeight = be.load_value ? parseFloat(be.load_value) : null;
       const details = exerciseMap[be.exercise_id] || null;
-      const rounds = getEffectiveRounds(block, blockExs.length);
+      const rounds = getEffectiveRounds(block, blockExs.length, blockExs);
       list.push({
         exercise_id: be.exercise_id,
         // exercise_title_raw is the per-step authored text (e.g. a progressive
@@ -89,6 +90,7 @@ export function buildFlatExerciseList(
         rounds,
         effective_sets: rounds * setCount,
         reps,
+        ladder,
         target_weight: targetWeight,
         rest_seconds: block.rest_between_rounds_sec ?? null,
         coach_note: be.notes || '',
@@ -136,6 +138,54 @@ export function isTabataBlock(block) {
   const type = (block.block_type || '').toLowerCase();
   const format = (block.workout_format || '').toLowerCase();
   return type === 'tabata' || format === 'tabata';
+}
+
+// Builds the round-by-round rep sequence for a ladder-style block exercise,
+// e.g. ladder_start_reps=10, ladder_end_reps=1, ladder_step=1 → [10,9,...,1].
+// Returns null when the exercise isn't configured as a ladder. An explicit
+// ladder_sequence (for a non-arithmetic ladder, e.g. a 1-2-...-10-...-2-1
+// pyramid or a 21-15-9-9-15-21 palindrome) always wins over start/end/step.
+export function getLadderSequence(be) {
+  if (Array.isArray(be?.ladder_sequence) && be.ladder_sequence.length > 1) {
+    return be.ladder_sequence;
+  }
+  const start = be?.ladder_start_reps;
+  const end = be?.ladder_end_reps;
+  const step = Math.abs(be?.ladder_step) || 1;
+  if (start == null || end == null || start === end) return null;
+  const seq = [];
+  if (start > end) {
+    for (let r = start; r >= end; r -= step) seq.push(r);
+  } else {
+    for (let r = start; r <= end; r += step) seq.push(r);
+  }
+  return seq.length > 1 ? seq : null;
+}
+
+// Accepts either a raw block_exercise row (with ladder_start_reps/_end_reps/
+// _step) or a flat exercise-list item that already carries a precomputed
+// `ladder` array — so the same round-count/reps-lookup logic works both when
+// building the flat list and later, in the execution UI, from that list.
+function ladderSequenceOf(item) {
+  if (Array.isArray(item?.ladder)) return item.ladder;
+  return getLadderSequence(item);
+}
+
+export function isLadderBlock(items) {
+  return (items || []).some((it) => (ladderSequenceOf(it) || []).length > 1);
+}
+
+export function getLadderRounds(items) {
+  const lens = (items || []).map((it) => ladderSequenceOf(it)?.length || 0);
+  return lens.length ? Math.max(...lens) : 0;
+}
+
+// Reps due on a given 1-indexed round for a ladder exercise; clamps to the
+// last rung if asked for a round past the ladder's length.
+export function getLadderRepsForRound(item, round) {
+  const seq = ladderSequenceOf(item);
+  if (!seq || !seq.length) return null;
+  return seq[Math.min(Math.max(round, 1), seq.length) - 1];
 }
 
 export function isSupersetBlock(block) {
@@ -198,7 +248,11 @@ export function getWorkoutMetaLine(workout, blocksByWorkout, blockExercisesByBlo
   return parts.join(' · ');
 }
 
-export function getEffectiveRounds(block, exerciseCount) {
+export function getEffectiveRounds(block, exerciseCount, blockExs = null) {
+  if (blockExs && isLadderBlock(blockExs)) {
+    const ladderRounds = getLadderRounds(blockExs);
+    if (ladderRounds > 0) return ladderRounds;
+  }
   if (isEMOMBlock(block) && exerciseCount > 0) {
     const mins = getEMOMMinutes(block);
     if (mins > 0) return Math.floor(mins / exerciseCount);
@@ -212,7 +266,7 @@ export function getEffectiveRounds(block, exerciseCount) {
 // Derives the block label and default interval-timer config (work/rest/rounds/
 // exerciseCount) for a Tabata or EMOM-family block, given how many exercises
 // are in it. Returns null for a block that isn't a timed rotating block.
-export function deriveBlockTimerConfig(block, exerciseCount) {
+export function deriveBlockTimerConfig(block, exerciseCount, blockExs = null) {
   if (block.block_type == null && block.workout_format == null) return null;
   const count = Math.max(1, exerciseCount || 1);
 
@@ -231,13 +285,15 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
   }
 
   if (isSupersetBlock(block)) {
+    const ladder = isLadderBlock(blockExs);
     return {
-      blockLabel: 'Superset',
+      blockLabel: ladder ? 'Ladder' : 'Superset',
       isEmomFamily: false,
       isAlternatingEmom: false,
       isSuperset: true,
+      isLadder: ladder,
       timerDefaultConfig: {
-        rounds: block.rounds ?? 1,
+        rounds: ladder ? getLadderRounds(blockExs) : (block.rounds ?? 1),
         restSec: block.rest_seconds ?? 90,
       },
     };
@@ -262,14 +318,19 @@ export function deriveBlockTimerConfig(block, exerciseCount) {
     };
   }
 
-  if (isRotatingCircuitBlock(block)) {
+  // A ladder circuit (e.g. Bellzebub's "20-1" KB swing/goblet squat pair)
+  // rotates through its exercises once per rung even though block.rounds
+  // itself is never set — the ladder's own length is what makes it rotate.
+  if (isCircuitBlock(block) && (isRotatingCircuitBlock(block) || isLadderBlock(blockExs))) {
+    const ladder = isLadderBlock(blockExs);
     return {
-      blockLabel: 'Circuit',
+      blockLabel: ladder ? 'Ladder' : 'Circuit',
       isEmomFamily: false,
       isAlternatingEmom: false,
       isSuperset: true,
+      isLadder: ladder,
       timerDefaultConfig: {
-        rounds: block.rounds ?? 1,
+        rounds: ladder ? getLadderRounds(blockExs) : (block.rounds ?? 1),
         restSec: block.rest_seconds ?? 0,
       },
     };

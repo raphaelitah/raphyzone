@@ -13,6 +13,10 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
     notes: '',
     speed: '',
     incline: '',
+    is_ladder: false,
+    ladder_start_reps: '',
+    ladder_end_reps: '',
+    ladder_step: '1',
   });
   const [saving, setSaving] = useState(false);
   const [exerciseEquipment, setExerciseEquipment] = useState(null);
@@ -28,6 +32,10 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
         notes: blockExercise.notes || '',
         speed: blockExercise.speed?.toString() || '',
         incline: blockExercise.incline?.toString() || '',
+        is_ladder: blockExercise.ladder_start_reps != null && blockExercise.ladder_end_reps != null,
+        ladder_start_reps: blockExercise.ladder_start_reps?.toString() || '',
+        ladder_end_reps: blockExercise.ladder_end_reps?.toString() || '',
+        ladder_step: blockExercise.ladder_step?.toString() || '1',
       });
     }
   }, [blockExercise, prescribedSets]);
@@ -63,25 +71,77 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
               <p className="text-sm text-muted-foreground text-left">{blockExercise.exercise_title_raw}</p>
             </SheetHeader>
             <div className="px-5 pb-8 space-y-4">
-              <div>
-                <Label>Sets</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={form.set_count}
-                  onChange={(e) => setForm({ ...form, set_count: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                  className="mt-1"
+              <div className="flex items-center justify-between rounded-lg border border-input px-3 py-2.5">
+                <div>
+                  <Label className="cursor-pointer" onClick={() => setForm({ ...form, is_ladder: !form.is_ladder })}>Ladder</Label>
+                  <p className="text-xs text-muted-foreground">Reps change every round, e.g. 10-9-8...-1</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form.is_ladder}
+                  onChange={(e) => setForm({ ...form, is_ladder: e.target.checked })}
+                  className="h-4 w-4"
                 />
               </div>
-              <div>
-                <Label>Reps / Prescription</Label>
-                <Input
-                  value={form.prescription_value}
-                  onChange={(e) => setForm({ ...form, prescription_value: e.target.value })}
-                  placeholder="e.g. 10, 30s, AMRAP"
-                  className="mt-1"
-                />
-              </div>
+              {form.is_ladder ? (
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>Start reps</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.ladder_start_reps}
+                      onChange={(e) => setForm({ ...form, ladder_start_reps: e.target.value })}
+                      placeholder="10"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>End reps</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.ladder_end_reps}
+                      onChange={(e) => setForm({ ...form, ladder_end_reps: e.target.value })}
+                      placeholder="1"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Step</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.ladder_step}
+                      onChange={(e) => setForm({ ...form, ladder_step: e.target.value })}
+                      placeholder="1"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label>Sets</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.set_count}
+                      onChange={(e) => setForm({ ...form, set_count: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Reps / Prescription</Label>
+                    <Input
+                      value={form.prescription_value}
+                      onChange={(e) => setForm({ ...form, prescription_value: e.target.value })}
+                      placeholder="e.g. 10, 30s, AMRAP"
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <Label>Load</Label>
                 <Input
