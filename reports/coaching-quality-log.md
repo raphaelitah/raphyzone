@@ -9923,3 +9923,67 @@ Call log:
 - ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" is dominantly "Knee / Ankle Isolation" but its warm-up first-movement pick "Single Arm Banded Press" is "Vertical Push"
 
 ---
+## Equipment Fuzz Run 2026-09-09T08:08:45.698Z
+
+**Result: 47 anomaly(ies) found.**
+
+### equipment-fuzz
+- ✓ full_gym: generated plan, checked 15 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "bodyweight_only" (Monday): "The Happening" includes "Dual Kettlebell Front Rack Walking Lunges" which needs [Barbell, Kettlebell] — not available under this profile
+- ✓ bodyweight_only: generated plan, checked 6 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "only_dumbbells" (Monday): "Linda" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Monday): "Linda" includes "Dumbbell Bench Press" which needs [Flat Bench] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Monday): "Linda" includes "Dumbbell Power Clean" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "Double Unders" which needs [Jump Rope] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "Dumbbell Power Snatch" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "Dumbbell Thruster" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "Chest to Bar Pull-Up" which needs [Pull-up Bar] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "American Kettlebell Swing" which needs [Kettlebell] — not available under this profile
+- ⚠️ Profile "only_dumbbells" (Wednesday): "Wilhelm Tell" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ✓ only_dumbbells: generated plan, checked 16 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Double Unders" which needs [Jump Rope] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Dumbbell Power Snatch" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Dumbbell Thruster" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Chest to Bar Pull-Up" which needs [Pull-up Bar] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "American Kettlebell Swing" which needs [Kettlebell] — not available under this profile
+- ⚠️ Profile "only_barbell" (Monday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ✓ only_barbell: generated plan, checked 14 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "only_kettlebell" (Monday): "Mogadishu Mile" includes "Dumbbell Ground to Overhead" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Tuesday): "The Happening" includes "Dual Kettlebell Front Rack Walking Lunges" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Double Unders" which needs [Jump Rope] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Dumbbell Power Snatch" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Dumbbell Thruster" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Chest to Bar Pull-Up" which needs [Pull-up Bar] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_kettlebell" (Wednesday): "Wilhelm Tell" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ✓ only_kettlebell: generated plan, checked 17 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Double Unders" which needs [Jump Rope] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Dumbbell Power Snatch" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Dumbbell Thruster" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Chest to Bar Pull-Up" which needs [Pull-up Bar] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "American Kettlebell Swing" which needs [Kettlebell] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_resistance_bands" (Wednesday): "Wilhelm Tell" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ✓ only_resistance_bands: generated plan, checked 14 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Double Unders" which needs [Jump Rope] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Dumbbell Power Snatch" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Dumbbell Thruster" which needs [Barbell, Dumbbells] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Chest to Bar Pull-Up" which needs [Pull-up Bar] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "American Kettlebell Swing" which needs [Kettlebell] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Dumbbell Marching Farmer Carry" which needs [Dumbbells] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Monday): "Wilhelm Tell" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "only_suspension_trainer" (Tuesday): "The Happening" includes "Dual Kettlebell Front Rack Walking Lunges" which needs [Barbell, Kettlebell] — not available under this profile
+- ✓ only_suspension_trainer: generated plan, checked 15 exercise assignments across 4 assigned workouts
+- ⚠️ Profile "home_gym_combo" (Monday): "Lynne" includes "Barbell Bench Press" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "home_gym_combo" (Tuesday): "Linda" includes "Deadlift" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "home_gym_combo" (Tuesday): "Linda" includes "Dumbbell Power Clean" which needs [Barbell] — not available under this profile
+- ⚠️ Profile "home_gym_combo" (Wednesday): "The Happening" includes "Dual Kettlebell Front Rack Walking Lunges" which needs [Barbell, Kettlebell] — not available under this profile
+- ✓ home_gym_combo: generated plan, checked 8 exercise assignments across 4 assigned workouts
+- ✓ commercial_gym_minus_cardio: generated plan, checked 9 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 9/9 profile generations
+
+---

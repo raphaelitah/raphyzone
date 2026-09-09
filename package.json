@@ -18,7 +18,8 @@
     "test:e2e:desktop": "playwright test --project=chromium",
     "test:e2e:all": "playwright test",
     "audit:coaching-quality": "node scripts/coaching-quality-audit.mjs",
-    "agent:coaching-quality": "node scripts/coaching-quality-agent.mjs"
+    "agent:coaching-quality": "node scripts/coaching-quality-agent.mjs",
+    "fuzz:coaching-quality-equipment": "node scripts/coaching-quality-equipment-fuzz.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

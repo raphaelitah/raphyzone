@@ -1,6 +1,6 @@
 name: Coaching Quality Expert
 
-# Two complementary checks, both writing to reports/coaching-quality-log.md:
+# Three complementary checks, all writing to reports/coaching-quality-log.md:
 #   - audit: a static data audit over the catalog (scripts/coaching-quality-audit.mjs)
 #     — no browser, checks nonsensical prescriptions, mis-modeled structure, duration
 #     vs. structure mismatches, and equipment assigned to an athlete that they don't
@@ -9,7 +9,13 @@ name: Coaching Quality Expert
 #     and actually executes real catalog workouts through the UI like a human athlete
 #     would (scripts/coaching-quality-agent.mjs) — real weight/feedback logging, real
 #     rest-transition checks — and narrates a verdict per workout.
-# Both run weekly and on demand. Neither duplicates the regular e2e job, which
+#   - equipment-fuzz: drives the real generateWeeklyPlan edge function for the
+#     seeded test-athlete@raphyzone.dev account across a deliberately varied set
+#     of equipment profiles (scripts/coaching-quality-equipment-fuzz.mjs), so an
+#     equipment-matching bug that only manifests for an unusual gear combo no
+#     real athlete happens to have gets caught — the audit job's equipment check
+#     only ever sees whichever profile real athletes already have.
+# All three run weekly and on demand. None duplicates the regular e2e job, which
 # only checks that the UI/DB mechanically work, not whether a workout makes
 # sense.
 #
@@ -18,9 +24,13 @@ name: Coaching Quality Expert
 # checks only produce a new finding when someone edits the catalog — nightly
 # runs were just re-confirming "still 0". The equipment check here still has
 # real ongoing value (it checks whatever weekly_plans real usage generates),
-# but the stronger check for that is scripts/coaching-quality-equipment-fuzz.mjs
-# (TODO), which deliberately generates plans across a range of equipment
-# profiles instead of relying on whichever one a real athlete happens to have.
+# but the stronger check for that is the equipment-fuzz job below
+# (scripts/coaching-quality-equipment-fuzz.mjs), which deliberately generates
+# plans across a range of equipment profiles instead of relying on whichever
+# one a real athlete happens to have. It's testing generator code
+# (supabase/functions/_shared/planContext.ts), not catalog content, so it has
+# the same "only useful when something changes" property as the audit job —
+# weekly matches.
 on:
   schedule:
     - cron: '0 7 * * 1' # 07:00 UTC every Monday
@@ -99,4 +109,33 @@ jobs:
         run: .github/scripts/commit-coaching-log.sh "Coaching quality agent run"
       - name: Fail the job if the agent flagged anything
         if: steps.agent.outcome == 'failure'
+        run: exit 1
+
+  equipment-fuzz:
+    name: Run plan-generator equipment fuzz test
+    runs-on: ubuntu-latest
+    # Runs after audit/agent (not in parallel) so all three jobs' commits to
+    # reports/coaching-quality-log.md never race each other.
+    needs: [audit, agent]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Record report log baseline
+        run: .github/scripts/record-coaching-log-baseline.sh
+      - run: npm run fuzz:coaching-quality-equipment
+        id: equipment-fuzz
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Commit updated report log
+        run: .github/scripts/commit-coaching-log.sh "Coaching quality equipment fuzz run"
+      - name: Fail the job if the fuzz run found anomalies
+        if: steps.equipment-fuzz.outcome == 'failure'
         run: exit 1
