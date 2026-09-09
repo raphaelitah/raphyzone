@@ -95,6 +95,10 @@ export default function WorkoutExecution() {
   const [workoutPaused, setWorkoutPaused] = useState(false);
   const [warmup, setWarmup] = useState(null);
   const [warmupDismissed, setWarmupDismissed] = useState(false);
+  // 'skipped' when the athlete bypassed the warm-up entirely, 'completed' when
+  // they did it before starting — distinct from warmupDismissed, which only
+  // tracks whether to keep showing this screen.
+  const [warmupOutcome, setWarmupOutcome] = useState(null);
   // In-set/round/rest-timer snapshot for the active SupersetPanel, keyed by
   // block_id (superset) or exercise key (solo) so it survives navigating away
   // and back — otherwise the panel remounts and restarts the current set.
@@ -172,10 +176,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, panel: panelProgress } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, panelProgress]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress]);
 
   const pendingLoadRef = useRef(null);
 
@@ -340,6 +344,7 @@ export default function WorkoutExecution() {
       setIndex(resumeIdx);
       indexRef.current = resumeIdx;
       if (savedProgress?.warmupDismissed) setWarmupDismissed(true);
+      if (savedProgress?.warmupOutcome) setWarmupOutcome(savedProgress.warmupOutcome);
       if (savedProgress?.panel && typeof savedProgress.panel === 'object') setPanelProgress(savedProgress.panel);
     }
 
@@ -1153,7 +1158,8 @@ export default function WorkoutExecution() {
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
   if (!workout) return <div className="p-6 text-center text-muted-foreground">Workout not found.</div>;
 
-  const dismissWarmup = () => setWarmupDismissed(true);
+  const skipWarmup = () => { setWarmupOutcome('skipped'); setWarmupDismissed(true); };
+  const completeWarmup = () => { setWarmupOutcome('completed'); setWarmupDismissed(true); };
   if (warmup && !warmupDismissed) {
     const hasMobility = warmup.mobility?.length > 0;
     const hasCardio = !!warmup.cardio;
@@ -1200,8 +1206,8 @@ export default function WorkoutExecution() {
           {warmup.notes && <p className="text-sm text-muted-foreground">{warmup.notes}</p>}
         </div>
         <div className="p-5 border-t border-border flex gap-3">
-          <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl border border-border text-muted-foreground font-medium">Skip warm up</button>
-          <button onClick={dismissWarmup} className="flex-1 h-12 rounded-xl bg-brand text-brand-foreground font-medium flex items-center justify-center gap-2"><Dumbbell className="h-4 w-4" /> Start Workout</button>
+          <button onClick={skipWarmup} className="flex-1 h-12 rounded-xl border border-border text-muted-foreground font-medium">Skip warm up</button>
+          <button onClick={completeWarmup} className="flex-1 h-12 rounded-xl bg-brand text-brand-foreground font-medium flex items-center justify-center gap-2"><Dumbbell className="h-4 w-4" /> Start Workout</button>
         </div>
       </div>
     );
