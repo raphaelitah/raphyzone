@@ -76,9 +76,13 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      - run: npx playwright install --with-deps chromium || (sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/* && sudo apt-get update && npx playwright install --with-deps chromium)
+      # The runner image preconfigures a google-chrome-stable apt source that Playwright's
+      # bundled Chromium doesn't need; its index has intermittently served bad hashes and
+      # broken install-deps, so drop it before installing.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+      - run: npx playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-      - run: npx playwright install-deps chromium || (sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/* && sudo apt-get update && npx playwright install-deps chromium)
+      - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
       # @llm-quota specs (plan-builder, plan-queue) are excluded here — they burn several
       # real Gemini calls against a shared 20/day free-tier quota, so they only run on a
@@ -114,9 +118,13 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      - run: npx playwright install --with-deps chromium || (sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/* && sudo apt-get update && npx playwright install --with-deps chromium)
+      # The runner image preconfigures a google-chrome-stable apt source that Playwright's
+      # bundled Chromium doesn't need; its index has intermittently served bad hashes and
+      # broken install-deps, so drop it before installing.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+      - run: npx playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-      - run: npx playwright install-deps chromium || (sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/* && sudo apt-get update && npx playwright install-deps chromium)
+      - run: npx playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
       - run: npm run test:e2e -- --grep "@llm-quota"
         env:
