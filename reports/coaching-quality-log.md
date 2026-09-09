@@ -9876,3 +9876,50 @@ Call log:
 - ✓ checked 5 plan-day workout assignments across 8 weekly plans
 
 ---
+## Run 2026-09-09T08:04:21.998Z
+
+**Result: 24 anomaly(ies) found.**
+
+### duration
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 33 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 12 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~9 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e22d42f5b541a7ef79ed8a4b "The Ghost": declared 23 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+
+### equipment
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Push Strength A" includes "Barbell Bench Press" which needs [Barbell, Flat Bench] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Push Strength A" includes "Seated Barbell Press" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Push Strength A" includes "Incline Dumbbell Bench Press" which needs [Incline Bench] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Push Strength A" includes "Cable Tricep Pushdown with Straight Bar" which needs [Cable] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" includes "Bent Over Barbell Row" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" includes "Seated Row Machine" which needs [Cable, Seated Cable Row] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" includes "Ring Face Pull" which needs [Suspension Trainer (TRX or similar)] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Leg Strength A" includes "Back Squat" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Leg Strength A" includes "Leg Press" which needs [Cable, Leg Press] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Leg Strength A" includes "Romanian Deadlift" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Push Strength A" includes "Barbell Bench Press" which needs [Barbell, Flat Bench] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Push Strength A" includes "Seated Barbell Press" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Push Strength A" includes "Incline Dumbbell Bench Press" which needs [Incline Bench] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Push Strength A" includes "Cable Tricep Pushdown with Straight Bar" which needs [Cable] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" includes "Back Squat" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" includes "Leg Press" which needs [Cable, Leg Press] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" includes "Romanian Deadlift" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "The Sixer" includes "Bent Over Dual Kettlebell Row" which needs [Kettlebell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "The Sixer" includes "Dumbbell Power Snatch" which needs [Barbell] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "The Sixer" includes "High Box Step Up" which needs [Step Box] — not in the athlete's equipment (profile: custom)
+- ✓ checked 13 plan-day workout assignments across 8 weekly plans
+
+### warmup
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Pull Strength A" is dominantly "Horizontal Pull" but its warm-up first-movement pick "Banded Bar Muscle-Up" is "Vertical Pull"
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-14): "Leg Strength A" is dominantly "Knee / Ankle Isolation" but its warm-up first-movement pick "Single Arm Banded Press" is "Vertical Push"
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-09-07): "Leg Strength A" is dominantly "Knee / Ankle Isolation" but its warm-up first-movement pick "Single Arm Banded Press" is "Vertical Push"
+
+---
