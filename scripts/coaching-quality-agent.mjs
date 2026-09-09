@@ -285,7 +285,19 @@ async function checkWeightSuggestion(page, log) {
   // already advanced to a different exercise, which could easily explain a session
   // occasionally looking like it "jumped back" for no reason. Poll for the loading
   // spinner to actually clear instead of guessing a fixed delay.
+  //
+  // Wait for the spinner to actually appear first. calcWeight's setWeightLoadingKey
+  // update needs a React render to flush before the spinner mounts, so checking for
+  // "not visible" with zero lead time (as this used to) can catch the gap between
+  // the click returning and that render landing, reading a request that's still
+  // in flight as already resolved — confirmed live: "The Lou" (a 44-round rotating
+  // circuit, i.e. the tightest timing of any block) flagged "no value came back
+  // and no calibration prompt appeared" even though the athlete's calibration
+  // fully covered every exercise, so the request must have still been pending
+  // when this checked. A response fast enough to never show a spinner at all
+  // means this wait just no-ops past its own timeout, which is fine.
   const loadingSpinner = weightLabel.locator('..').locator('svg.animate-spin');
+  await loadingSpinner.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {});
   for (let waited = 0; waited < 8000; waited += 400) {
     if (!(await loadingSpinner.isVisible().catch(() => false))) break;
     await page.waitForTimeout(400);
@@ -387,7 +399,21 @@ async function runWorkout(page, candidate, qaCoachId) {
     for (; iterations < maxIterations; iterations++) {
       if (!/\/workout\//.test(page.url())) break;
 
-      const startBlock = page.getByRole('button', { name: /^start (?!set$|workout$)/i });
+      // Excludes "now$" too: WorkoutExecution's "Still resting" AlertDialog (shown
+      // when tapping a block's own Start button while inter-block rest is still
+      // running) has its own "Start now" confirm button, which this same broad
+      // "any Start-X button" regex used to also match. Radix hides the rest of the
+      // page from the a11y tree while that dialog is open, so startBlock ended up
+      // resolving to the dialog's "Start now" button on the loop iteration right
+      // after the click that opened it — mid-render of a modal whose countdown
+      // text re-renders every second, which is exactly the kind of element
+      // Playwright's actionability check flags as "not stable"/"detached from the
+      // DOM" (confirmed live: crashed the run on "Shoulder day" and "Big Snatch
+      // Six"/"Seven Samurai" in earlier runs). Handling "Start now" as its own
+      // branch below removes the ambiguity instead of relying on this locator to
+      // luck into a stable element.
+      const startBlock = page.getByRole('button', { name: /^start (?!set$|workout$|now$)/i });
+      const startNowBtn = page.getByRole('button', { name: /^start now$/i });
       const startSet = page.getByRole('button', { name: /^start set$/i });
       const doneBtn = page.getByRole('button', { name: /^done$/i });
       const skipRestBtn = page.getByRole('button', { name: /^skip rest$/i });
@@ -397,6 +423,14 @@ async function runWorkout(page, candidate, qaCoachId) {
 
       const dbg = (branch) => { if (process.env.DEBUG_AGENT) console.error(`[${iterations}] branch=${branch}`); };
 
+      // A real athlete jumping into a block early rather than waiting out the
+      // rest — the same deliberate choice confirmStartWhileResting models —
+      // rather than the abrupt fallback skip further down.
+      if (await startNowBtn.isVisible().catch(() => false)) {
+        dbg('startNow');
+        if ((await clickIfFinishing(startNowBtn)) === 'finished') break;
+        continue;
+      }
       if (await startBlock.isVisible().catch(() => false)) {
         dbg('startBlock');
         const label = await startBlock.textContent().catch(() => 'block');
