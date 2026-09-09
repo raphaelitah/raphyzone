@@ -149,6 +149,9 @@ export default function BlockEditor({
                           <p className="text-xs text-muted-foreground">
                             {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
                           </p>
+                          {!isRest && be.notes && (
+                            <p className="text-xs text-muted-foreground italic truncate mt-0.5">{be.notes}</p>
+                          )}
                         </div>
                         <IconButton onClick={() => onEditExercise(be)} icon={Pencil} />
                         <button onClick={() => onDeleteExercise(be)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
