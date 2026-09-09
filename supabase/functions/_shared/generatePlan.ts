@@ -1,5 +1,5 @@
 import { callLLM } from './llm.ts';
-import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, WEEK_DAYS } from './planContext.ts';
+import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, computeEquipmentByWorkoutId, WEEK_DAYS } from './planContext.ts';
 import { verifyWorkoutReasons } from './verifyWorkoutReasons.ts';
 import { generateWarmup } from './warmupGenerator.ts';
 import { resolveWorkoutExercises } from './resolveWorkoutExercises.ts';
@@ -89,8 +89,9 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
   const targetStrengthDays = Math.round((resistancePriority / ratioTotal) * trainDayCount);
   const targetConditioningDays = trainDayCount - targetStrengthDays;
 
-  const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, [], true);
-  const catalog = buildWorkoutCatalog(filteredWorkouts);
+  const equipmentByWorkoutId = await computeEquipmentByWorkoutId(supabase, (workouts || []).map((w: any) => w.workout_id));
+  const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, [], true, equipmentByWorkoutId);
+  const catalog = buildWorkoutCatalog(filteredWorkouts, equipmentByWorkoutId);
 
   const openSlots = baseSlots.filter((s) => !lockedDays.has(s.day) && !pastRestDays.has(s.day));
 

@@ -99,7 +99,7 @@ export function buildProfileContext(profile: any, feedback: any[]) {
 // that could plausibly contain a literal "|" (there are none in this dataset)
 // would break a row; exercise names are comma-joined, which is a minor
 // ambiguity risk only if an exercise name itself contains a comma.
-export function buildWorkoutCatalog(workouts: any[]) {
+export function buildWorkoutCatalog(workouts: any[], equipmentByWorkoutId?: Map<string, string[]>) {
   const header = 'id|name|modality|movement_focus|duration_min|equipment|exercises';
   const rows = (workouts || []).map((w) => [
     w.id,
@@ -107,7 +107,7 @@ export function buildWorkoutCatalog(workouts: any[]) {
     w.modality || '',
     w.movement_focus || '',
     w.est_duration_min || w.duration_minutes || '',
-    (w.equipment || []).join(','),
+    (equipmentByWorkoutId?.get(w.workout_id) ?? (w.equipment || [])).join(','),
     (w.exercises || []).map((e: any) => e.exercise_name).join(','),
   ].join('|'));
   return [header, ...rows].join('\n');
@@ -134,13 +134,59 @@ export function buildWorkoutCatalog(workouts: any[]) {
 // regardless of how tightly the other fields are trimmed.
 const MAX_PER_MODALITY = 14;
 
-export function filterCatalogForSelection(workouts: any[], profile: any, neededModalities: string[], hasActivityDays: boolean) {
+// workouts.equipment is a classification snapshot (written by classifyWorkoutCatalog),
+// not live data — it goes stale exactly like movement_pattern did (see
+// resolveWorkoutExercises.ts) whenever a workout's blocks/exercises are edited
+// after its last classification pass. "Bert", "Bolder Shoulders", and
+// "Lonestar Lunge" were all found stored as equipment: ["Bodyweight"] despite
+// containing Dumbbell/Kettlebell/Barbell/Bench exercises — the fuzz test in
+// scripts/coaching-quality-equipment-fuzz.mjs caught workouts assigned to
+// equipment-restricted profiles as a result. Compute the real requirement from
+// the current block_exercises -> exercises.equipment_tags data instead of
+// trusting the snapshot; callers that can't afford the extra query (or don't
+// have one) can omit `equipmentByWorkoutId` and fall back to the old snapshot
+// behavior.
+export async function computeEquipmentByWorkoutId(supabase: any, workoutBusinessIds: string[]): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (!workoutBusinessIds.length) return result;
+
+  const { data: blocks } = await supabase.from('workout_blocks').select('block_id, workout_id').in('workout_id', workoutBusinessIds);
+  const workoutIdByBlock = new Map<string, string>((blocks || []).map((b: any) => [b.block_id, b.workout_id]));
+  const blockIds = [...workoutIdByBlock.keys()];
+  if (!blockIds.length) return result;
+
+  const { data: beList } = await supabase
+    .from('block_exercises')
+    .select('block_id, exercise_id, step_type')
+    .in('block_id', blockIds)
+    .eq('step_type', 'exercise');
+  const exerciseCodes = [...new Set((beList || []).map((be: any) => be.exercise_id).filter(Boolean))];
+  if (!exerciseCodes.length) return result;
+
+  const { data: exercises } = await supabase.from('exercises').select('exercise_code, equipment_tags').in('exercise_code', exerciseCodes);
+  const tagsByCode = new Map((exercises || []).map((e: any) => [e.exercise_code, e.equipment_tags || []]));
+
+  const sets = new Map<string, Set<string>>();
+  for (const be of beList || []) {
+    const workoutId = workoutIdByBlock.get(be.block_id);
+    if (!workoutId) continue;
+    if (!sets.has(workoutId)) sets.set(workoutId, new Set());
+    for (const tag of requiredEquipment(tagsByCode.get(be.exercise_id))) sets.get(workoutId)!.add(tag);
+  }
+  for (const [workoutId, tagSet] of sets) result.set(workoutId, [...tagSet]);
+  return result;
+}
+
+export function filterCatalogForSelection(workouts: any[], profile: any, neededModalities: string[], hasActivityDays: boolean, equipmentByWorkoutId?: Map<string, string[]>) {
   let list = workouts || [];
 
   if (profile?.equipment_profile !== 'full_gym') {
     const owned = [...(profile?.available_equipment || []), ...(profile?.custom_equipment || [])];
     const available = new Set([...expandEquipmentEquivalents(owned)].map((e) => e.toLowerCase().trim()));
-    list = list.filter((w) => requiredEquipment(w.equipment).every((eq: string) => available.has((eq || '').toLowerCase().trim())));
+    list = list.filter((w) => {
+      const required = equipmentByWorkoutId?.get(w.workout_id) ?? requiredEquipment(w.equipment);
+      return required.every((eq: string) => available.has((eq || '').toLowerCase().trim()));
+    });
   }
 
   if (!hasActivityDays && neededModalities.length) {
