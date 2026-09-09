@@ -30,7 +30,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
     supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
     supabase.from('workout_feedback').select('*').eq('user_id', user.id),
     supabase.from('workouts').select('*').eq('status', 'approved'),
-    supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
+    supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality, dumbbell_substitutable'),
     supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStartDate),
   ]);
 

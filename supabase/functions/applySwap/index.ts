@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
       supabase.from('workouts').select('*').eq('id', old_workout_id).maybeSingle(),
       supabase.from('workouts').select('*').eq('id', new_workout_id).maybeSingle(),
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
-      supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality'),
+      supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality, dumbbell_substitutable'),
     ]);
 
     if (!plan || plan.user_id !== user.id) return Response.json({ error: 'Plan not found' }, { status: 404, headers: corsHeaders });

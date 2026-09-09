@@ -163,15 +163,27 @@ export async function computeEquipmentByWorkoutId(supabase: any, workoutBusiness
   const exerciseCodes = [...new Set((beList || []).map((be: any) => be.exercise_id).filter(Boolean))];
   if (!exerciseCodes.length) return result;
 
-  const { data: exercises } = await supabase.from('exercises').select('exercise_code, equipment_tags').in('exercise_code', exerciseCodes);
-  const tagsByCode = new Map((exercises || []).map((e: any) => [e.exercise_code, e.equipment_tags || []]));
+  const { data: exercises } = await supabase.from('exercises').select('exercise_code, equipment_tags, dumbbell_substitutable').in('exercise_code', exerciseCodes);
+  const exerciseByCode = new Map<string, any>((exercises || []).map((e: any) => [e.exercise_code, e]));
 
+  // A workout's required-equipment list is aggregated across all its
+  // exercises with no per-exercise linkage kept, so a dumbbell_substitutable
+  // Kettlebell tag is encoded here as the compound token 'Kettlebell/Dumbbells'
+  // (an OR, resolved against owned equipment in filterCatalogForSelection)
+  // rather than folded into a blanket Dumbbell<->Kettlebell equivalence that
+  // would also wrongly cover this workout's non-substitutable KB exercises,
+  // if it has any. '/' is used (not '|') because buildWorkoutCatalog's rows
+  // are themselves '|'-delimited for the LLM prompt.
   const sets = new Map<string, Set<string>>();
   for (const be of beList || []) {
     const workoutId = workoutIdByBlock.get(be.block_id);
     if (!workoutId) continue;
     if (!sets.has(workoutId)) sets.set(workoutId, new Set());
-    for (const tag of requiredEquipment(tagsByCode.get(be.exercise_id))) sets.get(workoutId)!.add(tag);
+    const exercise = exerciseByCode.get(be.exercise_id);
+    for (const tag of requiredEquipment(exercise?.equipment_tags)) {
+      const resolved = tag === 'Kettlebell' && exercise?.dumbbell_substitutable ? 'Kettlebell/Dumbbells' : tag;
+      sets.get(workoutId)!.add(resolved);
+    }
   }
   for (const [workoutId, tagSet] of sets) result.set(workoutId, [...tagSet]);
   return result;
@@ -185,7 +197,11 @@ export function filterCatalogForSelection(workouts: any[], profile: any, neededM
     const available = new Set([...expandEquipmentEquivalents(owned)].map((e) => e.toLowerCase().trim()));
     list = list.filter((w) => {
       const required = equipmentByWorkoutId?.get(w.workout_id) ?? requiredEquipment(w.equipment);
-      return required.every((eq: string) => available.has((eq || '').toLowerCase().trim()));
+      // A '/' in a required entry (see computeEquipmentByWorkoutId) is an OR
+      // of substitutable equipment — satisfied if the athlete owns any one.
+      return required.every((eq: string) =>
+        (eq || '').split('/').some((alt) => available.has(alt.toLowerCase().trim()))
+      );
     });
   }
 

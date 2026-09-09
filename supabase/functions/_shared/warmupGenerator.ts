@@ -17,6 +17,7 @@ export interface ExerciseRow {
   secondary_muscle_group?: string | null;
   equipment_tags?: string[] | null;
   modality?: string | null;
+  dumbbell_substitutable?: boolean | null;
 }
 
 export interface WorkoutLike {
@@ -155,10 +156,19 @@ export function expandEquipmentEquivalents(owned: string[] | null | undefined): 
   return set;
 }
 
+// A Kettlebell requirement is also satisfied by owning Dumbbells when the
+// exercise is flagged dumbbell_substitutable (uses the bell purely as a
+// loaded mass, not for a swing/clean/snatch, bottoms-up grip, horn/halo
+// grip, or figure-eight pass — see the migration adding that column).
+export function equipmentTagSatisfied(tag: string, exercise: { dumbbell_substitutable?: boolean | null }, available: Set<string>): boolean {
+  if (available.has(tag)) return true;
+  return tag === 'Kettlebell' && !!exercise.dumbbell_substitutable && available.has('Dumbbells');
+}
+
 function equipmentSatisfied(exercise: ExerciseRow, available: Set<string>): boolean {
   const tags = requiredEquipment(exercise.equipment_tags);
   if (!tags.length) return true; // no real equipment requirement — always fine
-  return tags.every((t) => available.has(t));
+  return tags.every((t) => equipmentTagSatisfied(t, exercise, available));
 }
 
 // Deterministic per-workout shuffle (mulberry32 seeded by the workout id) so
