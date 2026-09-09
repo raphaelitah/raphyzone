@@ -216,7 +216,15 @@ async function checkRestBanner(page, expectedSeconds, transitionLabel, log) {
   await page.waitForTimeout(1200);
   const second = await countdown.textContent().catch(() => null);
   const ticking = first != null && second != null && first !== second;
-  const natural = ticking && (expectedSeconds === 0 || expectedSeconds > 0);
+  // "Naturalness" is purely about whether the countdown actually ticked, not
+  // about expectedSeconds — that's only meaningful above for detecting a rest
+  // phase that got skipped entirely. The 'between rounds' call site passes
+  // expectedSeconds: null (it has no prescribed value on hand at that point
+  // in the loop), which under `ticking && (expectedSeconds === 0 ||
+  // expectedSeconds > 0)` forced every genuinely-ticking rest to be recorded
+  // as unnatural — reported once as "Bam Bam": 0/9 transitions natural even
+  // though every one's own note said "rest counted down naturally".
+  const natural = ticking;
   log.transitions.push({
     label: transitionLabel,
     natural,
