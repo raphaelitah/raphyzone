@@ -226,6 +226,7 @@ Deno.serve(async (req: Request) => {
             movement_pattern: details?.movement_pattern || null,
             equipment: details?.equipment || null,
             requires_load: details?.requires_load !== false,
+            dumbbell_substitutable: !!details?.dumbbell_substitutable,
             benchmark_pattern: details?.benchmark_pattern || null,
             benchmark_ratio: details?.benchmark_ratio || null,
             block_type: block.block_type || null,
@@ -256,6 +257,7 @@ Deno.serve(async (req: Request) => {
           movement_pattern: details.movement_pattern || null,
           equipment: details.equipment || null,
           requires_load: details.requires_load !== false,
+          dumbbell_substitutable: !!details.dumbbell_substitutable,
           sets: refRow?.sets || 3,
           reps: refRow?.reps || '8-12',
           current_load: null,
@@ -386,7 +388,7 @@ Deno.serve(async (req: Request) => {
 
     const res = { weights };
 
-    const clamp = (kg: number | null, equipment: string | null) => {
+    const clamp = (kg: number | null, equipment: string | null, dumbbellSubstitutable: boolean) => {
       if (kg == null || isNaN(kg)) return null;
       const eq = (equipment || '').toLowerCase();
       const maxFor = (cat: string) => {
@@ -396,7 +398,14 @@ Deno.serve(async (req: Request) => {
       let max: number | null = null;
       if (eq.includes('dumbbell')) max = maxFor('dumbbells');
       else if (eq.includes('barbell') || eq.includes('ez bar') || eq.includes('plate')) max = maxFor('barbell');
-      else if (eq.includes('kettlebell')) max = maxFor('kettlebells');
+      else if (eq.includes('kettlebell')) {
+        // A dumbbell_substitutable Kettlebell exercise (see exercises table
+        // migration) can be assigned to an athlete who owns no kettlebells at
+        // all (planContext.ts's equipment matcher already allows this) — they
+        // load it with a dumbbell instead, so fall back to the dumbbell cap
+        // when there's no kettlebell max to clamp against.
+        max = maxFor('kettlebells') ?? (dumbbellSubstitutable ? maxFor('dumbbells') : null);
+      }
       if (max != null && kg > max) return max;
       // Round to a practical, easy-to-load increment (40, 42, 44...) rather
       // than an arbitrary one-decimal value like 40.5 — nobody's loading a
@@ -414,7 +423,7 @@ Deno.serve(async (req: Request) => {
         (weightsByWorkout[row.workoutEntityId] = weightsByWorkout[row.workoutEntityId] || {})[row.exercise_id] = null;
         return;
       }
-      const clamped = clamp(w.target_weight_kg, row.equipment);
+      const clamped = clamp(w.target_weight_kg, row.equipment, !!row.dumbbell_substitutable);
       (weightsByWorkout[row.workoutEntityId] = weightsByWorkout[row.workoutEntityId] || {})[row.exercise_id] = clamped;
     });
 
