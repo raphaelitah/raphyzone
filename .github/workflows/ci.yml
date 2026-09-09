@@ -79,7 +79,8 @@ jobs:
       # The runner image preconfigures a google-chrome-stable apt source that Playwright's
       # bundled Chromium doesn't need; its index has intermittently served bad hashes and
       # broken install-deps, so drop it before installing.
-      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+      - run: grep -rl dl.google.com /etc/apt/sources.list.d/ /etc/apt/sources.list 2>/dev/null; ls /etc/apt/sources.list.d/
+      - run: sudo find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec grep -l dl.google.com {} \; -delete
       - run: npx playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
@@ -121,7 +122,7 @@ jobs:
       # The runner image preconfigures a google-chrome-stable apt source that Playwright's
       # bundled Chromium doesn't need; its index has intermittently served bad hashes and
       # broken install-deps, so drop it before installing.
-      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+      - run: sudo find /etc/apt -type f \( -name '*.list' -o -name '*.sources' \) -exec grep -l dl.google.com {} \; -delete
       - run: npx playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
