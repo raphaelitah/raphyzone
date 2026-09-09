@@ -47,20 +47,21 @@ const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN: Record<string, string> = {
 
 // strength_calibration.weight_kg is recorded as combined/total weight (see
 // StrengthCalibration.jsx's "Total Weight" field: "for dumbbells or
-// kettlebells, enter the combined weight of both sides"). For calibration
-// patterns whose benchmark exercise is a simultaneous two-dumbbell lift
-// (Dumbbell Bench Press, Seated Dumbbell Press), that total must be halved
-// before it's usable as a per-implement baseline for ratio math or for
-// exercises that prescribe weight per dumbbell. Patterns whose benchmark is
-// already a single implement or a single total-load number (barbell lifts,
-// a machine stack, a one-dumbbell snatch) need no adjustment.
-const CALIBRATION_PATTERN_IMPLEMENTS: Record<string, number> = {
-  horizontal_push: 2, // Dumbbell Bench Press
-  vertical_push: 2, // Seated Dumbbell Press
-};
+// kettlebells, enter the combined weight of both sides"). Whether that total
+// needs halving into a per-implement value depends on which *exercise* the
+// athlete actually calibrated with (recorded per-entry as `exercise`), not on
+// the pattern alone — e.g. Vertical Push can be calibrated via "Seated
+// Dumbbell Press" (two DBs, needs halving) or "Standing Overhead Press" /
+// "Machine Shoulder Press" (single total load, no halving). Keying this off
+// pattern alone would incorrectly halve a barbell lift's baseline just
+// because some other athlete calibrated that same pattern with dumbbells.
+const DUAL_DUMBBELL_CALIBRATION_EXERCISES = new Set([
+  'Seated Dumbbell Press',
+  'Dumbbell Bench Press',
+]);
 
-function perImplementBaseline(pattern: string, weightKg: number): number {
-  return weightKg / (CALIBRATION_PATTERN_IMPLEMENTS[pattern] || 1);
+function perImplementBaseline(calibrationExercise: string | undefined, weightKg: number): number {
+  return DUAL_DUMBBELL_CALIBRATION_EXERCISES.has(calibrationExercise || '') ? weightKg / 2 : weightKg;
 }
 
 // Fatigue decay for exercises stacked in a circuit/superset/EMOM: each prior
@@ -305,9 +306,9 @@ Deno.serve(async (req: Request) => {
 
     // Keyed by calibration pattern (not movement_pattern label) so callers can
     // apply perImplementBaseline against the original pattern key.
-    const calibrationByCalPattern: Record<string, { weight_kg: number; reps: number }> = {};
+    const calibrationByCalPattern: Record<string, { weight_kg: number; reps: number; exercise?: string }> = {};
     calibration.forEach((c: any) => {
-      calibrationByCalPattern[c.pattern] = { weight_kg: c.weight_kg, reps: c.reps || 8 };
+      calibrationByCalPattern[c.pattern] = { weight_kg: c.weight_kg, reps: c.reps || 8, exercise: c.exercise };
     });
     const movementPatternToCalPattern: Record<string, string> = {};
     Object.entries(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).forEach(([calPattern, mp]) => {
@@ -318,7 +319,7 @@ Deno.serve(async (req: Request) => {
     const perImplementForCalPattern = (calPattern: string): number | null => {
       const entry = calibrationByCalPattern[calPattern];
       if (!entry) return null;
-      return perImplementBaseline(calPattern, entry.weight_kg);
+      return perImplementBaseline(entry.exercise, entry.weight_kg);
     };
 
     const weights = rows
