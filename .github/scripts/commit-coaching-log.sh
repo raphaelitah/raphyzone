@@ -13,6 +13,18 @@
 # (recorded by record-coaching-log-baseline.sh before the script ran).
 # Retries on a push race (someone else's commit landing between our fetch
 # and push) by redoing the same append against the newer base.
+#
+# Uses `git reset --hard` (not `--soft`) against origin/main: `--soft` only
+# moves the branch pointer and leaves the index/working tree exactly as this
+# job's checkout left them. If that checkout predates commits pushed to main
+# later (e.g. by a person, while this run was mid-flight), the stale index
+# still holds their old content, and `git commit` below commits that whole
+# stale index as the new tree — silently reverting every file changed
+# upstream since checkout, not just appending to the log. Confirmed live:
+# 7359ac0 reverted a same-day fix to this very script, plus three unrelated
+# app files, because the run's checkout predated that push. `--hard` syncs
+# the index/working tree to origin/main's actual latest content first, so
+# only the log file (rewritten below) ever differs from it.
 set -euo pipefail
 
 LOG_FILE="reports/coaching-quality-log.md"
@@ -45,7 +57,7 @@ git config user.email "actions@github.com"
 MAX_ATTEMPTS=5
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   git fetch origin main
-  git reset --soft origin/main
+  git reset --hard origin/main
   git checkout origin/main -- "$LOG_FILE" 2>/dev/null || : > "$LOG_FILE"
   cat "$NEW_SECTION" >> "$LOG_FILE"
   git add "$LOG_FILE"
