@@ -45,6 +45,37 @@ const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN: Record<string, string> = {
   olympic_power: 'Olympic / Power',
 };
 
+// strength_calibration.weight_kg is recorded as combined/total weight (see
+// StrengthCalibration.jsx's "Total Weight" field: "for dumbbells or
+// kettlebells, enter the combined weight of both sides"). For calibration
+// patterns whose benchmark exercise is a simultaneous two-dumbbell lift
+// (Dumbbell Bench Press, Seated Dumbbell Press), that total must be halved
+// before it's usable as a per-implement baseline for ratio math or for
+// exercises that prescribe weight per dumbbell. Patterns whose benchmark is
+// already a single implement or a single total-load number (barbell lifts,
+// a machine stack, a one-dumbbell snatch) need no adjustment.
+const CALIBRATION_PATTERN_IMPLEMENTS: Record<string, number> = {
+  horizontal_push: 2, // Dumbbell Bench Press
+  vertical_push: 2, // Seated Dumbbell Press
+};
+
+function perImplementBaseline(pattern: string, weightKg: number): number {
+  return weightKg / (CALIBRATION_PATTERN_IMPLEMENTS[pattern] || 1);
+}
+
+// Fatigue decay for exercises stacked in a circuit/superset/EMOM: each prior
+// exercise in the same block chips away at capacity, capped at a 20% total
+// discount so a long circuit never prescribes a token weight.
+const FATIGUE_DECAY_PER_PRIOR_EXERCISE = 0.05;
+const FATIGUE_DECAY_CAP = 0.2;
+const FATIGUE_BLOCK_TYPES = new Set(['circuit', 'superset', 'emom']);
+
+function fatigueMultiplier(blockType: string | null | undefined, positionInBlock: number): number {
+  if (!blockType || !FATIGUE_BLOCK_TYPES.has(blockType.toLowerCase())) return 1.0;
+  const discount = Math.min(FATIGUE_DECAY_CAP, positionInBlock * FATIGUE_DECAY_PER_PRIOR_EXERCISE);
+  return 1 - discount;
+}
+
 // Loadable movement_pattern values with no calibration question of their own
 // (see src/lib/fitness.js MOVEMENT_PATTERN_FALLBACK, kept in sync with this
 // table): their baseline is derived from a related calibrated pattern instead
@@ -180,7 +211,7 @@ Deno.serve(async (req: Request) => {
         const blockExs = (blockExsByBlock[block.block_id] || [])
           .filter((be: any) => be.step_type === 'exercise')
           .sort((a: any, b: any) => (a.order_in_block || 0) - (b.order_in_block || 0));
-        blockExs.forEach((be: any) => {
+        blockExs.forEach((be: any, positionInBlock: number) => {
           if (!be.exercise_id) return;
           const sets = setsByBE[be.block_exercise_id] || [];
           const setCount = sets.length || 1;
@@ -194,6 +225,10 @@ Deno.serve(async (req: Request) => {
             movement_pattern: details?.movement_pattern || null,
             equipment: details?.equipment || null,
             requires_load: details?.requires_load !== false,
+            benchmark_pattern: details?.benchmark_pattern || null,
+            benchmark_ratio: details?.benchmark_ratio || null,
+            block_type: block.block_type || null,
+            position_in_block: positionInBlock,
             sets: setCount,
             reps,
             current_load: be.load_value ? parseFloat(be.load_value) : null,
@@ -268,22 +303,57 @@ Deno.serve(async (req: Request) => {
     const ws = profile.weight_setup || {};
     const goalFactor = GOAL_FACTOR[profile.goal] ?? 1.0;
 
-    const calibrationByPattern: Record<string, { weight_kg: number; reps: number }> = {};
+    // Keyed by calibration pattern (not movement_pattern label) so callers can
+    // apply perImplementBaseline against the original pattern key.
+    const calibrationByCalPattern: Record<string, { weight_kg: number; reps: number }> = {};
     calibration.forEach((c: any) => {
-      const movementPattern = CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[c.pattern] || c.pattern;
-      if (movementPattern) calibrationByPattern[movementPattern] = { weight_kg: c.weight_kg, reps: c.reps || 8 };
+      calibrationByCalPattern[c.pattern] = { weight_kg: c.weight_kg, reps: c.reps || 8 };
     });
+    const movementPatternToCalPattern: Record<string, string> = {};
+    Object.entries(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).forEach(([calPattern, mp]) => {
+      movementPatternToCalPattern[mp] = calPattern;
+    });
+
+    // Per-implement baseline (kg) for a calibration pattern key, or null if uncalibrated.
+    const perImplementForCalPattern = (calPattern: string): number | null => {
+      const entry = calibrationByCalPattern[calPattern];
+      if (!entry) return null;
+      return perImplementBaseline(calPattern, entry.weight_kg);
+    };
 
     const weights = rows
       .filter((r) => r.requires_load)
       .map((r) => {
-        const fallback = MOVEMENT_PATTERN_FALLBACK[r.movement_pattern || ''];
-        const baseline = overrideMap[r.exercise_id]
-          ?? calibrationByPattern[r.movement_pattern || '']?.weight_kg
-          ?? (fallback ? calibrationByPattern[fallback.from]?.weight_kg * fallback.ratio : null)
-          ?? null;
+        let baseline: number | null = null;
+        if (overrideMap[r.exercise_id] != null) {
+          // Per-exercise overrides are entered by the athlete for that specific
+          // exercise (not a shared calibration benchmark), so no implement
+          // normalization applies.
+          baseline = overrideMap[r.exercise_id];
+        } else if (r.benchmark_pattern) {
+          // Exercise-level override: derive from a specific calibration pattern
+          // at its own ratio, rather than trusting its movement_pattern label.
+          const perImplement = perImplementForCalPattern(r.benchmark_pattern);
+          baseline = perImplement != null ? perImplement * (r.benchmark_ratio ?? 1) : null;
+        } else {
+          const calPattern = movementPatternToCalPattern[r.movement_pattern || ''];
+          const direct = calPattern ? perImplementForCalPattern(calPattern) : null;
+          if (direct != null) {
+            baseline = direct;
+          } else {
+            const fallback = MOVEMENT_PATTERN_FALLBACK[r.movement_pattern || ''];
+            const fromCalPattern = fallback ? movementPatternToCalPattern[fallback.from] : null;
+            const fromPerImplement = fromCalPattern ? perImplementForCalPattern(fromCalPattern) : null;
+            baseline = fallback && fromPerImplement != null ? fromPerImplement * fallback.ratio : null;
+          }
+        }
         if (baseline == null || isNaN(baseline)) return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: null };
-        const target = baseline * factor * repMultiplier(r.reps) * goalFactor * feedbackMultiplier(recentByExercise[r.exercise_id]);
+        const target = baseline
+          * factor
+          * repMultiplier(r.reps)
+          * goalFactor
+          * feedbackMultiplier(recentByExercise[r.exercise_id])
+          * fatigueMultiplier(r.block_type, r.position_in_block);
         return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: target };
       });
 

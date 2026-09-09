@@ -1,4 +1,6 @@
-import { SECONDARY_GOAL_OPTIONS, TRAINING_HISTORY_OPTIONS, PROGRAM_DIFFICULTY_LEVELS, GOALS } from '@/lib/fitness';
+import {
+  SECONDARY_GOAL_OPTIONS, TRAINING_HISTORY_OPTIONS, PROGRAM_DIFFICULTY_LEVELS, GOALS, WEIGHT_CATEGORY_EQUIPMENT,
+} from '@/lib/fitness';
 
 function goalLabel(value) {
   return GOALS.find((g) => g.value === value)?.label || 'training';
@@ -110,8 +112,19 @@ const COMPLETENESS_EXTRA_FIELDS = [
   { key: 'desired_activities', isMissing: (p) => !(p?.desired_activities?.length) && !p?.desired_activities_reviewed },
   {
     key: 'weight_setup',
-    isMissing: (p) => p?.equipment_profile !== 'full_gym'
-      && !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg),
+    // Flag if any weight category the athlete actually has equipment for (per
+    // WEIGHT_CATEGORY_EQUIPMENT) is missing a max_kg — not just "at least one
+    // category is set" — so e.g. having a dumbbell max doesn't mask a missing
+    // kettlebell max when kettlebells are in available_equipment too. Equipment
+    // selection hasn't happened yet (available_equipment empty), fall back to
+    // "any max set" so a bare/incomplete profile still counts as missing.
+    isMissing: (p) => {
+      if (p?.equipment_profile === 'full_gym') return false;
+      const equipment = p?.available_equipment || [];
+      if (!equipment.length) return !['dumbbells', 'barbell', 'kettlebells'].some((k) => p?.weight_setup?.[k]?.max_kg);
+      return Object.entries(WEIGHT_CATEGORY_EQUIPMENT)
+        .some(([cat, eqs]) => eqs.some((e) => equipment.includes(e)) && !p?.weight_setup?.[cat]?.max_kg);
+    },
   },
   {
     key: 'training_mix',
