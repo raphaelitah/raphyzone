@@ -71,10 +71,12 @@ jobs:
   agent:
     name: Run live workout-execution agent
     runs-on: ubuntu-latest
-    # Runs after `audit` (not in parallel) so both jobs' commits to
-    # reports/coaching-quality-log.md never race each other.
-    needs: audit
-    if: always()
+    # Runs in parallel with `audit`/`equipment-fuzz`, not after them:
+    # commit-coaching-log.sh already handles concurrent commits to
+    # reports/coaching-quality-log.md itself (fetch, hard-reset to
+    # origin/main, re-append just this job's new bytes, retry up to 5x on a
+    # push race), so serializing the jobs isn't needed for correctness — it
+    # was just adding the slowest job's runtime on top of the other two.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -82,7 +84,25 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Get installed Playwright version
+        id: playwright-version
+        run: echo "version=$(node -e "console.log(require('@playwright/test/package.json').version)")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright Chromium binary
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      # A cache hit restores the downloaded browser binary but not the apt-installed
+      # OS deps (those aren't under ~/.cache/ms-playwright and don't persist across
+      # runners), so still run install-deps on its own — much faster than the full
+      # install, which re-downloads Chromium every time.
+      - name: Install Playwright Chromium (+ OS deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright OS deps only (browser cached)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: Start dev server
         run: npm run dev &
         env:
@@ -98,7 +118,10 @@ jobs:
           exit 1
       - name: Record report log baseline
         run: .github/scripts/record-coaching-log-baseline.sh
-      - run: node scripts/coaching-quality-agent.mjs
+      # Smaller per-run batch (was 15) shortens this job at the cost of more
+      # weekly runs to churn through the full catalog — fine since a
+      # workout is only re-reviewed when it's new or has changed anyway.
+      - run: node scripts/coaching-quality-agent.mjs 8
         id: agent
         continue-on-error: true
         env:
@@ -114,10 +137,8 @@ jobs:
   equipment-fuzz:
     name: Run plan-generator equipment fuzz test
     runs-on: ubuntu-latest
-    # Runs after audit/agent (not in parallel) so all three jobs' commits to
-    # reports/coaching-quality-log.md never race each other.
-    needs: [audit, agent]
-    if: always()
+    # Runs in parallel with `audit`/`agent` — see the comment on the `agent`
+    # job for why serializing on report-log commits isn't needed.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
