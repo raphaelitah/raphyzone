@@ -271,15 +271,21 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
   for (const entry of mapped) {
     if (entry.slot_type !== 'train' || entry.workout_id || (entry as any).locked) continue;
     const modality = entry.modality;
-    const candidates = (workouts || []).filter((w: any) => w.modality === modality && !usedWorkoutIds.has(w.id));
-    const equipped = candidates.filter((w: any) => filteredWorkouts.some((f: any) => f.id === w.id));
-    const fallback = equipped[0] || candidates[0];
+    // Only ever consider workouts already equipment-filtered (filteredWorkouts) —
+    // equipment matching is mandatory (see planPrompt above) and this code-level
+    // fallback must honor it too, not just the LLM's own picks. Relax modality
+    // before giving up entirely, matching the prompt's own relaxation order, but
+    // equipment is never relaxed: a day with no equipment-safe workout at all is
+    // left unassigned rather than silently handed gear the athlete doesn't have.
+    const equipped = filteredWorkouts.filter((w: any) => !usedWorkoutIds.has(w.id));
+    const modalityMatch = equipped.filter((w: any) => w.modality === modality);
+    const fallback = modalityMatch[0] || equipped[0];
     if (fallback) {
       entry.workout_id = fallback.id;
       entry.workout_name = fallback.name;
-      entry.reason = equipped[0]
+      entry.reason = modalityMatch[0]
         ? 'Assigned automatically to keep every training day filled.'
-        : 'Assigned automatically — closest match; equipment may not fully match your setup for this week.';
+        : 'Assigned automatically — closest match; modality may not fully match this day, but equipment fits your setup.';
       usedWorkoutIds.add(fallback.id);
       try {
         const resolvedExercises = await resolveWorkoutExercises(supabase, fallback.workout_id, exerciseCatalog || []);
