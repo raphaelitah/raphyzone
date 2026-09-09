@@ -10400,3 +10400,21 @@ Call log:
 - ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
 
 ---
+## Equipment Fuzz Run 2026-09-09T16:30:41.633Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_suspension_trainer: generated plan, checked 22 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
+## Equipment Fuzz Run 2026-09-09T16:31:21.399Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ commercial_gym_minus_cardio: generated plan, checked 14 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
