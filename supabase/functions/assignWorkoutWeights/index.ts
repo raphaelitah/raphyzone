@@ -335,6 +335,18 @@ Deno.serve(async (req: Request) => {
       return perImplementBaseline(entry.exercise, entry.weight_kg);
     };
 
+    // An exercise repeated multiple times in the same workout (e.g. a movement
+    // that shows up in two separate rounds of a circuit) should carry one
+    // consistent weight throughout — athletes don't drop the load partway
+    // through a workout for a movement they're about to repeat. Fatigue decay
+    // is only meaningful for a true single-pass circuit order, so skip it
+    // entirely for any exercise that occurs more than once in its workout.
+    const occurrenceCountByWorkoutExercise: Record<string, number> = {};
+    rows.forEach((r) => {
+      const key = `${r.workoutEntityId}::${r.exercise_id}`;
+      occurrenceCountByWorkoutExercise[key] = (occurrenceCountByWorkoutExercise[key] || 0) + 1;
+    });
+
     const weights = rows
       .filter((r) => r.requires_load)
       .map((r) => {
@@ -362,12 +374,13 @@ Deno.serve(async (req: Request) => {
           }
         }
         if (baseline == null || isNaN(baseline)) return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: null };
+        const isRepeatedInWorkout = occurrenceCountByWorkoutExercise[`${r.workoutEntityId}::${r.exercise_id}`] > 1;
         const target = baseline
           * factor
           * repMultiplier(r.reps)
           * goalFactor
           * feedbackMultiplier(recentByExercise[r.exercise_id])
-          * fatigueMultiplier(r.block_type, r.position_in_block);
+          * (isRepeatedInWorkout ? 1.0 : fatigueMultiplier(r.block_type, r.position_in_block));
         return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: target };
       });
 
