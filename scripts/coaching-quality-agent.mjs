@@ -213,7 +213,19 @@ async function checkRestBanner(page, expectedSeconds, transitionLabel, log) {
     }
     return false;
   }
-  const countdown = page.getByText(/^\d{2}:\d{2}$/).first();
+  // page.getByText(/^\d{2}:\d{2}$/).first() used to grab whichever MM:SS-shaped
+  // text sits first in the DOM — which is the header's own session stopwatch
+  // (WorkoutExecution.jsx's `formatDuration(totalElapsed)`, rendered above the
+  // block content), not the actual rest countdown. Since this agent races
+  // through taps in seconds, that stopwatch reads ~00:00-00:03, which looked
+  // exactly like a broken near-zero rest timer. Scope the search to the
+  // matched badge/banner's own container (two ancestor <div>s up covers both
+  // the WorkoutTimerPanel/SupersetPanel "Rest" badge, where the countdown is a
+  // sibling one level further out, and the inter-block rest banner, where it's
+  // a nested sibling within the same row) so it can only find the real one.
+  const activeIndicator = seenBadge ? restBadge : restingBanner;
+  const countdownScope = activeIndicator.locator('xpath=ancestor::div[1]/ancestor::div[1]');
+  const countdown = countdownScope.getByText(/^\d{2}:\d{2}$/).first();
   const first = await countdown.textContent().catch(() => null);
   await page.waitForTimeout(1200);
   const second = await countdown.textContent().catch(() => null);

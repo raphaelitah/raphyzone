@@ -120,6 +120,42 @@ export const CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN = {
   olympic_power: 'Olympic / Power',
 };
 
+// Loadable movement_pattern values that don't get their own calibration
+// question (keeping onboarding to the 7 patterns above) — instead, their
+// weight is derived from a related calibrated pattern's baseline, scaled by
+// a typical accessory-vs-compound load ratio. Kept in sync with the identical
+// table in supabase/functions/assignWorkoutWeights/index.ts, which does the
+// actual scaling; this copy just lets the UI (WorkoutExecution's calcWeight)
+// know which calibration prompt to offer when even the fallback has nothing
+// to derive from.
+export const MOVEMENT_PATTERN_FALLBACK = {
+  'Shoulder Isolation': { from: 'vertical_push', ratio: 0.3 },
+  'Elbow Flexion': { from: 'horizontal_pull', ratio: 0.35 },
+  'Elbow Extension': { from: 'horizontal_push', ratio: 0.35 },
+  'Lunge / Step': { from: 'squat', ratio: 0.5 },
+  'Knee / Ankle Isolation': { from: 'squat', ratio: 0.3 },
+  'Hip Isolation': { from: 'hinge', ratio: 0.4 },
+  Carry: { from: 'hinge', ratio: 0.7 },
+  'Full Body Complex': { from: 'olympic_power', ratio: 0.6 },
+  'Core - Rotation': { from: 'hinge', ratio: 0.2 },
+  'Core - Flexion': { from: 'hinge', ratio: 0.2 },
+  'Core - Anti-extension': { from: 'hinge', ratio: 0.2 },
+  'Core - Extension': { from: 'hinge', ratio: 0.2 },
+};
+
+// Given an exercise's movement_pattern, finds the calibration question (see
+// CALIBRATION_PATTERNS) whose answer determines its weight — either directly,
+// or via MOVEMENT_PATTERN_FALLBACK for patterns without their own question
+// (e.g. a "Shoulder Isolation" lateral raise resolves to 'vertical_push', the
+// same question a strict press would use).
+export function resolveCalibrationPatternKey(movementPattern) {
+  const direct = Object.keys(CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN).find(
+    (k) => CALIBRATION_PATTERN_TO_MOVEMENT_PATTERN[k] === movementPattern
+  );
+  if (direct) return direct;
+  return MOVEMENT_PATTERN_FALLBACK[movementPattern || '']?.from ?? null;
+}
+
 export const TRAINING_FOCUS_RANKS = [
   { value: 0, label: 'Pure Strength', desc: 'Lift only · muscle hypertrophy' },
   { value: 20, label: 'Strength', desc: 'Almost all lifting' },
