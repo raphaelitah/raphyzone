@@ -167,6 +167,11 @@ export default function ProfileEquipmentTab({ form, setForm }) {
                       <p className="text-sm font-medium">{WEIGHT_CATEGORY_LABELS[cat]}</p>
                       <span className="text-[11px] text-muted-foreground/60">Max</span>
                     </div>
+                    {(cat === 'dumbbells' || cat === 'kettlebells') && (
+                      <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                        Weight of one {cat === 'dumbbells' ? 'dumbbell' : 'kettlebell'}, not the combined total.
+                      </p>
+                    )}
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         type="number"
