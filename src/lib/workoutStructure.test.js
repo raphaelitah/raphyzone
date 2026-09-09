@@ -251,6 +251,17 @@ describe('buildFlatExerciseList', () => {
     expect(noDetails.sets).toBe(1);
   });
 
+  it('prefers the per-step exercise_title_raw over the catalog name when both exist, so steps sharing one exercise_id (e.g. a progressive treadmill interval) stay distinguishable on screen', () => {
+    const blockExercisesWithTitles = {
+      b1: [
+        { block_exercise_id: 'e1', block_id: 'b1', step_type: 'exercise', exercise_id: 'ex1', exercise_title_raw: 'Treadmill Run (10% incline)' },
+        { block_exercise_id: 'e3', block_id: 'b1', step_type: 'exercise', exercise_id: 'ex1', exercise_title_raw: 'Treadmill Run (12% incline)' },
+      ],
+    };
+    const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesWithTitles, setsByBlockExercise, exerciseMap);
+    expect(list.map((e) => e.exercise_name)).toEqual(['Treadmill Run (10% incline)', 'Treadmill Run (12% incline)']);
+  });
+
   it('computes effective_sets as effective rounds x set count, using the EMOM exercise-count divisor', () => {
     // 2 exercises in this EMOM block, 9-minute cap -> getEffectiveRounds gives 4 (floor(9/2)).
     const list = buildFlatExerciseList(workout, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);

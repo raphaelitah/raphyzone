@@ -78,7 +78,13 @@ export function buildFlatExerciseList(
       const rounds = getEffectiveRounds(block, blockExs.length);
       list.push({
         exercise_id: be.exercise_id,
-        exercise_name: details?.name || be.exercise_title_raw || 'Exercise',
+        // exercise_title_raw is the per-step authored text (e.g. a progressive
+        // interval workout distinguishing "Treadmill Run (10% incline)" from
+        // "Treadmill Run (12% incline)" across steps that share one catalog
+        // exercise_id) — prefer it over the catalog's generic details.name,
+        // which would otherwise silently collapse every step back to the same
+        // undifferentiated "Treadmill Run" on screen.
+        exercise_name: be.exercise_title_raw || details?.name || 'Exercise',
         sets: setCount,
         rounds,
         effective_sets: rounds * setCount,
