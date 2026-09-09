@@ -128,12 +128,21 @@ async function selectWorkoutsToReview(limit) {
 
 async function fetchExercisesForBlocks(blockIds) {
   if (!blockIds.length) return new Map();
-  const [{ data }, { data: exercises }] = await Promise.all([
-    db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise'),
-    db.from('exercises').select('exercise_code, equipment_tags'),
-  ]);
+  const { data } = await db.from('block_exercises').select('block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value').in('block_id', blockIds).eq('step_type', 'exercise');
   // estimateWorkoutMinutes' weighted-movement penalty needs each step's
   // equipment_tags — attach them here rather than change its call signature.
+  // Scoped to just the exercise_codes this batch actually references, not
+  // the whole exercises table: an unfiltered select() is silently capped at
+  // PostgREST's default 1000-row page, and with ~2900 rows in exercises,
+  // whichever arbitrary 1000 come back (no ORDER BY = no stable set) miss
+  // most codes — e.g. "Sumo Deadlift High Pull" (EX02571) and "Wide Stance
+  // Front Squat" (EX02842) got silently dropped, isWeighted() defaulted to
+  // false for them, and the weighted-rep-pace penalty never applied,
+  // undercounting the estimate for "Andi" (and similarly "Grettel").
+  const codes = [...new Set((data || []).map((be) => be.exercise_id).filter(Boolean))];
+  const { data: exercises } = codes.length
+    ? await db.from('exercises').select('exercise_code, equipment_tags').in('exercise_code', codes)
+    : { data: [] };
   const equipmentByCode = new Map((exercises || []).filter((e) => e.exercise_code).map((e) => [e.exercise_code, e.equipment_tags]));
   const byBlock = new Map();
   for (const be of data || []) {
