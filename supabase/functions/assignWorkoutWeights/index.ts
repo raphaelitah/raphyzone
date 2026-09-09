@@ -315,7 +315,20 @@ Deno.serve(async (req: Request) => {
       movementPatternToCalPattern[mp] = calPattern;
     });
 
+    // Raw (as-calibrated) baseline for a calibration pattern key, or null if uncalibrated.
+    const rawBaselineForCalPattern = (calPattern: string): number | null => {
+      const entry = calibrationByCalPattern[calPattern];
+      return entry ? entry.weight_kg : null;
+    };
     // Per-implement baseline (kg) for a calibration pattern key, or null if uncalibrated.
+    // Only used by the benchmark_pattern override path below: that path derives a
+    // *different* exercise's baseline via a ratio calibrated against a per-implement
+    // number, so it needs the halving. The direct movement_pattern match and the
+    // generic MOVEMENT_PATTERN_FALLBACK table both assume "this exercise's baseline
+    // is the same number the athlete calibrated" (their historical, still-correct
+    // behavior) — halving there would incorrectly shrink e.g. a barbell Strict Press
+    // baseline just because this athlete's Vertical Push calibration happened to be
+    // a two-dumbbell exercise.
     const perImplementForCalPattern = (calPattern: string): number | null => {
       const entry = calibrationByCalPattern[calPattern];
       if (!entry) return null;
@@ -333,19 +346,19 @@ Deno.serve(async (req: Request) => {
           baseline = overrideMap[r.exercise_id];
         } else if (r.benchmark_pattern) {
           // Exercise-level override: derive from a specific calibration pattern
-          // at its own ratio, rather than trusting its movement_pattern label.
+          // at its own per-implement ratio, rather than trusting its movement_pattern label.
           const perImplement = perImplementForCalPattern(r.benchmark_pattern);
           baseline = perImplement != null ? perImplement * (r.benchmark_ratio ?? 1) : null;
         } else {
           const calPattern = movementPatternToCalPattern[r.movement_pattern || ''];
-          const direct = calPattern ? perImplementForCalPattern(calPattern) : null;
+          const direct = calPattern ? rawBaselineForCalPattern(calPattern) : null;
           if (direct != null) {
             baseline = direct;
           } else {
             const fallback = MOVEMENT_PATTERN_FALLBACK[r.movement_pattern || ''];
             const fromCalPattern = fallback ? movementPatternToCalPattern[fallback.from] : null;
-            const fromPerImplement = fromCalPattern ? perImplementForCalPattern(fromCalPattern) : null;
-            baseline = fallback && fromPerImplement != null ? fromPerImplement * fallback.ratio : null;
+            const fromRaw = fromCalPattern ? rawBaselineForCalPattern(fromCalPattern) : null;
+            baseline = fallback && fromRaw != null ? fromRaw * fallback.ratio : null;
           }
         }
         if (baseline == null || isNaN(baseline)) return { index: r.index, exercise_id: r.exercise_id, target_weight_kg: null };
