@@ -13,6 +13,7 @@ import SessionDetailSheet from '@/components/SessionDetailSheet';
 import ExpandableSection from '@/components/ExpandableSection';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 export default function Progress() {
   const { user } = useAuth();
@@ -23,6 +24,28 @@ export default function Progress() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [detailSession, setDetailSession] = useState(null);
+  const [prHistoryRecord, setPrHistoryRecord] = useState(null);
+  const [prHistoryFull, setPrHistoryFull] = useState([]);
+  const [prHistoryLoading, setPrHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!prHistoryRecord || !user) { setPrHistoryFull([]); return; }
+    setPrHistoryLoading(true);
+    (async () => {
+      const { data } = await supabase
+        .from('exercise_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('exercise_id', prHistoryRecord.exercise_id)
+        .not('max_weight', 'is', null)
+        .order('created_date', { ascending: true });
+      if (!active) return;
+      setPrHistoryFull(data || []);
+      setPrHistoryLoading(false);
+    })();
+    return () => { active = false; };
+  }, [prHistoryRecord, user]);
   const [runningWorkoutIds, setRunningWorkoutIds] = useState(new Set());
   const { gap: profileGap, profile: gapProfile, answer: answerGap, dismiss: dismissGap } = useProfileGaps('progress');
 
@@ -130,6 +153,20 @@ export default function Progress() {
     trendByExercise[p.exercise_id] = points;
   });
 
+  // PR history for the exercise whose sheet is open: sets that set a new record, newest first
+  const prHistoryMilestones = (() => {
+    const sorted = [...prHistoryFull].sort((a, b) => parseDate(a.date || a.created_date).getTime() - parseDate(b.date || b.created_date).getTime());
+    const milestones = [];
+    let runningMax = -Infinity;
+    sorted.forEach((s) => {
+      if (s.max_weight > runningMax) {
+        runningMax = s.max_weight;
+        milestones.push(s);
+      }
+    });
+    return milestones.reverse();
+  })();
+
   return (
     <div className="px-5 pt-10">
       <header className="mb-5">
@@ -180,10 +217,18 @@ export default function Progress() {
       )}
 
       <div className="mb-6">
-        <PersonalRecordsSection prs={prs} trendByExercise={trendByExercise} />
+        <PersonalRecordsSection prs={prs} trendByExercise={trendByExercise} onSelect={setPrHistoryRecord} />
       </div>
 
       <RecentWorkoutsSection completed={completed} runningWorkoutIds={runningWorkoutIds} onSelect={setDetailSession} />
+
+      <PrHistorySheet
+        record={prHistoryRecord}
+        history={prHistoryMilestones}
+        loading={prHistoryLoading}
+        open={!!prHistoryRecord}
+        onOpenChange={(o) => !o && setPrHistoryRecord(null)}
+      />
 
       <SessionDetailSheet
         session={detailSession}
@@ -199,7 +244,7 @@ export default function Progress() {
   );
 }
 
-function PersonalRecordsSection({ prs, trendByExercise }) {
+function PersonalRecordsSection({ prs, trendByExercise, onSelect }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? prs : prs.slice(0, 3);
   return (
@@ -212,10 +257,38 @@ function PersonalRecordsSection({ prs, trendByExercise }) {
     >
       <div className="space-y-2">
         {prs.length ? visible.map((p) => (
-          <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} />
+          <PersonalRecordRow key={p.id} record={p} trend={trendByExercise[p.exercise_id] || []} onClick={() => onSelect(p)} />
         )) : <p className="text-sm text-muted-foreground text-center py-6">No records yet. Log a workout to start tracking.</p>}
       </div>
     </ExpandableSection>
+  );
+}
+
+function PrHistorySheet({ record, history, loading, open, onOpenChange }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto p-0">
+        <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
+          <SheetTitle className="text-left flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> {record?.exercise_name}</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-2 px-5 py-4">
+          {loading && <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>}
+          {!loading && history.map((h, i) => {
+            const date = h.date || h.created_date;
+            return (
+              <Card key={h.id} className={cn('rounded-xl border-border p-3 flex items-center justify-between', i === 0 && 'border-brand/30 bg-brand/5')}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{i === 0 ? 'Current' : 'Previous'}</p>
+                  {date && <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDate(parseDate(date), 'd MMM yyyy')}</p>}
+                </div>
+                <span className="text-sm font-semibold shrink-0">{h.max_weight}kg</span>
+              </Card>
+            );
+          })}
+          {!loading && history.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No history yet.</p>}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -251,11 +324,11 @@ function RecentWorkoutsSection({ completed, runningWorkoutIds, onSelect }) {
   );
 }
 
-function PersonalRecordRow({ record, trend }) {
+function PersonalRecordRow({ record, trend, onClick }) {
   const showTrend = new Set(trend.map((t) => t.date)).size >= 3 && new Set(trend.map((t) => t.weight)).size > 1;
   const recordDate = record.date || record.created_date;
   return (
-    <Card className="rounded-xl border-border p-3">
+    <Card onClick={onClick} className="rounded-xl border-border p-3 cursor-pointer hover:border-foreground/20 transition-colors">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{record.exercise_name}</p>
