@@ -268,20 +268,20 @@ function PrHistorySheet({ record, history, loading, open, onOpenChange }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto p-0">
-        <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
-          <SheetTitle className="text-left flex items-center gap-1.5"><Trophy className="h-4 w-4 text-amber-500" /> {record?.exercise_name}</SheetTitle>
+        <SheetHeader className="px-6 pt-6 pb-4 border-b border-border">
+          <SheetTitle className="text-left flex items-center gap-2 text-lg"><Trophy className="h-5 w-5 text-amber-500" /> {record?.exercise_name}</SheetTitle>
         </SheetHeader>
-        <div className="space-y-2 px-5 py-4">
+        <div className="space-y-3 px-6 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           {loading && <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>}
           {!loading && history.map((h, i) => {
             const date = h.date || h.created_date;
             return (
-              <Card key={h.id} className={cn('rounded-xl border-border p-3 flex items-center justify-between', i === 0 && 'border-brand/30 bg-brand/5')}>
+              <Card key={h.id} className={cn('rounded-xl border-border p-4 flex items-center justify-between', i === 0 && 'border-brand/30 bg-brand/5')}>
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{i === 0 ? 'Current' : 'Previous'}</p>
-                  {date && <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDate(parseDate(date), 'd MMM yyyy')}</p>}
+                  {date && <p className="text-xs text-muted-foreground mt-1">{fmtDate(parseDate(date), 'd MMM yyyy')}</p>}
                 </div>
-                <span className="text-sm font-semibold shrink-0">{h.max_weight}kg</span>
+                <span className="text-base font-semibold shrink-0">{h.max_weight}kg</span>
               </Card>
             );
           })}
