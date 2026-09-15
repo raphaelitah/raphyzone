@@ -145,6 +145,10 @@ export default function SupersetPanel({
 
   const startSet = () => {
     primeTimerAudio();
+    // Cancel any inter-block rest still counting down as soon as the user
+    // commits to the next set, even during the lead-in — otherwise it keeps
+    // ticking alongside the "Get ready" countdown until it expires on its own.
+    onStartTimer?.();
     if (!hasStartedBlockRef.current) {
       hasStartedBlockRef.current = true;
       leadInEndAtRef.current = Date.now() + LEAD_IN_SEC * 1000;
