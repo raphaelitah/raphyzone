@@ -914,15 +914,15 @@ export default function WorkoutExecution() {
       }
       const candidates = Object.values(fullExerciseMapRef.current).filter((e) => e.id !== ex.id);
       const ranked = candidates
+        .filter((c) => c.primary_muscle_group && c.primary_muscle_group === ex.primary_muscle_group)
         .map((c) => {
-          let score = 0;
-          if (c.movement_pattern === ex.movement_pattern) score += 40;
-          if (c.primary_muscle_group && c.primary_muscle_group === ex.primary_muscle_group) score += 10;
+          let score = 10; // primary_muscle_group match is required to reach this point
+          if (c.movement_pattern === ex.movement_pattern) score += 8;
           if (c.secondary_muscle_group && c.secondary_muscle_group === ex.secondary_muscle_group) score += 4;
-          if (c.technical_difficulty === ex.technical_difficulty) score += 6;
+          if (c.equipment && c.equipment === ex.equipment) score += 6;
+          if (c.technical_difficulty === ex.technical_difficulty) score += 2;
           return { c, score };
         })
-        .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
 
