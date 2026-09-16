@@ -906,11 +906,18 @@ export default function WorkoutExecution() {
       const ex = targetExercise?.details;
       if (!ex) { setLoadingSubs(false); return; }
       if (!fullExerciseMapRef.current) {
-        const { data: allExs } = await supabase.from('exercises')
-          .select('id, exercise_code, name, movement_pattern, primary_muscle_group, secondary_muscle_group, technical_difficulty, equipment, video_url')
-          .order('created_date', { ascending: false })
-          .limit(3000);
-        fullExerciseMapRef.current = buildExerciseMapByCode(allExs || []);
+        const allExs = [];
+        const pageSize = 1000;
+        for (let from = 0; ; from += pageSize) {
+          const { data: page } = await supabase.from('exercises')
+            .select('id, exercise_code, name, movement_pattern, primary_muscle_group, secondary_muscle_group, technical_difficulty, equipment, video_url')
+            .order('created_date', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (!page?.length) break;
+          allExs.push(...page);
+          if (page.length < pageSize) break;
+        }
+        fullExerciseMapRef.current = buildExerciseMapByCode(allExs);
       }
       const candidates = Object.values(fullExerciseMapRef.current).filter((e) => e.id !== ex.id);
       const ranked = candidates
