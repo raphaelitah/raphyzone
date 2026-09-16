@@ -699,20 +699,6 @@ export default function Home() {
         );
       })()}
 
-      {inProgressSession && inProgressSession.workout_id !== todayWorkoutSlot?.workout_id && (
-        <Card className="rounded-2xl border border-brand/30 bg-brand/5 p-4 mb-5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-brand uppercase tracking-wide">Workout in progress</p>
-              <p className="font-semibold truncate mt-0.5">{workouts[inProgressSession.workout_id]?.name || inProgressSession.workout_name}</p>
-            </div>
-            <Button asChild className="rounded-xl h-10 px-4 bg-brand text-brand-foreground hover:bg-brand/90 shrink-0">
-              <Link to={`/workout/${inProgressSession.workout_id}?date=${inProgressSession.date}`}><Play className="h-3.5 w-3.5 mr-1.5" /> Continue</Link>
-            </Button>
-          </div>
-        </Card>
-      )}
-
       {todaySlot && todaySlot.slot_type === 'activity' && !todaySlot.workout_id && (
         <Card className="rounded-2xl border border-amber-200 bg-amber-50 p-5 mb-5">
           <div className="flex items-center gap-2 text-amber-700">
