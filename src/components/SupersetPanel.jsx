@@ -86,23 +86,44 @@ export default function SupersetPanel({
     emitState({ phase: 'running' });
   };
 
+  // Boundaries (in seconds-remaining) at which the countdown beep fires:
+  // round(x) === n exactly when x is in [n - 0.5, n + 0.5).
+  const COUNTDOWN_BOUNDARIES = [3.5, 2.5, 1.5];
+  const prevRemainingRef = useRef(null);
+
+  useEffect(() => {
+    prevRemainingRef.current = null;
+  }, [phase]);
+
   useEffect(() => {
     if (phase !== 'running' && phase !== 'resting' && phase !== 'leadin') return;
     const id = setInterval(() => {
       if (phase === 'leadin' && leadInEndAtRef.current != null) {
-        const remaining = Math.round((leadInEndAtRef.current - Date.now()) / 1000);
+        const remaining = (leadInEndAtRef.current - Date.now()) / 1000;
         if (Date.now() >= leadInEndAtRef.current) {
           leadInEndAtRef.current = null;
           startSetActual();
           playGoBeep();
           return;
         }
-        if (remaining === 3 || remaining === 2 || remaining === 1) playCountdownBeep();
+        // Beep whenever a countdown boundary was crossed since the last tick,
+        // rather than only when remaining lands exactly on 3/2/1 — setInterval
+        // ticks can drift/throttle and skip past an exact-match value.
+        const prevRemaining = prevRemainingRef.current;
+        if (prevRemaining != null) {
+          for (const boundary of COUNTDOWN_BOUNDARIES) {
+            if (prevRemaining >= boundary && remaining < boundary) {
+              playCountdownBeep();
+              break;
+            }
+          }
+        }
+        prevRemainingRef.current = remaining;
         setTick((t) => t + 1);
         return;
       }
       if (phase === 'resting' && restEndAtRef.current != null) {
-        const remaining = Math.round((restEndAtRef.current - Date.now()) / 1000);
+        const remaining = (restEndAtRef.current - Date.now()) / 1000;
         if (Date.now() >= restEndAtRef.current) {
           restEndAtRef.current = null;
           setRound((r) => r + 1);
@@ -113,7 +134,16 @@ export default function SupersetPanel({
           emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
           return;
         }
-        if (remaining === 3 || remaining === 2 || remaining === 1) playCountdownBeep();
+        const prevRemaining = prevRemainingRef.current;
+        if (prevRemaining != null) {
+          for (const boundary of COUNTDOWN_BOUNDARIES) {
+            if (prevRemaining >= boundary && remaining < boundary) {
+              playCountdownBeep();
+              break;
+            }
+          }
+        }
+        prevRemainingRef.current = remaining;
         setTick((t) => t + 1);
         return;
       }

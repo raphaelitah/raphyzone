@@ -82,12 +82,23 @@ export default function useIntervalTimer(config) {
     setPhaseIndex(idx);
   }, []);
 
+  // Boundaries (in seconds-remaining) at which the countdown beep fires,
+  // matching the old "remaining rounds to 3/2/1" behavior: round(x) === n
+  // exactly when x is in [n - 0.5, n + 0.5).
+  const COUNTDOWN_BOUNDARIES = [3.5, 2.5, 1.5];
+
   // Plays the 3-2-1 countdown beep near the end of the phase that was just
   // active, or the "go" beep the instant a new phase starts (end of lead-in,
   // end of work, end of rest). Compares status/phaseIndex before and after a
   // catchUp() call, so a multi-phase catch-up (e.g. after being backgrounded)
   // still only fires one "go" beep rather than one per skipped phase.
-  const playPhaseSounds = useCallback((prevStatus, prevPhaseIdx) => {
+  //
+  // Countdown beeps are fired by checking which boundaries were *crossed*
+  // between the previous and current remaining time, rather than checking
+  // whether the current remaining time lands exactly on 3/2/1 — setInterval
+  // ticks aren't guaranteed to land on exact second boundaries (throttling,
+  // event-loop jitter), so an exact-match check can silently skip a beep.
+  const playPhaseSounds = useCallback((prevStatus, prevPhaseIdx, prevRemainingSec) => {
     const newStatus = statusRef.current;
     const newPhaseIdx = phaseIndexRef.current;
     const transitioned = (prevStatus === 'leadin' && newStatus === 'running')
@@ -97,9 +108,13 @@ export default function useIntervalTimer(config) {
       return;
     }
     if ((newStatus !== 'running' && newStatus !== 'leadin') || phaseEndAtRef.current == null) return;
-    const remaining = Math.round((phaseEndAtRef.current - Date.now()) / 1000);
-    if (remaining === 3 || remaining === 2 || remaining === 1) {
-      playCountdownBeep();
+    if (prevRemainingSec == null) return;
+    const remaining = (phaseEndAtRef.current - Date.now()) / 1000;
+    for (const boundary of COUNTDOWN_BOUNDARIES) {
+      if (prevRemainingSec >= boundary && remaining < boundary) {
+        playCountdownBeep();
+        break;
+      }
     }
   }, []);
 
@@ -108,8 +123,11 @@ export default function useIntervalTimer(config) {
     const id = setInterval(() => {
       const prevStatus = statusRef.current;
       const prevPhaseIdx = phaseIndexRef.current;
+      const prevRemainingSec = phaseEndAtRef.current != null
+        ? (phaseEndAtRef.current - Date.now()) / 1000
+        : null;
       catchUp();
-      playPhaseSounds(prevStatus, prevPhaseIdx);
+      playPhaseSounds(prevStatus, prevPhaseIdx, prevRemainingSec);
       setTick((t) => t + 1);
     }, 1000);
     return () => clearInterval(id);
@@ -120,8 +138,11 @@ export default function useIntervalTimer(config) {
       if (document.visibilityState === 'visible') {
         const prevStatus = statusRef.current;
         const prevPhaseIdx = phaseIndexRef.current;
+        const prevRemainingSec = phaseEndAtRef.current != null
+          ? (phaseEndAtRef.current - Date.now()) / 1000
+          : null;
         catchUp();
-        playPhaseSounds(prevStatus, prevPhaseIdx);
+        playPhaseSounds(prevStatus, prevPhaseIdx, prevRemainingSec);
         setTick((t) => t + 1);
       }
     };
