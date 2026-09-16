@@ -76,6 +76,8 @@ export default function WorkoutExecution() {
   const [restartOpen, setRestartOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [confirmSkipOpen, setConfirmSkipOpen] = useState(false);
+  const [confirmSwapOpen, setConfirmSwapOpen] = useState(false);
   const [conflictSession, setConflictSession] = useState(null);
   const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
@@ -770,6 +772,19 @@ export default function WorkoutExecution() {
     });
     scheduleSave(key);
   };
+  // Bailing on a single round mid-exercise still counts as progress worth
+  // recording, unlike skipping the whole exercise (which drops its log
+  // entirely) — so this is tracked per-key rather than folded into `skipped`.
+  const handleRoundSkip = (key, roundNum) => {
+    setLogs((l) => {
+      const prevSkipped = l[key]?.skipped_rounds || [];
+      const nextSkipped = prevSkipped.includes(roundNum) ? prevSkipped : [...prevSkipped, roundNum].sort((a, b) => a - b);
+      const next = { ...l, [key]: { ...(l[key] || {}), skipped_rounds: nextSkipped } };
+      logsRef.current = next;
+      return next;
+    });
+    scheduleSave(key);
+  };
   const flushCurrentTime = () => {
     const cur = exercisesRef.current[indexRef.current];
     if (!cur) return;
@@ -793,9 +808,14 @@ export default function WorkoutExecution() {
     }
     if (!log || (log.max_weight == null && !log.bodyweight && log.distance_km == null && log.duration_seconds == null && !log.difficulty && !log.note)) return;
     try {
+      const skippedRounds = log.skipped_rounds || [];
+      const skippedNote = skippedRounds.length
+        ? `Skipped round${skippedRounds.length > 1 ? 's' : ''} ${skippedRounds.join(', ')}.`
+        : '';
       const payload = {
         user_id: userRef.current.id, workout_session_id: sessionIdRef.current, exercise_id: ex.exercise_id, exercise_name: ex.exercise_name,
-        max_weight: log.bodyweight ? 0 : (log.max_weight ?? null), difficulty: log.difficulty || 'normal', note: log.note || '',
+        max_weight: log.bodyweight ? 0 : (log.max_weight ?? null), difficulty: log.difficulty || 'normal',
+        note: [log.note || '', skippedNote].filter(Boolean).join(' '),
         sets: ex.effective_sets ?? ex.sets, reps: ex.reps, target_weight: ex.target_weight,
         distance_km: log.distance_km ?? null, duration_seconds: log.duration_seconds ?? null,
         elapsed_seconds: Math.round(exerciseElapsedRef.current[key] || 0),
@@ -1462,6 +1482,7 @@ export default function WorkoutExecution() {
                 onExerciseElapsed={handleSupersetExerciseElapsed}
                 onFinish={handleSupersetFinish}
                 onSkip={handleSupersetSkip}
+                onRoundSkip={handleRoundSkip}
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, timerDefaultConfig?.restSec ?? 0, delta)}
                 onSwap={requestSubstitute}
@@ -1498,6 +1519,7 @@ export default function WorkoutExecution() {
                 restSec={restOverrides[current.block_id] ?? (current.rest_seconds || 0)}
                 onExerciseElapsed={handleSupersetExerciseElapsed}
                 onFinish={handleSoloFinish}
+                onRoundSkip={handleRoundSkip}
                 onStartTimer={startTimer}
                 onAdjustRest={(delta) => adjustRest(current.block_id, current.rest_seconds || 0, delta)}
                 weightLoadingKey={weightLoadingKey}
@@ -1516,11 +1538,15 @@ export default function WorkoutExecution() {
             {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : logPrompt.review ? 'Save' : <>Save &amp; Continue <ChevronRight className="h-5 w-5 ml-1" /></>}
           </Button>
         </div>
-      ) : !isBlockActive && (
+      ) : !isBlockActive && !['running', 'resting'].includes(panelProgress[current.key]?.phase ?? 'ready') && (
+        // Skip/swap only make sense before the first set of this exercise starts —
+        // once a set is running or resting, the panel itself offers "skip this
+        // round/set" instead (which records the round as skipped rather than
+        // dropping the whole exercise or restarting it as something else).
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <div className="flex items-center gap-2">
-            <button onClick={handleSoloSkip} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /> Skip</button>
-            <button onClick={() => requestSubstitute()} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
+            <button onClick={() => setConfirmSkipOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /> Skip</button>
+            <button onClick={() => setConfirmSwapOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
           </div>
         </div>
       )}
@@ -1616,6 +1642,36 @@ export default function WorkoutExecution() {
             <AlertDialogAction disabled={stopping} onClick={stopWorkout} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {stopping ? 'Stopping…' : 'Stop workout'}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmSkipOpen} onOpenChange={setConfirmSkipOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip {current?.exercise_name || 'this exercise'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This exercise will be marked as skipped and you'll move on to what's next.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmSkipOpen(false); handleSoloSkip(); }}>Skip</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmSwapOpen} onOpenChange={setConfirmSwapOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Swap {current?.exercise_name || 'this exercise'}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You'll pick a replacement and start it fresh from the first set.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmSwapOpen(false); requestSubstitute(); }}>Swap</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

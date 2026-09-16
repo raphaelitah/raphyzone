@@ -42,6 +42,18 @@ async function dismissCalibrationPromptIfPresent(page) {
   }
 }
 
+// Skip and Swap (and, mid-exercise, "skip this round") now open a confirm
+// AlertDialog instead of acting immediately (WorkoutExecution.jsx / SupersetPanel.jsx)
+// — confirm it if one popped up, scoped to the dialog itself so this doesn't
+// collide with the identically-labelled trigger button still underneath it.
+async function confirmActionDialogIfPresent(page) {
+  const dialog = page.getByRole('alertdialog');
+  if (await dialog.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await dialog.getByRole('button', { name: /^(skip|swap)$/i }).click();
+    await dialog.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
+  }
+}
+
 async function clickThroughCalibration(page, locator, options = {}) {
   for (let attempt = 1; attempt <= 5; attempt++) {
     await dismissCalibrationPromptIfPresent(page);
@@ -120,6 +132,7 @@ test.describe('Running a workout (regression)', () => {
       // of waiting out the full click timeout on a page that no longer has one.
       if (!(await skipButton.first().isVisible({ timeout: 2000 }).catch(() => false))) break;
       await clickThroughCalibration(page, skipButton.first());
+      await confirmActionDialogIfPresent(page);
     }
 
     await page.waitForURL(/\/progress/, { timeout: 15000 });
@@ -159,6 +172,7 @@ test.describe('Running a workout (regression)', () => {
       await clickThroughCalibration(page, startBlockButton);
     }
     await clickThroughCalibration(page, skipButton.first());
+    await confirmActionDialogIfPresent(page);
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
 
     // The advanced index is persisted to workout_sessions.progress in a background
@@ -338,6 +352,7 @@ test.describe('Running a workout (regression)', () => {
       await clickThroughCalibration(page, startBlockButton);
     }
     await clickThroughCalibration(page, skipButton.first());
+    await confirmActionDialogIfPresent(page);
     await expect(page.getByText(/Exercise 2 of/i)).toBeVisible({ timeout: 10000 });
 
     await clickThroughCalibration(page, page.locator('header button').filter({ has: page.locator('svg.lucide-rotate-ccw') }));

@@ -12,6 +12,16 @@ import {
   playGoBeep,
   primeTimerAudio,
 } from '@/lib/timerSounds';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 function formatClock(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -37,6 +47,7 @@ export default function SupersetPanel({
   onStartTimer,
   onAdjustRest,
   onSwap = null,
+  onRoundSkip = null,
   label = 'Superset',
   unitLabel = 'Round',
   weightLoadingKey = null,
@@ -49,6 +60,9 @@ export default function SupersetPanel({
   const [phase, setPhase] = useState(() => initialState?.phase ?? 'ready'); // ready | leadin | running | resting
   const [, setTick] = useState(0);
   const [muted, setMuted] = useState(() => isTimerAudioMuted());
+  // 'skip' (whole exercise), 'swap' (whole exercise) or 'skipRound' (current/upcoming
+  // round only) — set while a confirm dialog is open, null otherwise.
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const toggleMuted = () => {
     const next = !muted;
@@ -244,15 +258,65 @@ export default function SupersetPanel({
     emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
   };
 
+  // While resting, the round just finished is already logged — "skip round"
+  // there means bail on the round coming up next, not the one just done.
+  const pendingSkipRound = phase === 'resting' ? round + 1 : round;
+
+  const skipRound = () => {
+    startAtRef.current = null;
+    restEndAtRef.current = null;
+    roundElapsedRef.current = 0;
+    onRoundSkip?.(current.key, pendingSkipRound, rounds);
+    if (pendingSkipRound >= rounds) {
+      setPhase('ready');
+      onFinish?.();
+      return;
+    }
+    const nextRound = pendingSkipRound + 1;
+    setRound(nextRound);
+    setExIndex(0);
+    setPhase('ready');
+    emitState({ phase: 'ready', round: nextRound, exIndex: 0 });
+  };
+
+  const confirmLabel = (label || 'exercise').toLowerCase();
+  const roundLabel = (unitLabel || 'round').toLowerCase();
+  const runConfirmedAction = () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (action === 'skip') onSkip?.();
+    else if (action === 'swap') onSwap?.(current);
+    else if (action === 'skipRound') skipRound();
+  };
+
+  const confirmCopy = {
+    skip: {
+      title: `Skip ${confirmLabel}?`,
+      description: `${current?.exercise_name || 'This exercise'} will be marked as skipped and you'll move on to what's next.`,
+      confirm: 'Skip',
+    },
+    swap: {
+      title: `Swap ${current?.exercise_name || 'this exercise'}?`,
+      description: "You'll pick a replacement and start it fresh from the first set.",
+      confirm: 'Swap',
+    },
+    skipRound: {
+      title: `Skip ${roundLabel} ${pendingSkipRound}?`,
+      description: `${unitLabel} ${pendingSkipRound} will be recorded as skipped and you'll move on to the next one.`,
+      confirm: 'Skip',
+    },
+  }[confirmAction] || null;
+
   return (
+    <>
     <BlockPanel
       label={label}
       roundLabel={`${unitLabel} ${round} of ${rounds}`}
       exercises={exercises}
       activeKey={current?.key}
       onSelectExercise={phase === 'ready' ? selectExercise : undefined}
-      onSkip={onSkip}
-      skipLabel={`Skip ${(label || 'exercise').toLowerCase()}`}
+      onSkip={onSkip && phase !== 'running' && phase !== 'resting' ? () => setConfirmAction('skip') : null}
+      skipLabel={`Skip ${confirmLabel}`}
       headerRight={(
         <button
           onClick={toggleMuted}
@@ -281,7 +345,14 @@ export default function SupersetPanel({
             </div>
           )}
           <p className="text-xs text-muted-foreground">{unitLabel} {round} total: {formatClock(roundTotal)}</p>
-          <button onClick={skipRest} className="text-xs text-muted-foreground underline">Skip rest</button>
+          <div className="flex items-center gap-4">
+            <button onClick={skipRest} className="text-xs text-muted-foreground underline">Skip rest</button>
+            {onRoundSkip && pendingSkipRound <= rounds && (
+              <button onClick={() => setConfirmAction('skipRound')} className="text-xs text-muted-foreground underline">
+                Skip {roundLabel} {pendingSkipRound}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 w-full">
@@ -298,6 +369,11 @@ export default function SupersetPanel({
               <Button onClick={finishSet} className="w-full rounded-xl h-14 bg-brand text-brand-foreground hover:bg-brand/90">
                 <Check className="h-5 w-5 mr-2" /> Done
               </Button>
+              {onRoundSkip && (
+                <button onClick={() => setConfirmAction('skipRound')} className="text-xs text-muted-foreground underline">
+                  Skip this {roundLabel}
+                </button>
+              )}
             </>
           ) : (
             <div className="flex items-center gap-2 w-full">
@@ -305,7 +381,7 @@ export default function SupersetPanel({
                 <Play className="h-5 w-5 mr-2" /> Start set
               </Button>
               {onSwap && (
-                <button onClick={() => onSwap(current)} className="flex items-center justify-center w-14 h-14 rounded-xl border border-border text-muted-foreground shrink-0">
+                <button onClick={() => setConfirmAction('swap')} className="flex items-center justify-center w-14 h-14 rounded-xl border border-border text-muted-foreground shrink-0">
                   <RefreshCw className="h-4 w-4" />
                 </button>
               )}
@@ -315,5 +391,18 @@ export default function SupersetPanel({
         </div>
       )}
     </BlockPanel>
+    <AlertDialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmCopy?.title}</AlertDialogTitle>
+          <AlertDialogDescription>{confirmCopy?.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={runConfirmedAction}>{confirmCopy?.confirm}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
