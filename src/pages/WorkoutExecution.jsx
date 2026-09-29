@@ -1433,7 +1433,7 @@ export default function WorkoutExecution() {
                     ) : exRequiresWeight && (
                       <div className="mb-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-muted-foreground">Max weight used (kg)</label>
+                          <label className="text-xs font-medium text-muted-foreground">Max weight used (kg){e.details?.implement_count === 2 ? ' each' : ''}</label>
                           <button type="button" onClick={() => updateBlockLogEntry(e.key, entry.bodyweight ? { bodyweight: false, max_weight: null } : { bodyweight: true, max_weight: 0 })} className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors', entry.bodyweight ? 'bg-brand text-brand-foreground border-brand' : 'border-border text-muted-foreground')}>Bodyweight</button>
                         </div>
                         {entry.bodyweight ? (
