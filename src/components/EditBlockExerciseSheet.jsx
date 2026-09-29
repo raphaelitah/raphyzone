@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Search, Loader2, X } from 'lucide-react';
+
+const PICK_COLUMNS = 'id, exercise_code, name, movement_pattern, equipment';
 
 export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, open, onOpenChange, onSave }) {
   const [form, setForm] = useState({
@@ -20,7 +23,13 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
   });
   const [saving, setSaving] = useState(false);
   const [exerciseEquipment, setExerciseEquipment] = useState(null);
-  const isTreadmill = exerciseEquipment === 'Treadmill';
+  const [pickedExercise, setPickedExercise] = useState(null);
+  const [swapping, setSwapping] = useState(false);
+  const [swapQuery, setSwapQuery] = useState('');
+  const [swapResults, setSwapResults] = useState([]);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const swapCacheRef = useRef(new Map());
+  const isTreadmill = (pickedExercise?.equipment ?? exerciseEquipment) === 'Treadmill';
 
   useEffect(() => {
     if (blockExercise) {
@@ -37,6 +46,10 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
         ladder_end_reps: blockExercise.ladder_end_reps?.toString() || '',
         ladder_step: blockExercise.ladder_step?.toString() || '1',
       });
+      setPickedExercise(null);
+      setSwapping(false);
+      setSwapQuery('');
+      setSwapResults([]);
     }
   }, [blockExercise, prescribedSets]);
 
@@ -52,10 +65,50 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
     return () => { cancelled = true; };
   }, [blockExercise]);
 
+  useEffect(() => {
+    if (!swapping) return;
+    const q = swapQuery.trim();
+    if (!q) {
+      setSwapResults([]);
+      return;
+    }
+    const cached = swapCacheRef.current.get(q);
+    if (cached) {
+      setSwapResults(cached);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSwapLoading(true);
+      try {
+        const { data } = await supabase
+          .from('exercises')
+          .select(PICK_COLUMNS)
+          .not('submission_status', 'in', '(pending,rejected)')
+          .ilike('name', `%${q}%`)
+          .order('name')
+          .limit(50);
+        swapCacheRef.current.set(q, data || []);
+        setSwapResults(data || []);
+      } catch {
+        setSwapResults([]);
+      } finally {
+        setSwapLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [swapQuery, swapping]);
+
+  const handlePickSwap = (ex) => {
+    setPickedExercise(ex);
+    setSwapping(false);
+    setSwapQuery('');
+    setSwapResults([]);
+  };
+
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({ ...form, exercise: pickedExercise });
     } finally {
       setSaving(false);
     }
@@ -68,9 +121,77 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
           <>
             <SheetHeader className="px-5 pt-5">
               <SheetTitle className="text-left">Edit exercise</SheetTitle>
-              <p className="text-sm text-muted-foreground text-left">{blockExercise.exercise_title_raw}</p>
+              <p className="text-sm text-muted-foreground text-left">{pickedExercise?.name || blockExercise.exercise_title_raw}</p>
             </SheetHeader>
             <div className="px-5 pb-8 space-y-4">
+              {blockExercise.step_type !== 'rest' && (
+                swapping ? (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={swapQuery}
+                        onChange={(e) => setSwapQuery(e.target.value)}
+                        placeholder="Search exercises…"
+                        className="pl-9 pr-9"
+                        autoFocus
+                      />
+                      {swapQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSwapQuery('')}
+                          aria-label="Clear search"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {swapLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-5 w-5 text-brand animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[40dvh] overflow-y-auto">
+                        {swapResults.map((ex) => (
+                          <button
+                            key={ex.id}
+                            onClick={() => handlePickSwap(ex)}
+                            className="w-full text-left rounded-xl border border-border p-3 hover:border-foreground/20"
+                          >
+                            <p className="text-sm font-medium truncate">{ex.name}</p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {ex.movement_pattern ? ex.movement_pattern.replace(/_/g, ' ') : ''}
+                              {ex.equipment ? ` · ${ex.equipment}` : ''}
+                            </p>
+                          </button>
+                        ))}
+                        {swapQuery.trim() && !swapLoading && swapResults.length === 0 && (
+                          <p className="text-center text-sm text-muted-foreground py-6">No exercises found.</p>
+                        )}
+                        {!swapQuery.trim() && (
+                          <p className="text-center text-sm text-muted-foreground py-6">Start typing to search the exercise library…</p>
+                        )}
+                      </div>
+                    )}
+                    <Button variant="outline" onClick={() => setSwapping(false)} className="w-full rounded-xl h-10">
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between rounded-lg border border-input px-3 py-2.5">
+                    <div className="min-w-0">
+                      <Label>Exercise</Label>
+                      <p className="text-sm font-medium truncate">{pickedExercise?.name || blockExercise.exercise_title_raw}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setSwapping(true)} className="shrink-0 rounded-lg">
+                      Change
+                    </Button>
+                  </div>
+                )
+              )}
+              {!swapping && (
+              <>
               <div className="flex items-center justify-between rounded-lg border border-input px-3 py-2.5">
                 <div>
                   <Label className="cursor-pointer" onClick={() => setForm({ ...form, is_ladder: !form.is_ladder })}>Ladder</Label>
@@ -189,6 +310,8 @@ export default function EditBlockExerciseSheet({ blockExercise, prescribedSets, 
               <Button onClick={handleSubmit} disabled={saving} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
                 {saving ? 'Saving…' : 'Save changes'}
               </Button>
+              </>
+              )}
             </div>
           </>
         )}

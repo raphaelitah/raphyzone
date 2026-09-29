@@ -50,6 +50,10 @@ export function useBlockExerciseCrud({
       : null;
 
     const update = {
+      ...(formData.exercise ? {
+        exercise_id: formData.exercise.exercise_code,
+        exercise_title_raw: formData.exercise.name,
+      } : {}),
       prescription_value: ladderSeq ? ladderSeq.join('-') : formData.prescription_value,
       load_value: formData.load_value,
       notes: formData.notes,
