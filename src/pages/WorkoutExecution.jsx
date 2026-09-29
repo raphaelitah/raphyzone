@@ -105,6 +105,7 @@ export default function WorkoutExecution() {
   // block_id (superset) or exercise key (solo) so it survives navigating away
   // and back — otherwise the panel remounts and restarts the current set.
   const [panelProgress, setPanelProgress] = useState({});
+  const [swaps, setSwaps] = useState({}); // original block_exercise_id -> substituted exercise row; session-only, persisted in progress so a reload keeps it
   // Set the instant the athlete finishes the last block/exercise's feedback
   // screen (or skips past it) — from then on the exercise UI is replaced by a
   // dedicated saving/done/error screen. This must be set synchronously in the
@@ -178,10 +179,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps]);
 
   const pendingLoadRef = useRef(null);
 
@@ -270,10 +271,18 @@ export default function WorkoutExecution() {
     const setsByBlockExercise = buildSetsByBlockExercise(sets);
     const exerciseMap = buildExerciseMapByCode(referencedExs);
     const merged = buildFlatExerciseList(w, blocksByWorkout, blockExercisesByBlock, setsByBlockExercise, exerciseMap);
-    const finalExercises = merged.map((e) => ({
-      ...e,
-      target_weight: (e.exercise_id && exerciseWeights[e.exercise_id] != null) ? exerciseWeights[e.exercise_id] : null,
-    }));
+    // Re-apply on-the-spot swaps from a previous visit to this session: the
+    // rows above come from the saved workout, which a swap never changes.
+    const savedSwaps = (sessionExisted && sess.progress?.swaps && typeof sess.progress.swaps === 'object') ? sess.progress.swaps : {};
+    const finalExercises = merged.map((e, i) => {
+      const sw = savedSwaps[e.key];
+      const swapped = sw ? { ...e, swapOrigin: e.key, exercise_id: sw.exercise_code || sw.id, exercise_name: sw.name, details: sw, key: (sw.exercise_code || sw.id) + '-sub-' + i } : e;
+      return {
+        ...swapped,
+        target_weight: (swapped.exercise_id && exerciseWeights[swapped.exercise_id] != null) ? exerciseWeights[swapped.exercise_id] : null,
+      };
+    });
+    if (Object.keys(savedSwaps).length) setSwaps(savedSwaps);
     setExercises(finalExercises);
 
     // A workout reached through a weekly plan already has every exercise's
@@ -1066,8 +1075,10 @@ export default function WorkoutExecution() {
     if (targetIdx === -1) { setSubSheet(false); return; }
     const newId = alt.exercise.exercise_code || alt.exercise.id;
     const next = [...exercises];
-    next[targetIdx] = { ...next[targetIdx], exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + targetIdx, target_weight: null };
+    const swapOrigin = next[targetIdx].swapOrigin ?? next[targetIdx].key;
+    next[targetIdx] = { ...next[targetIdx], swapOrigin, exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + targetIdx, target_weight: null };
     setExercises(next);
+    setSwaps((s) => ({ ...s, [swapOrigin]: alt.exercise }));
     setLogs((l) => { const c = { ...l }; delete c[targetKey]; return c; });
     setSubSheet(false);
     setSubTarget(null);
