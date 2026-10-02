@@ -13,7 +13,7 @@ import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
 import { getProfileCompleteness } from '@/lib/profileGaps';
 import { IconButton } from '@/components/ui/icon-button';
-import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity } from 'lucide-react';
+import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity, Users } from 'lucide-react';
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
@@ -152,6 +152,12 @@ export default function Profile() {
         {isAdmin && (
           <Button onClick={() => navigate('/admin-taxonomy')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
             <span className="flex items-center gap-2"><Tags className="h-4 w-4 text-brand" /> Taxonomy Management</span>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+        {isAdmin && (
+          <Button onClick={() => navigate('/admin-users')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
+            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-brand" /> Users</span>
             <ChevronRight className="h-4 w-4" />
           </Button>
         )}
