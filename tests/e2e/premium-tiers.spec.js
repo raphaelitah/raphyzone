@@ -15,6 +15,13 @@ async function firstApprovedWorkout(api) {
 }
 
 test.describe('Free / premium tiers', () => {
+  // A leftover in-progress session (one allowed per user) would make the
+  // session-insert checks below fail for the wrong reason.
+  test.beforeEach(async () => {
+    const free = await apiAs(FREE);
+    await free.from('workout_sessions').delete().eq('status', 'in_progress');
+  });
+
   test('free-tier user reports free status and the configured AI quota', async () => {
     const api = await apiAs(FREE);
     const { data, error } = await api.rpc('my_entitlement');
