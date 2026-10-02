@@ -31,7 +31,7 @@ export default function PlanCard() {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [opening, setOpening] = useState(false);
 
-  if (!entitlement) return null;
+  if (!entitlement || entitlement.paywall_enabled === false) return null;
   const { title, detail } = describePlan(entitlement, trialDaysLeft);
   const needsUpgrade = entitlement.reason === 'free' || entitlement.reason === 'trial';
 

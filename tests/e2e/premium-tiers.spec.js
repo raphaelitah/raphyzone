@@ -2,11 +2,19 @@ import { test, expect } from '@playwright/test';
 import { login, ATHLETE, ADMIN, FREE } from './fixtures/auth';
 import { makeApiClient } from './fixtures/apiClient';
 
-async function apiAs(user) {
-  const api = makeApiClient();
-  const { error } = await api.auth.signInWithPassword(user);
-  if (error) throw new Error(`sign-in failed for ${user.email}: ${error.message}`);
-  return api;
+// One real sign-in per account for the whole file — password sign-ins are
+// rate-limited, and each test only needs an authenticated client.
+const clients = new Map();
+function apiAs(user) {
+  if (!clients.has(user.email)) {
+    clients.set(user.email, (async () => {
+      const api = makeApiClient();
+      const { error } = await api.auth.signInWithPassword(user);
+      if (error) throw new Error(`sign-in failed for ${user.email}: ${error.message}`);
+      return api;
+    })());
+  }
+  return clients.get(user.email);
 }
 
 async function firstApprovedWorkout(api) {
@@ -120,11 +128,13 @@ test.describe('Free / premium tiers', () => {
     await expect(page.getByTestId('plan-banner')).toHaveCount(0);
   });
 
-  test('profile shows the plan, and free users can pick a billing period', async ({ page }) => {
+  test('profile shows premium status for premium accounts', async ({ page }) => {
     await login(page);
     await page.goto('/profile');
     await expect(page.getByTestId('plan-card')).toContainText('Premium');
+  });
 
+  test('free users see their plan and can pick a billing period', async ({ page }) => {
     await login(page, FREE);
     await page.goto('/profile');
     const card = page.getByTestId('plan-card');
@@ -137,10 +147,40 @@ test.describe('Free / premium tiers', () => {
     await expect(sheet.getByRole('button', { name: /continue to payment/i })).toBeEnabled();
   });
 
+  test('turning the paywall off gives everyone full access, and back on restores it', async () => {
+    const admin = await apiAs(ADMIN);
+    const free = await apiAs(FREE);
+    const { data: { user } } = await free.auth.getUser();
+    const workout = await firstApprovedWorkout(admin);
+    await admin.from('workouts').update({ is_free: false }).eq('id', workout.id);
+    const session = { user_id: user.id, workout_id: workout.id, workout_name: workout.name, date: new Date().toISOString().slice(0, 10), status: 'in_progress' };
+
+    try {
+      const off = await admin.from('app_settings').update({ value: false }).eq('key', 'paywall_enabled');
+      expect(off.error).toBeNull();
+      const { data: open } = await free.rpc('my_entitlement');
+      expect(open.is_premium).toBe(true);
+      expect(open.reason).toBe('open');
+      expect(open.paywall_enabled).toBe(false);
+      const started = await free.from('workout_sessions').insert(session).select().single();
+      expect(started.error).toBeNull();
+      await free.from('workout_sessions').delete().eq('id', started.data.id);
+    } finally {
+      await admin.from('app_settings').update({ value: true }).eq('key', 'paywall_enabled');
+    }
+
+    const { data: locked } = await free.rpc('my_entitlement');
+    expect(locked.is_premium).toBe(false);
+    expect(locked.reason).toBe('free');
+    const blocked = await free.from('workout_sessions').insert(session);
+    expect(blocked.error?.code).toBe('42501');
+  });
+
   test('admin sees plan status per user and the limits form', async ({ page }) => {
     await login(page, ADMIN);
     await page.goto('/admin-users');
     await expect(page.getByTestId('limits-form')).toBeVisible();
+    await expect(page.getByRole('switch', { name: /free \/ paid plans/i })).toBeChecked();
     await expect(page.getByLabel('Free AI actions / month')).toHaveValue(/\d+/, { timeout: 15000 });
     await expect(page.getByTestId('user-access').first()).toBeVisible({ timeout: 15000 });
   });

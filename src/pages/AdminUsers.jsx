@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Loader2, Send } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,6 +47,7 @@ export default function AdminUsers() {
   const [inviting, setInviting] = useState(false);
   const [settings, setSettings] = useState({ trial_days: '', free_ai_actions_per_month: '' });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [paywallEnabled, setPaywallEnabled] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -66,10 +68,27 @@ export default function AdminUsers() {
   const loadSettings = async () => {
     const { data } = await supabase.from('app_settings').select('key, value');
     const byKey = Object.fromEntries((data || []).map((r) => [r.key, r.value]));
+    setPaywallEnabled(byKey.paywall_enabled !== false);
     setSettings({
       trial_days: String(byKey.trial_days ?? 14),
       free_ai_actions_per_month: String(byKey.free_ai_actions_per_month ?? 1),
     });
+  };
+
+  // Master switch: when off, is_premium() is true for everyone in the database,
+  // so every free-tier lock and the AI quota open at once.
+  const togglePaywall = async (enabled) => {
+    setPaywallEnabled(enabled);
+    const { error } = await supabase.from('app_settings').upsert(
+      { key: 'paywall_enabled', value: enabled, updated_date: new Date().toISOString() },
+      { onConflict: 'key' },
+    );
+    if (error) {
+      setPaywallEnabled(!enabled);
+      toast({ title: 'Could not update', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: enabled ? 'Free/paid plans are on' : 'Free/paid plans are off — everyone has full access' });
   };
 
   const saveSettings = async (e) => {
@@ -137,7 +156,14 @@ export default function AdminUsers() {
       </form>
 
       <form onSubmit={saveSettings} className="rounded-xl border border-border p-3 mb-5 space-y-3" data-testid="limits-form">
-        <p className="text-sm font-medium">Plans & limits</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label htmlFor="setting-paywall" className="text-sm font-medium">Free / paid plans</Label>
+            <p className="text-[11px] text-muted-foreground">Off = everyone gets full access, no locks or AI limits.</p>
+          </div>
+          <Switch id="setting-paywall" checked={paywallEnabled} onCheckedChange={togglePaywall} />
+        </div>
+        <p className="text-sm font-medium pt-1">Plans & limits</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="setting-trial-days" className="text-xs">Trial length (days)</Label>
