@@ -7,6 +7,7 @@ import ActiveWorkoutBanner from '@/components/ActiveWorkoutBanner';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { onShowUpgrade } from '@/lib/entitlements';
+import { toast } from '@/components/ui/use-toast';
 
 export default function Layout() {
   const { user } = useAuth();
@@ -15,6 +16,19 @@ export default function Layout() {
   const [loading, setLoading] = useState(true);
   const [upgrade, setUpgrade] = useState({ open: false, reason: 'ai' });
   const { entitlement, trialDaysLeft, refresh: refreshEntitlement } = useEntitlement();
+
+  // Back from Stripe Checkout. The webhook confirms the subscription a moment
+  // after the redirect, so re-check the entitlement a few times.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('checkout');
+    if (!result) return undefined;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (result !== 'success') return undefined;
+    toast({ title: 'Payment received', description: 'Unlocking Premium…' });
+    const timers = [1500, 4000, 8000].map((ms) => setTimeout(refreshEntitlement, ms));
+    return () => timers.forEach(clearTimeout);
+  }, [refreshEntitlement]);
 
   useEffect(() => onShowUpgrade((reason) => {
     setUpgrade({ open: true, reason });

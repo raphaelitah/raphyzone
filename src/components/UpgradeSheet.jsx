@@ -1,7 +1,12 @@
-import { Lock, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Lock, Sparkles, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useEntitlement } from '@/hooks/useEntitlement';
+import { PRICING } from '@/lib/pricing';
+import { startCheckout } from '@/lib/billing';
+import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/use-toast';
 
 const PERKS = [
   'The full workout library',
@@ -21,6 +26,18 @@ export function LockBadge({ className = '' }) {
 export default function UpgradeSheet({ open, onOpenChange, reason = 'workout' }) {
   const { entitlement } = useEntitlement();
   const limit = entitlement?.ai_limit;
+  const [interval, setInterval] = useState('year');
+  const [busy, setBusy] = useState(false);
+
+  const subscribe = async () => {
+    setBusy(true);
+    try {
+      await startCheckout(interval);
+    } catch (err) {
+      toast({ title: 'Could not start checkout', description: err.message, variant: 'destructive' });
+      setBusy(false);
+    }
+  };
 
   const title = { ai: 'AI limit reached', workout: 'This workout is premium' }[reason] || 'Go Premium';
   const description = {
@@ -41,7 +58,29 @@ export default function UpgradeSheet({ open, onOpenChange, reason = 'workout' })
         <ul className="mt-4 space-y-2 text-sm">
           {PERKS.map((perk) => <li key={perk} className="flex items-center gap-2"><span className="text-brand">✓</span>{perk}</li>)}
         </ul>
-        <Button disabled className="w-full rounded-xl h-12 mt-5">Subscriptions coming soon</Button>
+        <div className="grid grid-cols-2 gap-2 mt-5" role="radiogroup" aria-label="Billing period">
+          {['year', 'month'].map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={interval === key}
+              onClick={() => setInterval(key)}
+              className={cn('rounded-xl border p-3 text-left transition-colors', interval === key ? 'border-brand bg-brand/5' : 'border-border')}
+            >
+              <span className="text-xs text-muted-foreground flex items-center justify-between">
+                {PRICING[key].label}
+                {key === 'year' && <span className="text-[10px] font-medium text-brand">Save {PRICING.year.savePct}%</span>}
+              </span>
+              <span className="block text-lg font-semibold leading-tight mt-0.5">{PRICING.currency}{PRICING[key].amount}<span className="text-xs font-normal text-muted-foreground">{PRICING[key].cadence}</span></span>
+              {key === 'year' && <span className="block text-[11px] text-muted-foreground">{PRICING.currency}{PRICING.year.perMonth}/month</span>}
+            </button>
+          ))}
+        </div>
+        <Button onClick={subscribe} disabled={busy} className="w-full rounded-xl h-12 mt-3 bg-brand text-brand-foreground hover:bg-brand/90">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue to payment'}
+        </Button>
+        <p className="text-[11px] text-muted-foreground text-center mt-2">Cancel anytime. Secure payment by Stripe.</p>
         <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full rounded-xl h-11 mt-1">Not now</Button>
       </SheetContent>
     </Sheet>

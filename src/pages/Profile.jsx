@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
+import PlanCard from '@/components/PlanCard';
 import { getProfileCompleteness } from '@/lib/profileGaps';
 import { IconButton } from '@/components/ui/icon-button';
 import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity, Users } from 'lucide-react';
@@ -118,6 +119,8 @@ export default function Profile() {
       </Card>
 
       <ProfileCalibrationCard profile={profile} />
+
+      <PlanCard />
 
       <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Settings</h2>
       <Card className="rounded-2xl border-border p-4 mb-5">

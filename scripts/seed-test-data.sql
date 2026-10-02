@@ -193,6 +193,13 @@ begin
   end if;
 end $$;
 
+-- Test accounts other than test-free are permanently premium, so the trial
+-- running out never turns the regular e2e suite into a free-tier run.
+update public.user_entitlements e set premium_override = true
+from auth.users u
+where u.id = e.user_id
+  and u.email in ('test-admin@raphyzone.dev', 'test-athlete@raphyzone.dev', 'qa-coach@raphyzone.dev');
+
 -- Test credentials (for reference):
 --   Admin:    test-admin@raphyzone.dev   / TestAdmin123!
 --   Athlete:  test-athlete@raphyzone.dev / TestAthlete123!

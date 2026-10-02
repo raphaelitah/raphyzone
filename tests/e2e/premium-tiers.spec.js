@@ -25,11 +25,10 @@ test.describe('Free / premium tiers', () => {
     expect(data.ai_remaining).toBeLessThanOrEqual(data.ai_limit);
   });
 
-  test('user on a trial is premium', async () => {
+  test('premium accounts have full access and no AI limit', async () => {
     const api = await apiAs(ATHLETE);
     const { data } = await api.rpc('my_entitlement');
     expect(data.is_premium).toBe(true);
-    expect(data.reason).toBe('trial');
     expect(data.ai_limit).toBeNull();
   });
 
@@ -106,12 +105,29 @@ test.describe('Free / premium tiers', () => {
     await expect(page.getByRole('heading', { name: /is premium/i })).toBeVisible({ timeout: 15000 });
   });
 
-  test('trial users see a trial banner and no locks', async ({ page }) => {
+  test('premium users see no locks or plan banner', async ({ page }) => {
     await login(page);
     await page.goto('/workouts');
-    await expect(page.getByTestId('plan-banner')).toContainText(/Premium trial · \d+ days? left/);
     await expect(page.locator('button:has(p.font-semibold)').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Premium', { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('plan-banner')).toHaveCount(0);
+  });
+
+  test('profile shows the plan, and free users can pick a billing period', async ({ page }) => {
+    await login(page);
+    await page.goto('/profile');
+    await expect(page.getByTestId('plan-card')).toContainText('Premium');
+
+    await login(page, FREE);
+    await page.goto('/profile');
+    const card = page.getByTestId('plan-card');
+    await expect(card).toContainText('Free plan');
+    await card.getByRole('button', { name: 'Upgrade' }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByRole('radio', { name: /Annual/ })).toHaveAttribute('aria-checked', 'true');
+    await sheet.getByRole('radio', { name: /Monthly/ }).click();
+    await expect(sheet.getByRole('radio', { name: /Monthly/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(sheet.getByRole('button', { name: /continue to payment/i })).toBeEnabled();
   });
 
   test('admin sees plan status per user and the limits form', async ({ page }) => {
