@@ -4,12 +4,22 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import BottomNav from '@/components/BottomNav';
 import ActiveWorkoutBanner from '@/components/ActiveWorkoutBanner';
+import UpgradeSheet from '@/components/UpgradeSheet';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { onShowUpgrade } from '@/lib/entitlements';
 
 export default function Layout() {
   const { user } = useAuth();
   const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [upgrade, setUpgrade] = useState({ open: false, reason: 'ai' });
+  const { entitlement, trialDaysLeft, refresh: refreshEntitlement } = useEntitlement();
+
+  useEffect(() => onShowUpgrade((reason) => {
+    setUpgrade({ open: true, reason });
+    refreshEntitlement();
+  }), [refreshEntitlement]);
 
   useEffect(() => {
     let active = true;
@@ -55,8 +65,20 @@ export default function Layout() {
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-md min-h-screen pb-16">
         <ActiveWorkoutBanner />
+        {entitlement && !isOnboarding && (trialDaysLeft != null || entitlement.reason === 'free') && (
+          <button
+            onClick={() => setUpgrade({ open: true, reason: 'general' })}
+            data-testid="plan-banner"
+            className="w-full text-xs text-muted-foreground bg-muted/50 px-5 py-1.5 text-left"
+          >
+            {trialDaysLeft != null
+              ? `Premium trial · ${trialDaysLeft} ${trialDaysLeft === 1 ? 'day' : 'days'} left`
+              : `Free plan · ${entitlement.ai_remaining} AI ${entitlement.ai_remaining === 1 ? 'action' : 'actions'} left this month`}
+          </button>
+        )}
         <Outlet />
       </main>
+      <UpgradeSheet open={upgrade.open} onOpenChange={(open) => setUpgrade((u) => ({ ...u, open }))} reason={upgrade.reason} />
       <BottomNav />
     </div>
   );

@@ -19,6 +19,7 @@ import RestToWorkoutChoiceSheet from '@/components/RestToWorkoutChoiceSheet';
 import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
 import ProfileGapPrompt from '@/components/ProfileGapPrompt';
 import { useProfileGaps } from '@/hooks/useProfileGaps';
+import { handleAiQuotaError } from '@/lib/entitlements';
 
 const REGENERATING_MESSAGES = [
   'Analyzing history…',
@@ -206,7 +207,7 @@ export default function Home() {
         const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: res.data.plan.id } });
         if (wres.data?.plan) setPlan(wres.data.plan);
       } catch {}
-    } catch { /* ignore */ }
+    } catch (err) { await handleAiQuotaError(err); }
     setRegenerating(false);
   };
 
@@ -227,7 +228,9 @@ export default function Home() {
       });
       if (res.error) throw res.error;
       setSwapAlternatives(res.data.alternatives || []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      if (await handleAiQuotaError(err)) setSwapFor(null);
+    }
     setSwapLoading(false);
   };
 
@@ -441,7 +444,9 @@ export default function Home() {
       const res = await supabase.functions.invoke('swapWorkout', { body: { day: slot.day, slot_type: 'train', other_days: otherDays } });
       if (res.error) throw res.error;
       setRestAiAlternatives(res.data.alternatives || []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      if (await handleAiQuotaError(err)) setRestAiFor(null);
+    }
     setRestAiLoading(false);
   };
 

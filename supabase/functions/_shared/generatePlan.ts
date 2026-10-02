@@ -3,6 +3,7 @@ import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, co
 import { verifyWorkoutReasons } from './verifyWorkoutReasons.ts';
 import { generateWarmup } from './warmupGenerator.ts';
 import { resolveWorkoutExercises } from './resolveWorkoutExercises.ts';
+import { loadApprovedCatalog } from './entitlements.ts';
 
 export interface GeneratePlanRequest {
   week_start_date: string;
@@ -29,7 +30,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
   const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: exerciseCatalog }, { data: existing }] = await Promise.all([
     supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
     supabase.from('workout_feedback').select('*').eq('user_id', user.id),
-    supabase.from('workouts').select('*').eq('status', 'approved'),
+    loadApprovedCatalog(supabase, user.id),
     supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality, dumbbell_substitutable'),
     supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStartDate),
   ]);

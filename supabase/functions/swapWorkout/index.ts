@@ -5,11 +5,14 @@ import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeEquipmentByWorkoutId } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
+import { consumeAiAction, refundAiAction, loadApprovedCatalog, type AiQuota } from '../_shared/entitlements.ts';
 
 // Ported from base44/functions/swapWorkout — unchanged behavior, Supabase data/LLM layer.
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  const supabase = getServiceClient();
+  let quota: AiQuota | null = null;
   try {
     const user = await getUserFromRequest(req);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
@@ -17,17 +20,23 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { current_workout_id, day, other_days, focus, slot_type, activity, modality, week_start_date } = body;
 
-    const supabase = getServiceClient();
+    // Metered: free users get a small monthly quota of AI actions.
+    const metered = await consumeAiAction(supabase, user.id, 'swapWorkout');
+    if ('denied' in metered) return metered.denied;
+    quota = metered.quota;
     const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: weeklyPlans }] = await Promise.all([
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       supabase.from('workout_feedback').select('*').eq('user_id', user.id),
-      supabase.from('workouts').select('*').eq('status', 'approved'),
+      loadApprovedCatalog(supabase, user.id),
       week_start_date
         ? supabase.from('weekly_plans').select('context_answer, context_notes, setup_equipment').eq('user_id', user.id).eq('week_start_date', week_start_date)
         : Promise.resolve({ data: null as any }),
     ]);
     const profile = profiles?.[0];
-    if (!profile) return Response.json({ error: 'Profile not found' }, { status: 404, headers: corsHeaders });
+    if (!profile) {
+      await refundAiAction(supabase, quota);
+      return Response.json({ error: 'Profile not found' }, { status: 404, headers: corsHeaders });
+    }
 
     // Respect this week's saved context/equipment override (set when the plan
     // was generated, e.g. "travelling — bodyweight and running only") so an
@@ -138,6 +147,7 @@ Return JSON with an "alternatives" array of { workout_id, reason }.`;
 
     return Response.json({ alternatives }, { headers: corsHeaders });
   } catch (error) {
+    if (quota) await refundAiAction(supabase, quota);
     return Response.json({ error: (error as Error).message }, { status: 500, headers: corsHeaders });
   }
 });

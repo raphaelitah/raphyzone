@@ -26,6 +26,8 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
+import { handleAiQuotaError } from '@/lib/entitlements';
+import UpgradeSheet from '@/components/UpgradeSheet';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -79,6 +81,8 @@ export default function WorkoutExecution() {
   const [confirmSkipOpen, setConfirmSkipOpen] = useState(false);
   const [confirmSwapOpen, setConfirmSwapOpen] = useState(false);
   const [conflictSession, setConflictSession] = useState(null);
+  // The premium gate on workout_sessions inserts rejects (RLS 42501) a locked workout.
+  const [locked, setLocked] = useState(false);
   const [endingConflict, setEndingConflict] = useState(false);
   const [completedBlockTimers, setCompletedBlockTimers] = useState(() => new Set());
   const [restOverrides, setRestOverrides] = useState({}); // block_id -> rest seconds, sticky for the rest of the session
@@ -420,8 +424,11 @@ export default function WorkoutExecution() {
         }
         if (!active() || !sess) return;
         await finishLoadingWorkout(sess, w, plans, active, sessionExisted);
-      } catch {
-        if (active()) setLoading(false);
+      } catch (err) {
+        if (active()) {
+          if (err?.code === '42501') setLocked(true);
+          setLoading(false);
+        }
       }
     })();
     return () => { alive = false; };
@@ -962,7 +969,7 @@ export default function WorkoutExecution() {
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
 
-      const { data: res } = await supabase.functions.invoke('suggestExerciseSubstitutes', {
+      const { data: res, error: subsError } = await supabase.functions.invoke('suggestExerciseSubstitutes', {
         body: {
           exercise: {
             name: ex.name,
@@ -978,6 +985,7 @@ export default function WorkoutExecution() {
           })),
         },
       });
+      if (subsError) await handleAiQuotaError(subsError);
       const withIds = (res?.alternatives || []).map((a) => {
         const match = ranked.find((x) => x.c.name === a.name);
         return { ...a, exercise: match?.c };
@@ -1194,6 +1202,16 @@ export default function WorkoutExecution() {
   }
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
+  if (locked) {
+    return (
+      <div className="p-6 pt-16 text-center">
+        <h1 className="text-xl font-semibold mb-2">{workout?.name || 'This workout'} is premium</h1>
+        <p className="text-sm text-muted-foreground mb-5">Free accounts include a selection of workouts. Premium unlocks the whole library.</p>
+        <Button variant="outline" onClick={() => navigate('/workouts')} className="rounded-xl">Browse free workouts</Button>
+        <UpgradeSheet open onOpenChange={(o) => { if (!o) navigate('/workouts'); }} reason="workout" />
+      </div>
+    );
+  }
   if (!workout) return <div className="p-6 text-center text-muted-foreground">Workout not found.</div>;
 
   const skipWarmup = () => { setWarmupOutcome('skipped'); setWarmupDismissed(true); };

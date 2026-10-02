@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { ATHLETE, ADMIN, AUTH_DIR } from './fixtures/auth.js';
+import { ATHLETE, ADMIN, FREE, AUTH_DIR } from './fixtures/auth.js';
 
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), '.env.local');
@@ -30,4 +30,5 @@ export default async function globalSetup() {
   loadEnvLocal();
   await saveSession(ATHLETE, 'athlete.json');
   await saveSession(ADMIN, 'admin.json');
+  await saveSession(FREE, 'free.json');
 }

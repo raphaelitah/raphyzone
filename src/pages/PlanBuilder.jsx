@@ -12,6 +12,7 @@ import SwapShortlistSheet from '@/components/SwapShortlistSheet';
 import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
 import RestToWorkoutChoiceSheet from '@/components/RestToWorkoutChoiceSheet';
+import { handleAiQuotaError } from '@/lib/entitlements';
 
 const CONTEXT_OPTIONS = [
   { value: 'normal', label: 'Normal week', desc: 'Nothing unusual' },
@@ -251,8 +252,9 @@ export default function PlanBuilder() {
       setBuildingText(BUILDING_FINAL_MESSAGE);
       await sleep(700);
       setPhase(profile?.auto_approve_plans ? 'auto_approved' : 'review');
-    } catch {
-      setError('Could not generate the plan. Please try again.'); setPhase('context');
+    } catch (err) {
+      if (!(await handleAiQuotaError(err))) setError('Could not generate the plan. Please try again.');
+      setPhase('context');
     }
   };
 
@@ -289,8 +291,8 @@ export default function PlanBuilder() {
       } else {
         await finishGeneratedPlan(res.data);
       }
-    } catch {
-      setError('Regeneration failed.');
+    } catch (err) {
+      if (!(await handleAiQuotaError(err))) setError('Regeneration failed.');
     }
     setRegenStatus('');
     setRegenerating(false);
@@ -316,8 +318,9 @@ export default function PlanBuilder() {
       });
       if (res.error) throw res.error;
       setAlternatives(res.data.alternatives || []);
-    } catch {
-      setError('Could not find alternatives.');
+    } catch (err) {
+      if (await handleAiQuotaError(err)) setSwapFor(null);
+      else setError('Could not find alternatives.');
     }
     setSwapLoading(false);
   };

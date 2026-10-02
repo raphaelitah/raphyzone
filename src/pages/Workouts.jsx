@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus, X } from 'lucide-react';
+import { Dumbbell, Clock, Play, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus, X, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -30,6 +30,9 @@ import WorkoutFilters from '@/components/WorkoutFilters';
 import AddToPlanSheet from '@/components/AddToPlanSheet';
 import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/useBlockExerciseCrud';
 import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import UpgradeSheet, { LockBadge } from '@/components/UpgradeSheet';
+import { Switch } from '@/components/ui/switch';
 
 const BATCH_SIZE = 20;
 const SEARCH_STORAGE_KEY = 'raphyzone:workouts-search-query';
@@ -55,9 +58,11 @@ export default function Workouts() {
   const [selected, setSelected] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { canAccess } = useEntitlement();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [creatingWorkout, setCreatingWorkout] = useState(false);
   const [addingToPlan, setAddingToPlan] = useState(null);
-  const [wForm, setWForm] = useState({ name: '', difficulty: '', workout_category: '', est_duration_min: '', description: '', notes: '' });
+  const [wForm, setWForm] = useState({ name: '', difficulty: '', workout_category: '', est_duration_min: '', description: '', notes: '', is_free: false });
   const [showWorkoutEdit, setShowWorkoutEdit] = useState(false);
   const [savingWorkout, setSavingWorkout] = useState(false);
   const [deletingBlock, setDeletingBlock] = useState(null);
@@ -207,6 +212,7 @@ export default function Workouts() {
         est_duration_min: selected.est_duration_min?.toString() || '',
         description: selected.description || '',
         notes: selected.notes || '',
+        is_free: !!selected.is_free,
       });
       setShowWorkoutEdit(false);
     }
@@ -314,6 +320,7 @@ export default function Workouts() {
         est_duration_min: wForm.est_duration_min ? parseInt(wForm.est_duration_min, 10) : null,
         description: wForm.description || null,
         notes: wForm.notes || null,
+        is_free: !!wForm.is_free,
       }).eq('id', selected.id).select().single();
       if (updated) {
         setSelected(updated);
@@ -498,9 +505,12 @@ export default function Workouts() {
                       {w.format_label}
                     </p>
                   </div>
-                  <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', WORKOUT_DIFFICULTY_META[w.difficulty]?.color)}>
-                    {WORKOUT_DIFFICULTY_META[w.difficulty]?.label}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {!canAccess(w) && <LockBadge />}
+                    <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', WORKOUT_DIFFICULTY_META[w.difficulty]?.color)}>
+                      {WORKOUT_DIFFICULTY_META[w.difficulty]?.label}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
@@ -609,6 +619,13 @@ export default function Workouts() {
                         <div>
                           <Label>Notes</Label>
                           <textarea value={wForm.notes} onChange={(e) => setWForm({ ...wForm, notes: e.target.value })} placeholder="Coach notes, cues, or reminders…" className="w-full mt-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm min-h-[60px] focus:outline-none focus:ring-1 focus:ring-ring" />
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                          <div>
+                            <Label htmlFor="workout-is-free">Free tier</Label>
+                            <p className="text-xs text-muted-foreground">Free accounts can start this workout.</p>
+                          </div>
+                          <Switch id="workout-is-free" checked={wForm.is_free} onCheckedChange={(v) => setWForm({ ...wForm, is_free: v })} />
                         </div>
                         <Button onClick={handleSaveWorkout} disabled={savingWorkout} size="sm" className="w-full rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">
                           {savingWorkout ? 'Saving…' : 'Save details'}
@@ -736,19 +753,30 @@ export default function Workouts() {
                 >
                   <CalendarPlus className="h-4 w-4 mr-2" /> Add to weekly plan
                 </Button>
-                <Button
-                  asChild
-                  className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90"
-                >
-                  <Link to={`/workout/${selected.id}`} onClick={() => setSelected(null)}>
-                    <Play className="h-4 w-4 mr-2" /> Start workout
-                  </Link>
-                </Button>
+                {canAccess(selected) ? (
+                  <Button
+                    asChild
+                    className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90"
+                  >
+                    <Link to={`/workout/${selected.id}`} onClick={() => setSelected(null)}>
+                      <Play className="h-4 w-4 mr-2" /> Start workout
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setUpgradeOpen(true)}
+                    className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90"
+                  >
+                    <Lock className="h-4 w-4 mr-2" /> Unlock with Premium
+                  </Button>
+                )}
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      <UpgradeSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} reason="workout" />
 
       <ConfirmDeleteDialog
         open={!!deletingBe}

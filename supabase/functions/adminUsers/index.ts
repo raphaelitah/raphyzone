@@ -7,8 +7,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PER_PAGE = 1000;
 
 // Admin-only user management: `{ action: 'list' }` returns every user with
-// their last sign-in and completed-workout count; `{ action: 'invite', email }`
-// sends a Supabase invite email. Both need the service role (auth.users is not
+// their last sign-in, completed-workout count and premium/trial status;
+// `{ action: 'invite', email }` sends a Supabase invite email;
+// `{ action: 'set_access', user_id, ... }` grants premium or extends a trial. Both need the service role (auth.users is not
 // readable from the browser), so the caller's admin role is checked first.
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -21,7 +22,24 @@ Deno.serve(async (req: Request) => {
     const { data: caller } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
     if (caller?.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403, headers: corsHeaders });
 
-    const { action, email, redirectTo } = await req.json();
+    const { action, email, redirectTo, user_id, premium_override, extend_trial_days } = await req.json();
+
+    // Grants/revokes premium access for one user: `premium_override` toggles a
+    // permanent admin grant; `extend_trial_days` pushes the trial end that many
+    // days past now (or past its current end if it is still running).
+    if (action === 'set_access') {
+      if (!user_id) return Response.json({ error: 'user_id required' }, { status: 400, headers: corsHeaders });
+      const { data: current } = await supabase.from('user_entitlements').select('trial_ends_at').eq('user_id', user_id).maybeSingle();
+      const patch: Record<string, unknown> = { user_id, updated_date: new Date().toISOString() };
+      if (typeof premium_override === 'boolean') patch.premium_override = premium_override;
+      if (Number.isFinite(extend_trial_days) && extend_trial_days > 0) {
+        const base = Math.max(Date.now(), current?.trial_ends_at ? new Date(current.trial_ends_at).getTime() : 0);
+        patch.trial_ends_at = new Date(base + extend_trial_days * 86400000).toISOString();
+      }
+      const { error } = await supabase.from('user_entitlements').upsert(patch, { onConflict: 'user_id' });
+      if (error) return Response.json({ error: error.message }, { status: 400, headers: corsHeaders });
+      return Response.json({ ok: true }, { headers: corsHeaders });
+    }
 
     if (action === 'invite') {
       const address = String(email || '').trim().toLowerCase();
@@ -40,10 +58,13 @@ Deno.serve(async (req: Request) => {
         if (data.users.length < PER_PAGE) break;
       }
 
-      const [{ data: profiles, error: pErr }, { data: sessions, error: sErr }] = await Promise.all([
+      const [{ data: profiles, error: pErr }, { data: sessions, error: sErr }, { data: ents, error: eErr }] = await Promise.all([
         supabase.from('profiles').select('id, role'),
         supabase.from('workout_sessions').select('user_id').eq('status', 'completed').limit(100000),
+        supabase.from('user_entitlements').select('user_id, trial_ends_at, premium_override, premium_until'),
       ]);
+      if (eErr) throw new Error(eErr.message);
+      const entitlements = new Map((ents || []).map((e: any) => [e.user_id, e]));
       if (pErr) throw new Error(pErr.message);
       if (sErr) throw new Error(sErr.message);
 
@@ -61,6 +82,9 @@ Deno.serve(async (req: Request) => {
         invited_at: u.invited_at || null,
         confirmed: !!(u.email_confirmed_at || u.confirmed_at),
         completed_workouts: counts.get(u.id) || 0,
+        trial_ends_at: entitlements.get(u.id)?.trial_ends_at || null,
+        premium_override: !!entitlements.get(u.id)?.premium_override,
+        premium_until: entitlements.get(u.id)?.premium_until || null,
       }));
       return Response.json({ users }, { headers: corsHeaders });
     }

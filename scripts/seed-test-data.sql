@@ -14,6 +14,7 @@ declare
   admin_id uuid;
   athlete_id uuid;
   qa_coach_id uuid;
+  free_id uuid;
 begin
   -- Admin test user
   if not exists (select 1 from auth.users where email = 'test-admin@raphyzone.dev') then
@@ -100,6 +101,44 @@ begin
       )
     );
   end if;
+  -- Free-tier athlete: same profile as test-athlete but with an expired trial, so
+  -- premium-gating specs (tests/e2e/premium-tiers.spec.js) see a locked catalog.
+  if not exists (select 1 from auth.users where email = 'test-free@raphyzone.dev') then
+    free_id := gen_random_uuid();
+
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+      confirmation_token, recovery_token, email_change_token_new,
+      email_change, email_change_token_current, reauthentication_token,
+      created_at, updated_at
+    ) values (
+      '00000000-0000-0000-0000-000000000000', free_id, 'authenticated', 'authenticated',
+      'test-free@raphyzone.dev', crypt('TestFree123!', gen_salt('bf')),
+      now(), '{"provider":"email","providers":["email"]}', '{"full_name":"Test Free"}',
+      '', '', '', '', '', '',
+      now(), now()
+    );
+
+    insert into auth.identities (
+      provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at, id
+    ) values (
+      free_id::text, free_id,
+      jsonb_build_object('sub', free_id::text, 'email', 'test-free@raphyzone.dev'),
+      'email', now(), now(), now(), gen_random_uuid()
+    );
+
+    insert into public.athlete_profiles (
+      user_id, goal, experience_level, onboarded, calibrated,
+      equipment_profile, available_equipment
+    ) values (
+      free_id, 'general_fitness', 'intermediate', true, true,
+      'full_gym', '["barbell","dumbbell","bodyweight","machine","cable","kettlebell","bands"]'::jsonb
+    );
+
+    -- handle_new_user starts every signup on a trial; end this one already.
+    update public.user_entitlements set trial_ends_at = now() - interval '1 day' where user_id = free_id;
+  end if;
   -- Coaching Quality Expert agent account
   --
   -- A dedicated, fully-onboarded and fully-calibrated athlete with a complete
@@ -158,3 +197,4 @@ end $$;
 --   Admin:    test-admin@raphyzone.dev   / TestAdmin123!
 --   Athlete:  test-athlete@raphyzone.dev / TestAthlete123!
 --   QA Coach: qa-coach@raphyzone.dev     / QaCoach123!
+--   Free:     test-free@raphyzone.dev    / TestFree123!  (trial expired; free tier)

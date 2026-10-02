@@ -3,6 +3,7 @@ import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { claimAndRunNextJob } from '../_shared/planQueue.ts';
+import { consumeAiAction, refundAiAction } from '../_shared/entitlements.ts';
 
 // Queued weekly-plan generation: Groq's free tier meters tokens/minute, not
 // requests/minute, so concurrent "build my week" clicks are paced through
@@ -28,18 +29,30 @@ Deno.serve(async (req: Request) => {
 
     const supabase = getServiceClient();
 
+    // Metered: free users get a small monthly quota of AI actions. Charged when
+    // the job is queued; refunded if it can't be queued or fails on the
+    // synchronous path (a queued job that fails later is not refunded).
+    const metered = await consumeAiAction(supabase, user.id, 'generateWeeklyPlan');
+    if ('denied' in metered) return metered.denied;
+
     const { data: job, error: insertError } = await supabase.from('plan_generation_jobs').insert({
       user_id: user.id,
       week_start_date: body.week_start_date,
       request: body,
     }).select().single();
-    if (insertError) throw new Error(`Failed to queue plan generation: ${insertError.message}`);
+    if (insertError) {
+      await refundAiAction(supabase, metered.quota);
+      throw new Error(`Failed to queue plan generation: ${insertError.message}`);
+    }
 
     const claimedJobId = await claimAndRunNextJob(supabase);
     if (claimedJobId === job.id) {
       const { data: finished } = await supabase.from('plan_generation_jobs').select('*').eq('id', job.id).single();
       if (finished?.status === 'done') return Response.json({ ...finished.result, job_id: job.id }, { headers: corsHeaders });
-      if (finished?.status === 'failed') return Response.json({ error: finished.error, job_id: job.id }, { status: 500, headers: corsHeaders });
+      if (finished?.status === 'failed') {
+        await refundAiAction(supabase, metered.quota);
+        return Response.json({ error: finished.error, job_id: job.id }, { status: 500, headers: corsHeaders });
+      }
     }
 
     return Response.json({ queued: true, job_id: job.id }, { headers: corsHeaders });

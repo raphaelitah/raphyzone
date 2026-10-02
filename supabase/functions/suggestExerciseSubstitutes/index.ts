@@ -2,6 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { getUserFromRequest } from '../_shared/auth.ts';
 import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { getServiceClient } from '../_shared/supabaseAdmin.ts';
+import { consumeAiAction, refundAiAction, type AiQuota } from '../_shared/entitlements.ts';
 
 // Ported from the inline base44.integrations.Core.InvokeLLM call in
 // src/pages/WorkoutExecution.jsx's requestSubstitute(). The client ranks
@@ -13,6 +15,8 @@ import { corsHeaders } from '../_shared/cors.ts';
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  const supabase = getServiceClient();
+  let quota: AiQuota | null = null;
   try {
     const user = await getUserFromRequest(req);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
@@ -22,6 +26,11 @@ Deno.serve(async (req: Request) => {
     if (!exercise || !Array.isArray(candidates) || !candidates.length) {
       return Response.json({ alternatives: [] }, { headers: corsHeaders });
     }
+
+    // Metered: free users get a small monthly quota of AI actions.
+    const metered = await consumeAiAction(supabase, user.id, 'suggestExerciseSubstitutes');
+    if ('denied' in metered) return metered.denied;
+    quota = metered.quota;
 
     const prompt = `An athlete wants to substitute the exercise "${exercise.name}" (movement: ${exercise.movement_pattern}, primary muscle: ${exercise.primary_muscle_group || 'n/a'}, equipment: ${exercise.equipment}).
 Here are candidate alternatives with their details:
@@ -54,6 +63,7 @@ For each candidate, explain in one sentence why it's a good substitute (same mus
 
     return Response.json({ alternatives: res.alternatives || [] }, { headers: corsHeaders });
   } catch (error) {
+    if (quota) await refundAiAction(supabase, quota);
     return Response.json({ error: (error as Error).message }, { status: 500, headers: corsHeaders });
   }
 });

@@ -27,6 +27,7 @@ Most flows (workouts, library, profile, admin) require a logged-in user, and log
 
 - Athlete: `test-athlete@raphyzone.dev` / `TestAthlete123!` (default for `login(page)`)
 - Admin: `test-admin@raphyzone.dev` / `TestAdmin123!` (`login(page, ADMIN)`)
+- Free tier (trial expired): `test-free@raphyzone.dev` / `TestFree123!` (`login(page, FREE)`)
 
 Run `scripts/seed-test-data.sql` against the target Supabase project (SQL editor, or the Supabase
 MCP `execute_sql` tool) before running the suite if those accounts don't exist yet — it's a no-op
@@ -39,6 +40,8 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
 - `fixtures/apiClient.js` — direct Supabase client for test setup/teardown (bypasses the UI)
 - `fixtures/reviewSeed.js` — seeds/cleans up pending exercise & workout submissions for
   admin-review tests
+- `premium-tiers.spec.js` — free vs. premium: entitlement status, locked workouts can't be started
+  (RLS) until an admin flags them free, locks/banner in the UI, and clients can't self-grant access
 - `auth.spec.js` — login/logout, protected-route redirects
 - `navigation.spec.js` — bottom-nav smoke test across all main tabs
 - `library.spec.js` — exercise library: list, search, detail sheet

@@ -12,6 +12,12 @@ export const ADMIN = {
   password: process.env.TEST_ADMIN_PASSWORD || 'TestAdmin123!',
 };
 
+// Trial expired, no free workouts flagged by default — see premium-tiers.spec.js.
+export const FREE = {
+  email: process.env.TEST_FREE_EMAIL || 'test-free@raphyzone.dev',
+  password: process.env.TEST_FREE_PASSWORD || 'TestFree123!',
+};
+
 export const AUTH_DIR = path.resolve(process.cwd(), 'tests/e2e/.auth');
 
 function projectRef(url) {
@@ -23,7 +29,7 @@ function projectRef(url) {
 // driving the /login form, but skips a real Supabase sign-in (and its network/rendering
 // cost) on every single test.
 export async function login(page, user = ATHLETE) {
-  const file = path.join(AUTH_DIR, user === ADMIN ? 'admin.json' : 'athlete.json');
+  const file = path.join(AUTH_DIR, user === ADMIN ? 'admin.json' : user === FREE ? 'free.json' : 'athlete.json');
   const session = JSON.parse(fs.readFileSync(file, 'utf8'));
   const key = `sb-${projectRef(process.env.VITE_SUPABASE_URL)}-auth-token`;
   await page.addInitScript(({ storageKey, storageValue }) => {
