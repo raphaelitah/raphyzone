@@ -12,7 +12,7 @@ import { toast } from '@/components/ui/use-toast';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function formatLastLogin(iso) {
+function formatLastActive(iso) {
   if (!iso) return 'Never';
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS);
   if (days < 1) return 'Today';
@@ -80,7 +80,7 @@ export default function AdminUsers() {
     setLoadError('');
     const { data, error } = await supabase.functions.invoke('adminUsers', { body: { action: 'list' } });
     if (error) setLoadError(await invokeError(error));
-    else setUsers([...data.users].sort((a, b) => (b.last_sign_in_at || '').localeCompare(a.last_sign_in_at || '')));
+    else setUsers([...data.users].sort((a, b) => (b.last_active_at || '').localeCompare(a.last_active_at || '')));
     setLoading(false);
   };
 
@@ -236,7 +236,7 @@ export default function AdminUsers() {
                       <span className="inline-flex items-center gap-1"><Dumbbell className="h-3.5 w-3.5" />{u.completed_workouts} <span>workouts</span></span>
                       <span className="inline-flex items-center gap-1">
                         <LogIn className="h-3.5 w-3.5" />
-                        {u.confirmed ? `Last login: ${formatLastLogin(u.last_sign_in_at)}` : 'Invited · not accepted'}
+                        {u.confirmed ? `Last active: ${formatLastActive(u.last_active_at)}` : 'Invited · not accepted'}
                       </span>
                     </div>
                   </div>

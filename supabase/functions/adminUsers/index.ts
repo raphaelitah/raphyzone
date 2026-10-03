@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const [{ data: profiles, error: pErr }, { data: sessions, error: sErr }, { data: ents, error: eErr }] = await Promise.all([
-        supabase.from('profiles').select('id, role'),
+        supabase.from('profiles').select('id, role, last_active_at'),
         supabase.from('workout_sessions').select('user_id').eq('status', 'completed').limit(100000),
         supabase.from('user_entitlements').select('user_id, trial_ends_at, premium_override, premium_until'),
       ]);
@@ -68,6 +68,7 @@ Deno.serve(async (req: Request) => {
       if (pErr) throw new Error(pErr.message);
       if (sErr) throw new Error(sErr.message);
 
+      const lastActive = new Map((profiles || []).map((p: any) => [p.id, p.last_active_at]));
       const roles = new Map((profiles || []).map((p) => [p.id, p.role]));
       const counts = new Map<string, number>();
       for (const s of sessions || []) counts.set(s.user_id, (counts.get(s.user_id) || 0) + 1);
@@ -79,6 +80,7 @@ Deno.serve(async (req: Request) => {
         role: roles.get(u.id) || 'athlete',
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
+        last_active_at: [lastActive.get(u.id), u.last_sign_in_at].filter(Boolean).sort().pop() || null,
         invited_at: u.invited_at || null,
         confirmed: !!(u.email_confirmed_at || u.confirmed_at),
         completed_workouts: counts.get(u.id) || 0,

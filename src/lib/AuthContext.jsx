@@ -2,6 +2,15 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { flushAttribution } from '@/lib/attribution';
 
+// Record that the user actually used the app (sign-in time alone goes stale for
+// persistent sessions). Throttled client-side; the RPC throttles again server-side.
+let lastTouch = 0;
+function touchLastActive() {
+  if (Date.now() - lastTouch < 15 * 60 * 1000) return;
+  lastTouch = Date.now();
+  supabase.rpc('touch_last_active').then(() => {}, () => {});
+}
+
 const AuthContext = createContext(/** @type {any} */ (undefined));
 
 // Supabase's auth user has no `role` or `full_name` — role lives in the
@@ -11,6 +20,7 @@ const AuthContext = createContext(/** @type {any} */ (undefined));
 async function enrichUser(authUser) {
   if (!authUser) return null;
   flushAttribution();
+  touchLastActive();
   const { data: profileRow } = await supabase
     .from('profiles')
     .select('role')
@@ -40,7 +50,15 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(!!session?.user);
     });
 
-    return () => listener.subscription.unsubscribe();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') touchLastActive();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      listener.subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const checkAppState = async () => {
