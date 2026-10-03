@@ -17,6 +17,7 @@
     "test:e2e:mobile": "playwright test --project=mobile-chrome --project=mobile-safari",
     "test:e2e:desktop": "playwright test --project=chromium",
     "test:e2e:all": "playwright test",
+    "social:write": "node scripts/social/write-week.mjs",
     "audit:coaching-quality": "node scripts/coaching-quality-audit.mjs",
     "agent:coaching-quality": "node scripts/coaching-quality-agent.mjs",
     "fuzz:coaching-quality-equipment": "node scripts/coaching-quality-equipment-fuzz.mjs"

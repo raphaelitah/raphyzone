@@ -1,0 +1,41 @@
+name: Instagram writer
+
+# Fridays 09:00 UTC: draft next week's 7 posts into social_posts (status 'draft').
+# Also re-runs on demand; posts marked 'redo' in the approval page are rewritten
+# on the next run. Needs repo secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+# and GROQ_API_KEY and/or GEMINI_API_KEY (free tiers).
+on:
+  schedule:
+    - cron: '0 9 * * 5'
+  workflow_dispatch:
+    inputs:
+      week_start:
+        description: 'Monday to write (YYYY-MM-DD); blank = next Monday'
+        required: false
+      force:
+        description: 'Regenerate every non-published post of that week'
+        type: boolean
+        default: false
+
+concurrency: social-writer
+
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/social/write-week.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          WEEK_START: ${{ inputs.week_start }}
+          FORCE: ${{ inputs.force && '1' || '' }}
