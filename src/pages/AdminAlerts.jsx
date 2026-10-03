@@ -114,7 +114,7 @@ export default function AdminAlerts() {
             <Card key={p.name} className="rounded-2xl border-border p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium">{providerLabel(p.name)}</span>
-                <span className={cn('text-xs font-medium', healthy ? 'text-emerald-600' : 'text-rose-600')}>{healthy ? 'Last call OK' : `Last call: ${lastKind}`}</span>
+                <span className={cn('text-xs font-medium', healthy ? 'text-brand' : 'text-rose-600')}>{healthy ? 'Last call OK' : `Last call: ${lastKind}`}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {p.calls} calls · <span className={rate > 0 ? 'text-rose-600' : ''}>{rate}% errors</span>{p.tokens ? ` · ${fmt(p.tokens)} tokens` : ''}
@@ -144,7 +144,7 @@ export default function AdminAlerts() {
       <h2 className="text-sm font-medium mb-2">Recent errors</h2>
       {errors.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground py-10 flex flex-col items-center gap-2">
-          <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+          <CheckCircle2 className="h-6 w-6 text-brand" />
           No errors in the last {LOOKBACK_DAYS} days.
         </p>
       ) : (

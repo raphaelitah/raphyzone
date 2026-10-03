@@ -153,13 +153,13 @@ export default function AdminReview() {
       <div className="flex gap-1.5 mb-5 rounded-xl bg-muted p-1">
         <button
           onClick={() => setTab('exercises')}
-          className={cn('flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors', tab === 'exercises' ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+          className={cn('flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors', tab === 'exercises' ? 'bg-brand text-brand-foreground shadow-sm' : 'text-muted-foreground')}
         >
           Exercises ({pending.length})
         </button>
         <button
           onClick={() => setTab('workouts')}
-          className={cn('flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors', tab === 'workouts' ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+          className={cn('flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors', tab === 'workouts' ? 'bg-brand text-brand-foreground shadow-sm' : 'text-muted-foreground')}
         >
           Workouts ({pendingWorkouts.length})
         </button>
@@ -182,9 +182,9 @@ export default function AdminReview() {
                   {w.est_duration_min && <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{w.est_duration_min} min</span>}
                 </div>
                 {w.similarity_score != null && (
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 mb-3">
-                    <p className="text-xs font-medium text-amber-800">{Math.round(w.similarity_score * 100)}% similar to an existing workout</p>
-                    {w.similarity_note && <p className="text-[11px] text-amber-700 mt-0.5">{w.similarity_note}</p>}
+                  <div className="rounded-xl bg-brand/5 border border-brand/20 px-3 py-2 mb-3">
+                    <p className="text-xs font-medium text-brand">{Math.round(w.similarity_score * 100)}% similar to an existing workout</p>
+                    {w.similarity_note && <p className="text-[11px] text-brand/80 mt-0.5">{w.similarity_note}</p>}
                   </div>
                 )}
                 {(workoutExercises[w.workout_id] || []).length > 0 && (
