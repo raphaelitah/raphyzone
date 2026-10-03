@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import BottomNav from '@/components/BottomNav';
@@ -83,8 +84,9 @@ export default function Layout() {
           <button
             onClick={() => setUpgrade({ open: true, reason: 'general' })}
             data-testid="plan-banner"
-            className="w-full text-xs text-muted-foreground bg-muted/50 px-5 py-1.5 text-left"
+            className="w-full flex items-center gap-2 text-xs font-medium text-white bg-gradient-to-r from-violet-600 to-purple-500 px-5 py-2.5 text-left shadow-sm"
           >
+            <Sparkles className="h-3.5 w-3.5 shrink-0 opacity-90" />
             {trialDaysLeft != null
               ? `Premium trial · ${trialDaysLeft} ${trialDaysLeft === 1 ? 'day' : 'days'} left`
               : `Free plan · ${entitlement.ai_remaining} AI ${entitlement.ai_remaining === 1 ? 'action' : 'actions'} left this month`}
