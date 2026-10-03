@@ -58,7 +58,10 @@ export default function Workouts() {
   const [selected, setSelected] = useState(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const { canAccess } = useEntitlement();
+  const { canAccess, isPremium, loading: entitlementLoading } = useEntitlement();
+  // Free users see the free workouts first, then the rest (locked) alphabetically.
+  // Premium users keep the plain alphabetical list.
+  const freeFirst = !isPremium;
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [creatingWorkout, setCreatingWorkout] = useState(false);
   const [addingToPlan, setAddingToPlan] = useState(null);
@@ -91,16 +94,27 @@ export default function Workouts() {
   const loadWorkouts = async () => {
     try {
       setStructureLoading(true);
-      const { data } = await supabase
+      const official = () => supabase
         .from('workouts')
         .select('*')
         .eq('ownership_type', 'official')
-        .eq('status', 'approved')
-        .order('name')
-        .limit(BATCH_SIZE);
-      const batch = data || [];
+        .eq('status', 'approved');
+      let batch;
+      let paged;
+      if (freeFirst) {
+        const [{ data: free }, { data: rest }] = await Promise.all([
+          official().eq('is_free', true).order('name'),
+          official().eq('is_free', false).order('name').limit(BATCH_SIZE),
+        ]);
+        paged = rest || [];
+        batch = [...(free || []), ...paged];
+      } else {
+        const { data } = await official().order('name').limit(BATCH_SIZE);
+        paged = data || [];
+        batch = paged;
+      }
       setWorkouts(batch);
-      setHasMore(batch.length === BATCH_SIZE);
+      setHasMore(paged.length === BATCH_SIZE);
       if (selected) {
         const updated = batch.find((w) => w.id === selected.id);
         if (updated) setSelected(updated);
@@ -130,16 +144,19 @@ export default function Workouts() {
     if (loadingMore || !hasMore || loading || searchResults !== null) return;
     setLoadingMore(true);
     try {
-      const lastWorkout = workouts[workouts.length - 1];
-      if (!lastWorkout) { setHasMore(false); return; }
-      const { data } = await supabase
+      // In free-first mode the free workouts are all loaded up front, so paging
+      // only walks the locked ones.
+      const pool = freeFirst ? workouts.filter((w) => !w.is_free) : workouts;
+      const lastWorkout = pool[pool.length - 1];
+      if (!lastWorkout && !freeFirst) { setHasMore(false); return; }
+      let query = supabase
         .from('workouts')
         .select('*')
         .eq('ownership_type', 'official')
-        .eq('status', 'approved')
-        .gt('name', lastWorkout.name)
-        .order('name')
-        .limit(BATCH_SIZE);
+        .eq('status', 'approved');
+      if (freeFirst) query = query.eq('is_free', false);
+      if (lastWorkout) query = query.gt('name', lastWorkout.name);
+      const { data } = await query.order('name').limit(BATCH_SIZE);
       const batch = data || [];
       if (batch.length === 0) {
         setHasMore(false);
@@ -151,7 +168,7 @@ export default function Workouts() {
     } finally {
       setLoadingMore(false);
     }
-  }, [workouts, loadingMore, hasMore, loading, searchResults]);
+  }, [workouts, loadingMore, hasMore, loading, searchResults, freeFirst]);
 
   const loadWorkoutSets = async (workout) => {
     if (!workout || loadedSetsFor.has(workout.workout_id)) return;
@@ -200,8 +217,9 @@ export default function Workouts() {
   };
 
   useEffect(() => {
+    if (entitlementLoading) return;
     loadWorkouts();
-  }, []);
+  }, [entitlementLoading, freeFirst]);
 
   useEffect(() => {
     if (selected) {
@@ -278,7 +296,13 @@ export default function Workouts() {
     }
   }, [selected, structureLoading, loadedSetsFor, blocksByWorkout]);
 
-  const filtered = useMemo(() => (searchResults ?? workouts).filter((w) => {
+  const ordered = useMemo(() => {
+    const base = searchResults ?? workouts;
+    // Stable sort: keeps the name order within the free and locked groups.
+    return freeFirst ? [...base].sort((a, b) => Number(!!b.is_free) - Number(!!a.is_free)) : base;
+  }, [searchResults, workouts, freeFirst]);
+
+  const filtered = useMemo(() => ordered.filter((w) => {
     const matchesRegion = running ? isRunningWorkout(w) : (region === 'All' || w.workout_category === region);
     const matchesDifficulty = difficulty === 'All' || w.difficulty === difficulty.toLowerCase();
     const matchesType = workoutType === 'All' || WORKOUT_FORMATS
@@ -289,7 +313,7 @@ export default function Workouts() {
         // blocks actually uses (e.g. a "superset" workout with tabata timing).
         || (blocksByWorkout[w.workout_id] || []).some((b) => b.workout_format === f.value));
     return matchesRegion && matchesDifficulty && matchesType;
-  }), [workouts, searchResults, region, running, difficulty, workoutType, blocksByWorkout]);
+  }), [ordered, region, running, difficulty, workoutType, blocksByWorkout]);
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop;

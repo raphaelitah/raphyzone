@@ -114,6 +114,34 @@ test.describe('Free / premium tiers', () => {
     await expect(sheet.getByRole('link', { name: /start workout/i })).toHaveCount(0);
   });
 
+  test('free users see free workouts first, then locked ones; premium stays alphabetical', async ({ page, browser }) => {
+    const admin = await apiAs(ADMIN);
+    const { data: freeRows } = await admin.from('workouts').select('name').eq('is_free', true).eq('status', 'approved').eq('ownership_type', 'official');
+    test.skip(!freeRows?.length, 'no workouts flagged free');
+    const cards = (p) => p.locator('button:has(p.font-semibold)');
+
+    await login(page, FREE);
+    await page.goto('/workouts');
+    await expect(cards(page).first()).toBeVisible({ timeout: 10000 });
+    const lockedFlags = await cards(page).evaluateAll((els) => els.map((el) => /\(Premium\)$/.test(el.getAttribute('aria-label') || '')));
+    const firstLocked = lockedFlags.indexOf(true);
+    expect(firstLocked).toBe(freeRows.length);
+    expect(lockedFlags.slice(firstLocked).every(Boolean)).toBe(true);
+    const names = await cards(page).locator('p.font-semibold').allTextContents();
+    const locked = names.slice(firstLocked);
+    expect(locked).toEqual([...locked].sort((a, b) => a.localeCompare(b)));
+
+    const ctx = await browser.newContext();
+    const premiumPage = await ctx.newPage();
+    await login(premiumPage, ATHLETE);
+    await premiumPage.goto('/workouts');
+    await expect(cards(premiumPage).first()).toBeVisible({ timeout: 10000 });
+    const premiumNames = await cards(premiumPage).locator('p.font-semibold').allTextContents();
+    const sorted = [...premiumNames].sort((a, b) => a.localeCompare(b));
+    expect(premiumNames.slice(0, 5)).toEqual(sorted.slice(0, 5));
+    await ctx.close();
+  });
+
   test('opening a locked workout directly shows the premium screen', async ({ page }) => {
     const admin = await apiAs(ADMIN);
     const workout = await firstApprovedWorkout(admin);
