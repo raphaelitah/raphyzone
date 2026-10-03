@@ -122,6 +122,9 @@ export default function Login() {
             />
           </div>
         </div>
+        <p className="text-xs text-muted-foreground text-center">
+          <Link to="/terms" className="hover:underline">Terms</Link> · <Link to="/privacy" className="hover:underline">Privacy</Link>
+        </p>
         <Button
           type="submit"
           variant="brand"

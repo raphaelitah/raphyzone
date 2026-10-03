@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Lock, Sparkles, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -81,7 +82,11 @@ export default function UpgradeSheet({ open, onOpenChange, reason = 'workout' })
         <Button onClick={subscribe} disabled={busy} className="w-full rounded-xl h-12 mt-3 bg-brand text-brand-foreground hover:bg-brand/90">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue to payment'}
         </Button>
-        <p className="text-[11px] text-muted-foreground text-center mt-2">Cancel anytime. Secure payment by Stripe.</p>
+        <p className="text-[11px] text-muted-foreground text-center mt-2">
+          Cancel anytime. Secure payment by Stripe. By subscribing you agree to the{' '}
+          <Link to="/terms" className="underline" onClick={() => onOpenChange(false)}>Terms</Link> and{' '}
+          <Link to="/privacy" className="underline" onClick={() => onOpenChange(false)}>Privacy Policy</Link>.
+        </p>
         <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full rounded-xl h-11 mt-1">Not now</Button>
         </div>
       </SheetContent>

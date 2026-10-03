@@ -226,6 +226,11 @@ export default function Register() {
             />
           </div>
         </div>
+        <p className="text-xs text-muted-foreground text-center" data-testid="legal-consent">
+          By creating an account you agree to our{" "}
+          <Link to="/terms" target="_blank" className="text-primary hover:underline">Terms</Link> and{" "}
+          <Link to="/privacy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link>.
+        </p>
         <Button
           type="submit"
           variant="brand"

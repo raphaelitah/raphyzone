@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { supabase } from '@/lib/supabaseClient';
@@ -148,6 +148,9 @@ export default function Profile() {
         <Button onClick={() => logout('/login')} variant="ghost" className="w-full rounded-xl h-12 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
           <LogOut className="h-4 w-4 mr-2" /> Sign out
         </Button>
+        <p className="text-center text-xs text-muted-foreground pt-1">
+          <Link to="/terms" className="hover:underline">Terms of Service</Link> · <Link to="/privacy" className="hover:underline">Privacy Policy</Link>
+        </p>
       </div>
 
       <ProfileEditor profile={profile} open={editing} onOpenChange={setEditing} onSaved={reload} />
