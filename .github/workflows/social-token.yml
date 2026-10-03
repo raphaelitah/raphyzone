@@ -1,0 +1,28 @@
+name: Instagram token refresh
+
+# Sundays 06:00 UTC: swap in a fresh 60-day Instagram token (stored in
+# social_credentials). Also exchanges a short-lived seed token on first run.
+on:
+  schedule:
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+concurrency: social-publish
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/social/refresh-token.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}

@@ -1,0 +1,32 @@
+name: Instagram publisher
+
+# Daily 16:00 UTC: publish the next approved + rendered post that is due.
+# Needs repo secrets SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INSTAGRAM_ACCESS_TOKEN.
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Dry run (log what would be posted)'
+        type: boolean
+        default: false
+
+concurrency: social-publish
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/social/publish-due.mjs ${{ inputs.dry && '--dry' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
