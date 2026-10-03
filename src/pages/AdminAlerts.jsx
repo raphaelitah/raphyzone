@@ -43,8 +43,8 @@ export default function AdminAlerts() {
 
   return (
     <div className="px-5 pt-10 pb-8">
-      <button onClick={() => navigate('/profile')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground transition-colors">
-        <ArrowLeft className="h-4 w-4" /> Back to profile
+      <button onClick={() => navigate('/admin')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground transition-colors">
+        <ArrowLeft className="h-4 w-4" /> Back to admin
       </button>
       <h1 className="text-2xl font-semibold tracking-tight mb-1">LLM Health</h1>
       <p className="text-sm text-muted-foreground mb-5">Last {logs.length} calls to Groq across generateWeeklyPlan, swapWorkout, suggestExerciseSubstitutes, and verifyWorkoutReasons.</p>

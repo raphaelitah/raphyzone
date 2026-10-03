@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Dumbbell, TrendingUp, Library, User } from 'lucide-react';
+import { Home, Dumbbell, TrendingUp, Library, User, ShieldCheck } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
 
 const tabs = [
@@ -10,11 +11,15 @@ const tabs = [
   { to: '/profile', label: 'Profile', icon: User },
 ];
 
+const adminTab = { to: '/admin', label: 'Admin', icon: ShieldCheck };
+
 export default function BottomNav() {
+  const { user } = useAuth();
+  const items = user?.role === 'admin' ? [...tabs, adminTab] : tabs;
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 h-16 border-t border-border bg-background/90 backdrop-blur-lg">
-      <div className="mx-auto max-w-md h-full grid grid-cols-5">
-        {tabs.map(({ to, label, icon: Icon, end }) => (
+      <div className="mx-auto max-w-md h-full grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+        {items.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}

@@ -24,6 +24,7 @@ const PlanBuilder = lazy(() => import('@/pages/PlanBuilder'));
 const PlanHistory = lazy(() => import('@/pages/PlanHistory'));
 const StrengthCalibration = lazy(() => import('@/pages/StrengthCalibration'));
 const WorkoutExecution = lazy(() => import('@/pages/WorkoutExecution'));
+const Admin = lazy(() => import('@/pages/Admin'));
 const AdminReview = lazy(() => import('@/pages/AdminReview'));
 const AdminTaxonomy = lazy(() => import('@/pages/AdminTaxonomy'));
 const AdminAlerts = lazy(() => import('@/pages/AdminAlerts'));
@@ -74,6 +75,7 @@ const AuthenticatedApp = () => {
           <Route path="/plan" element={<PlanBuilder />} />
           <Route path="/plan-history/:weekStart?" element={<PlanHistory />} />
           <Route path="/workout/:workoutId" element={<WorkoutExecution />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/admin-review" element={<AdminReview />} />
           <Route path="/admin-taxonomy" element={<AdminTaxonomy />} />
           <Route path="/admin-alerts" element={<AdminAlerts />} />

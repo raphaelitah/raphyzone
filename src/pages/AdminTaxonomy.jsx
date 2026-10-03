@@ -144,8 +144,8 @@ export default function AdminTaxonomy() {
 
   return (
     <div className="px-5 pt-10 pb-8">
-      <button onClick={() => navigate('/profile')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground transition-colors">
-        <ArrowLeft className="h-4 w-4" /> Back to profile
+      <button onClick={() => navigate('/admin')} className="flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground transition-colors">
+        <ArrowLeft className="h-4 w-4" /> Back to admin
       </button>
       <div className="flex items-start justify-between gap-3 mb-1">
         <h1 className="text-2xl font-semibold tracking-tight">Taxonomy Management</h1>

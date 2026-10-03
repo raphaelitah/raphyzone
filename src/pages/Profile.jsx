@@ -14,7 +14,7 @@ import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
 import PlanCard from '@/components/PlanCard';
 import { getProfileCompleteness } from '@/lib/profileGaps';
 import { IconButton } from '@/components/ui/icon-button';
-import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, ShieldCheck, Tags, Send, Activity, Users } from 'lucide-react';
+import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, Send } from 'lucide-react';
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
@@ -48,7 +48,6 @@ export default function Profile() {
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
 
-  const isAdmin = user?.role === 'admin';
   const { done: completeDone, total: completeTotal } = getProfileCompleteness(profile);
   const completePct = Math.round((completeDone / completeTotal) * 100);
 
@@ -146,30 +145,6 @@ export default function Profile() {
           <span className="flex items-center gap-2"><Send className="h-4 w-4 text-brand" /> My Submissions</span>
           <ChevronRight className="h-4 w-4" />
         </Button>
-        {isAdmin && (
-          <Button onClick={() => navigate('/admin-review')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
-            <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-brand" /> UGC For Review</span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
-        {isAdmin && (
-          <Button onClick={() => navigate('/admin-taxonomy')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
-            <span className="flex items-center gap-2"><Tags className="h-4 w-4 text-brand" /> Taxonomy Management</span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
-        {isAdmin && (
-          <Button onClick={() => navigate('/admin-users')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
-            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-brand" /> Users</span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
-        {isAdmin && (
-          <Button onClick={() => navigate('/admin-alerts')} variant="outline" className="w-full rounded-xl h-12 justify-between font-medium">
-            <span className="flex items-center gap-2"><Activity className="h-4 w-4 text-brand" /> LLM Health</span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        )}
         <Button onClick={() => logout('/login')} variant="ghost" className="w-full rounded-xl h-12 text-rose-600 hover:text-rose-700 hover:bg-rose-50">
           <LogOut className="h-4 w-4 mr-2" /> Sign out
         </Button>
