@@ -185,7 +185,7 @@ export default function AdminUsers() {
       <form onSubmit={saveSettings} className="rounded-2xl border border-border bg-card p-4 mb-6 space-y-4" data-testid="limits-form">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
               <Crown className="h-4 w-4" />
             </span>
             <div>
