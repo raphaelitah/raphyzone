@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { flushAttribution } from '@/lib/attribution';
 
 const AuthContext = createContext(/** @type {any} */ (undefined));
 
@@ -9,6 +10,7 @@ const AuthContext = createContext(/** @type {any} */ (undefined));
 // both directly on `user`, so merge them here once instead of in every page.
 async function enrichUser(authUser) {
   if (!authUser) return null;
+  flushAttribution();
   const { data: profileRow } = await supabase
     .from('profiles')
     .select('role')

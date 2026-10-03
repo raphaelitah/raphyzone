@@ -54,3 +54,22 @@ test.describe('Delete account', () => {
     await expect(dialog).toBeHidden();
   });
 });
+
+test.describe('Sign-up attribution', () => {
+  test('UTM params on first visit are stored for the sign-up flow', async ({ page }) => {
+    await page.goto('/register?utm_source=instagram&utm_medium=bio&utm_campaign=test');
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('rz_attribution') || 'null'));
+    expect(stored).toMatchObject({ utm_source: 'instagram', utm_medium: 'bio', utm_campaign: 'test' });
+    // First touch wins: a later visit with different UTMs must not overwrite it.
+    await page.goto('/login?utm_source=other');
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('rz_attribution')));
+    expect(after.utm_source).toBe('instagram');
+  });
+});
+
+test('captured attribution is saved to the account on sign-in', async ({ page }) => {
+  await page.goto('/register?utm_source=instagram&utm_medium=bio&utm_campaign=e2e');
+  await login(page);
+  // flushAttribution clears the stored copy only after the RPC succeeded.
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('rz_attribution'))).toBeNull();
+});
