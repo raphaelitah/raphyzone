@@ -1,0 +1,34 @@
+name: Instagram renderer
+
+# Saturdays 09:00 UTC (the day after the Friday writer): render carousels and the
+# split image for every draft post that has not been rendered yet, upload them to
+# the public social-assets bucket and attach the URLs to the post. Reels are added
+# to this same workflow by render_reels.py.
+on:
+  schedule:
+    - cron: '0 9 * * 6'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-render posts that are already rendered'
+        type: boolean
+        default: false
+
+concurrency: social-render
+
+jobs:
+  render-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/social/requirements.txt
+      - run: pip install -r scripts/social/requirements.txt
+      - run: python scripts/social/render_images.py ${{ inputs.force && '--force' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
