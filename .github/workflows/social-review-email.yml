@@ -1,0 +1,33 @@
+name: Instagram review email
+
+# Sundays 07:00 UTC (after the Friday writer and Saturday renderer): email the review link.
+# Needs repo secrets SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SMTP_USER, SMTP_PASS (Gmail app password).
+on:
+  schedule:
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Dry run (print the email, do not send)'
+        type: boolean
+        default: false
+
+concurrency: social-review-email
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/social/notify-review.mjs ${{ inputs.dry && '--dry' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
