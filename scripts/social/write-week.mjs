@@ -172,6 +172,7 @@ async function main() {
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
 
+  const logCall = (row) => { if (!dry) supabase.from('llm_call_logs').insert(row).then(({ error }) => error && console.error('llm_call_logs insert failed:', error.message)); };
   const failures = [];
   for (const plan of todo) {
     try {
@@ -179,7 +180,7 @@ async function main() {
     const built = await buildPrompt({ plan, catalog, recentIds, used, perf, progression });
     built.workoutIds.forEach((id) => used.add(id));
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
-    const out = await generateJson({ system: VOICE, user: built.user + note, validate: (o) => validatePost(plan.kind, o) });
+    const out = await generateJson({ system: VOICE, user: built.user + note, validate: (o) => validatePost(plan.kind, o), log: logCall });
     const { caption, hashtags } = finalize(out);
     const isReel = plan.kind.startsWith('reel');
     const row = {

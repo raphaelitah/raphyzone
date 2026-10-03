@@ -118,6 +118,7 @@ function logLLMCall(row: {
   latencyMs: number;
   errorMessage?: string;
   rateLimitHeaders?: Headers;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 }) {
   try {
     const h = row.rateLimitHeaders;
@@ -132,6 +133,8 @@ function logLLMCall(row: {
       rate_limit_remaining_tokens: h ? numOrNull(h.get('x-ratelimit-remaining-tokens')) : null,
       rate_limit_remaining_requests: h ? numOrNull(h.get('x-ratelimit-remaining-requests')) : null,
       rate_limit_reset_tokens_seconds: h ? numOrNull(h.get('x-ratelimit-reset-tokens')) : null,
+      prompt_tokens: row.usage?.prompt_tokens ?? null,
+      completion_tokens: row.usage?.completion_tokens ?? null,
     }).then(({ error }) => {
       if (error) console.error('llm_call_logs insert failed:', error.message);
     });
@@ -186,7 +189,7 @@ async function callProviderOnce({ provider, prompt, schema, functionName, attemp
     logLLMCall({ functionName, model: loggedModel, status: 'error', attempt, latencyMs, errorMessage: message, rateLimitHeaders: res.headers });
     throw new Error(message);
   }
-  logLLMCall({ functionName, model: loggedModel, status: 'ok', attempt, latencyMs, rateLimitHeaders: res.headers });
+  logLLMCall({ functionName, model: loggedModel, status: 'ok', attempt, latencyMs, rateLimitHeaders: res.headers, usage: data.usage });
   return JSON.parse(toolCall.function.arguments);
 }
 
@@ -243,11 +246,29 @@ async function callProviderWithRetry({ provider, prompt, schema, functionName }:
   throw lastError;
 }
 
+// A provider whose quota is exhausted keeps answering 429 for hours (Gemini's
+// per-day free bucket) or until the minute window resets (Groq TPM). Remember
+// that per isolate so later calls go straight to a provider that can answer
+// instead of burning a request (and a round-trip) discovering it again. If every
+// provider is cooling down we try them all anyway.
+const DAILY_QUOTA_RE = /quota|per day|daily/i;
+const DAILY_COOLDOWN_MS = 30 * 60_000;
+const cooldownUntil = new Map<string, number>();
+
+export function cooldownFor(message: string): number {
+  if (DAILY_QUOTA_RE.test(message)) return DAILY_COOLDOWN_MS;
+  const match = RETRY_AFTER_RE.exec(message);
+  return match ? Math.ceil(parseFloat(match[1]) * 1000) + 500 : 60_000;
+}
+
 export async function callLLM(args: { prompt: string; schema: LLMSchema; functionName: string }): Promise<any> {
-  const available = PROVIDERS.filter((p) => Deno.env.get(p.envKey));
-  if (available.length === 0) {
+  const configured = PROVIDERS.filter((p) => Deno.env.get(p.envKey));
+  if (configured.length === 0) {
     throw new Error('No LLM provider configured. Set GROQ_API_KEY and/or GEMINI_API_KEY before deploying AI-driven functions.');
   }
+  const now = Date.now();
+  const ready = configured.filter((p) => (cooldownUntil.get(p.name) ?? 0) <= now);
+  const available = ready.length ? ready : configured;
 
   let lastError: unknown;
   for (const provider of available) {
@@ -255,7 +276,9 @@ export async function callLLM(args: { prompt: string; schema: LLMSchema; functio
       return await callProviderWithRetry({ provider, ...args });
     } catch (err) {
       lastError = err;
-      console.error(`${provider.name} failed for ${args.functionName}, trying next provider:`, (err as Error).message);
+      const message = (err as Error).message || '';
+      if (message.includes('API error 429')) cooldownUntil.set(provider.name, Date.now() + cooldownFor(message));
+      console.error(`${provider.name} failed for ${args.functionName}, trying next provider:`, message);
     }
   }
   throw lastError;

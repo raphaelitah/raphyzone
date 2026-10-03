@@ -1,4 +1,5 @@
 import { callLLM } from './llm.ts';
+import { reasonNeedsVerification } from './reasonCheck.ts';
 
 // Grounds AI-generated workout "reasons" in the actual chosen workout's data.
 // Ported from base44/functions/verifyWorkoutReasons — called in-process (not over
@@ -15,7 +16,7 @@ export async function verifyWorkoutReasons(
   const { data: workouts } = await supabase.from('workouts').select('*').in('id', ids);
   const workoutMap = new Map((workouts || []).map((w: any) => [w.id, w]));
 
-  const records = items
+  const candidates = items
     .map((i) => {
       const wo: any = workoutMap.get(i.workout_id);
       if (!wo) return null;
@@ -33,6 +34,9 @@ export async function verifyWorkoutReasons(
     })
     .filter(Boolean);
 
+  // Only drafts that can contain an equipment-label or duration mistake go to the
+  // LLM; the rest keep their draft. Saves the call entirely when none need it.
+  const records = candidates.filter((r: any) => reasonNeedsVerification(r.draft_reason, workoutMap.get(r.workout_id) as any));
   if (!records.length) {
     return items.map((i) => ({ workout_id: i.workout_id, reason: i.draft_reason || '' }));
   }
