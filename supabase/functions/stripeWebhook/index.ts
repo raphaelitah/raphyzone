@@ -2,7 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { getStripe } from '../_shared/stripe.ts';
-import { entitlementFromSubscription } from '../_shared/subscriptionState.ts';
+import { entitlementFromSubscription, isNewPaidSubscription } from '../_shared/subscriptionState.ts';
+import { notifyAdmin } from '../_shared/notifyAdmin.ts';
 
 // Stripe -> app: keeps user_entitlements in step with the user's subscription.
 // Deploy with --no-verify-jwt (Stripe does not send a Supabase JWT); requests
@@ -25,16 +26,30 @@ async function syncSubscription(stripe: Stripe, supabase: any, subscriptionId: s
     return;
   }
 
+  const patch = entitlementFromSubscription(sub as any);
+  const { data: before } = await supabase.from('user_entitlements').select('subscription_status').eq('user_id', userId).maybeSingle();
+
   const { error } = await supabase.from('user_entitlements').upsert(
     {
       user_id: userId,
       stripe_customer_id: customerId,
-      ...entitlementFromSubscription(sub as any),
+      ...patch,
       updated_date: new Date().toISOString(),
     },
     { onConflict: 'user_id' },
   );
   if (error) throw new Error(error.message);
+
+  // Only the transition into a paid state notifies, so Stripe's repeat events
+  // and renewals stay quiet.
+  if (isNewPaidSubscription(before?.subscription_status, patch.subscription_status)) {
+    const { data: u } = await supabase.auth.admin.getUserById(userId);
+    const email = u?.user?.email ?? userId;
+    await notifyAdmin(
+      `New Raphyzone premium: ${email}`,
+      [`Email: ${email}`, `Plan: ${patch.plan_interval ?? 'unknown'}`, `Status: ${patch.subscription_status}`, `User id: ${userId}`].join('\n'),
+    );
+  }
 }
 
 Deno.serve(async (req: Request) => {

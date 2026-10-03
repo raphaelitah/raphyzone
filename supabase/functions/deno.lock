@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@supabase/functions-js@*": "2.112.4",
     "npm:@supabase/supabase-js@2": "2.112.4",
+    "npm:nodemailer@6": "6.10.1",
     "npm:openai@^4.52.5": "4.104.0",
     "npm:stripe@17": "17.7.0"
   },
@@ -239,6 +240,9 @@
       "dependencies": [
         "whatwg-url"
       ]
+    },
+    "nodemailer@6.10.1": {
+      "integrity": "sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA=="
     },
     "object-inspect@1.13.4": {
       "integrity": "sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew=="

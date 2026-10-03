@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { entitlementFromSubscription, isLiveSubscriptionStatus } from '../../supabase/functions/_shared/subscriptionState.ts';
+import { entitlementFromSubscription, isLiveSubscriptionStatus, isNewPaidSubscription } from '../../supabase/functions/_shared/subscriptionState.ts';
 
 const NOW = Date.UTC(2026, 9, 2) ; // 2026-10-02
 const inDays = (d) => Math.floor(NOW / 1000) + d * 86400;
@@ -55,5 +55,19 @@ describe('isLiveSubscriptionStatus', () => {
   it('blocks a second checkout only while a subscription is still billing', () => {
     expect(['active', 'trialing', 'past_due'].every(isLiveSubscriptionStatus)).toBe(true);
     expect(['canceled', 'incomplete', null, undefined].some(isLiveSubscriptionStatus)).toBe(false);
+  });
+});
+
+describe('isNewPaidSubscription', () => {
+  it('notifies on the first move into a paid state', () => {
+    expect(isNewPaidSubscription(undefined, 'active')).toBe(true);
+    expect(isNewPaidSubscription(null, 'trialing')).toBe(true);
+    expect(isNewPaidSubscription('canceled', 'active')).toBe(true);
+  });
+  it('stays quiet on repeats, renewals, recoveries and non-paid states', () => {
+    expect(isNewPaidSubscription('active', 'active')).toBe(false);
+    expect(isNewPaidSubscription('past_due', 'active')).toBe(false);
+    expect(isNewPaidSubscription(null, 'incomplete')).toBe(false);
+    expect(isNewPaidSubscription('active', 'canceled')).toBe(false);
   });
 });

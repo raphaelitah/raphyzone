@@ -55,3 +55,9 @@ export function entitlementFromSubscription(sub: SubscriptionLike, nowMs = Date.
 export function isLiveSubscriptionStatus(status: string | null | undefined): boolean {
   return status === 'active' || status === 'trialing' || status === 'past_due';
 }
+
+// True when a sync moves a user from not-paying to paying (first subscription,
+// or a re-subscribe after cancelling) — the moment worth telling the admin about.
+export function isNewPaidSubscription(before: string | null | undefined, after: string): boolean {
+  return (after === 'active' || after === 'trialing') && !isLiveSubscriptionStatus(before);
+}
