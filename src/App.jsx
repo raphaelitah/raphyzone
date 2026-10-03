@@ -30,6 +30,7 @@ const Admin = lazy(() => import('@/pages/Admin'));
 const AdminReview = lazy(() => import('@/pages/AdminReview'));
 const AdminTaxonomy = lazy(() => import('@/pages/AdminTaxonomy'));
 const AdminAlerts = lazy(() => import('@/pages/AdminAlerts'));
+const AdminSocial = lazy(() => import('@/pages/AdminSocial'));
 const AdminUsers = lazy(() => import('@/pages/AdminUsers'));
 const MySubmissionsPage = lazy(() => import('@/pages/MySubmissionsPage'));
 
@@ -81,6 +82,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin-review" element={<AdminReview />} />
           <Route path="/admin-taxonomy" element={<AdminTaxonomy />} />
           <Route path="/admin-alerts" element={<AdminAlerts />} />
+          <Route path="/admin-social" element={<AdminSocial />} />
           <Route path="/admin-users" element={<AdminUsers />} />
           <Route path="/my-submissions" element={<MySubmissionsPage />} />
         </Route>
