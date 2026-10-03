@@ -104,8 +104,14 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   }
   if (kind === 'reel_travel') {
     const jet = variant === 'jet_lag';
-    const pool = matchWorkouts(catalog, { tokens: ['bodyweight'], minutes: jet ? 25 : 30, minMinutes: jet ? 8 : 15, requireGear: false })
-      .filter((w) => !used.has(w.workout_id) && isTrulyEquipmentFree(w) && (!jet || isGentle(w)));
+    const base = matchWorkouts(catalog, { tokens: ['bodyweight'], minutes: jet ? 25 : 30, minMinutes: jet ? 8 : 15, requireGear: false })
+      .filter(isTrulyEquipmentFree);
+    // Gentle workouts are scarce, so the hotel-room reel avoids them and leaves them
+    // for the jet-lag reel; each side falls back rather than failing the slot.
+    const tiers = jet
+      ? [base.filter((w) => isGentle(w) && !used.has(w.workout_id)), base.filter(isGentle), base.filter((w) => !used.has(w.workout_id) && (w.minutes ?? 99) <= 20)]
+      : [base.filter((w) => !isGentle(w) && !used.has(w.workout_id)), base.filter((w) => !used.has(w.workout_id)), base];
+    const pool = tiers.find((t) => t.length) || [];
     const w = pickWorkout(pool, recentIds);
     if (!w) throw new Error(`No bodyweight workout for ${variant}`);
     const facts = summarizeWorkout(w);
@@ -166,7 +172,9 @@ async function main() {
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
 
+  const failures = [];
   for (const plan of todo) {
+    try {
     const cur = bySlot.get(plan.slot);
     const built = await buildPrompt({ plan, catalog, recentIds, used, perf, progression });
     built.workoutIds.forEach((id) => used.add(id));
@@ -197,7 +205,12 @@ async function main() {
     const { error } = await supabase.from('social_posts').upsert(row, { onConflict: 'week_start,slot' });
     if (error) throw error;
     console.log(`Slot ${plan.slot} (${plan.kind}): "${row.hook}"`);
+    } catch (err) {
+      failures.push(plan.slot);
+      console.error(`Slot ${plan.slot} (${plan.kind}) failed: ${err.message}`);
+    }
   }
+  if (failures.length) throw new Error(`Slots failed: ${failures.join(', ')} (rerun to retry just those)`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
