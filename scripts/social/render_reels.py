@@ -137,7 +137,7 @@ def cover_frame(hook):
 
 # ---------- ffmpeg ----------
 def run(cmd):
-    p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True)
+    p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode:
         raise RuntimeError(f"ffmpeg failed: {' '.join(map(str, cmd))[:300]}\n{p.stderr[-1500:]}")
 
@@ -183,10 +183,24 @@ def concat(parts, out, tmp):
     run([ffmpeg_exe(), "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", out])
 
 
-def mix_music(video, music, start, total, out):
-    af = (f"[1:a]atrim=0:{total:.2f},asetpts=N/SR/TB,loudnorm=I=-26:TP=-3,afade=t=in:d=1,afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5[m];"
-          "[0:a]asplit[vo][sc];[m][sc]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=350[duck];"
-          "[vo][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]")
+def duck_expr(intervals, depth=0.7, ramp=0.25):
+    """ffmpeg gain expression: 1.0 normally, dips by `depth` (smoothly) while a voiceover line plays.
+    (sidechaincompress was tried first but truncates the music on some inputs; the voice timings are
+    known exactly here, so the envelope is built directly.)"""
+    if not intervals:
+        return "1"
+    terms = [f"clip((t-({a:.3f}-{ramp}))/{ramp},0,1)*clip(({b + 0.2:.3f}+{ramp}-t)/{ramp},0,1)" for a, b in intervals]
+    env = terms[0]
+    for t in terms[1:]:
+        env = f"max({env},{t})"
+    return f"1-{depth}*({env})"
+
+
+def mix_music(video, music, start, total, intervals, out):
+    gain = duck_expr(intervals).replace(",", "\\,")
+    af = (f"[1:a]atrim=0:{total:.2f},asetpts=N/SR/TB,loudnorm=I=-24:TP=-3,afade=t=in:d=1,"
+          f"afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5,volume='{gain}':eval=frame[m];"
+          "[0:a][m]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]")
     run([ffmpeg_exe(), "-y", "-i", video, "-ss", str(start), "-i", music, "-filter_complex", af, "-map", "0:v", "-map", "[a]",
          "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-b:a", "160k", "-movflags", "+faststart", out])
 
@@ -205,6 +219,7 @@ def render_reel(post, work, app_shot_fn):
     seed = post["id"]
     used_clips = set()
     parts = []
+    voiced = []  # (scene index in parts, voiceover seconds)
 
     def vo(text, name):
         return synth(text, work / f"{name}.wav")
@@ -226,6 +241,7 @@ def render_reel(post, work, app_shot_fn):
         caption_overlay(sc.get("on_screen_text") or "").save(ov)
         out = work / f"scene{i}.mp4"
         build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, vo=v, bg_is_video=is_video)
+        voiced.append((len(parts), duration(v)))
         parts.append(out)
 
     # 2. workout card, straight from catalog data
@@ -236,6 +252,7 @@ def render_reel(post, work, app_shot_fn):
         v = vo(line, "vo_card")
         out = work / "scene_card.mp4"
         build_scene(out, max(5.5, duration(v) + 1.2), card, vo=v)
+        voiced.append((len(parts), duration(v)))
         parts.append(out)
 
     # 3. app screen (live capture)
@@ -246,6 +263,7 @@ def render_reel(post, work, app_shot_fn):
         v = vo(script["app_scene"]["voiceover"], "vo_app")
         out = work / "scene_app.mp4"
         build_scene(out, max(5.0, duration(v) + VO_PAD + 0.6), frame, vo=v)
+        voiced.append((len(parts), duration(v)))
         parts.append(out)
 
     # 4. end card
@@ -264,7 +282,11 @@ def render_reel(post, work, app_shot_fn):
     music, start, title = pick_music(script.get("music_mood") or "upbeat", seed)
     final = work / "final.mp4"
     if music:
-        mix_music(joined, music, start, total, final)
+        starts, acc = [], 0.0
+        for part in parts:
+            starts.append(acc)
+            acc += duration(part)
+        mix_music(joined, music, start, total, [(starts[i], starts[i] + vlen) for i, vlen in voiced], final)
     else:
         joined.rename(final)
     cover = work / "cover.png"
@@ -277,7 +299,7 @@ def app_capture(work, base_url):
         out = Path(work) / "app"
         try:
             subprocess.run(["node", str(ROOT / "record_app.mjs"), workout_name, str(out)] + ([base_url] if base_url else []),
-                           check=True, capture_output=True, text=True, timeout=180, cwd=ROOT.parent.parent)
+                           check=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, cwd=ROOT.parent.parent)
             return out / "app-1.png"
         except Exception as err:  # the reel still works without the app scene
             print(f"  app capture failed ({err}); continuing without the app scene", file=sys.stderr)

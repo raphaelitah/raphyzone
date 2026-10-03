@@ -96,7 +96,7 @@ def ffmpeg_exe():
 
 def duration(path):
     """Duration in seconds, read from ffmpeg's banner (no ffprobe needed)."""
-    p = subprocess.run([ffmpeg_exe(), "-i", str(path)], capture_output=True, text=True)
+    p = subprocess.run([ffmpeg_exe(), "-i", str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     import re
     m = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", p.stderr)
     if not m:

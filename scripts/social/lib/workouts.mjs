@@ -58,6 +58,23 @@ export async function loadCatalog(supabase) {
 // the app itself ignores them, deriving equipment from the exercises. Do the same: the
 // workout's equipment is the union of its exercises' equipment. The catalog tags are only
 // a fallback for exercises with no equipment recorded.
+const NAME_HINTS = [
+  [/barbell|\bbench press\b(?!.*dumbbell)|deadlift|\bback squat|\bfront squat|overhead squat|power clean|clean and jerk|snatch|thruster|push press|power jerk/i, 'barbell'],
+  [/\bez[- ]?bar\b|skull ?crusher/i, 'ez bar'],
+  [/dumbbell|\bdb\b/i, 'dumbbell'],
+  [/kettlebell|\bkb\b/i, 'kettlebell'],
+  [/pull-?up|chin-?up|muscle-?up|toes[- ]to[- ]bar/i, 'pull-up bar'],
+  [/\bcable\b|lat pulldown|pec deck|leg press|leg extension|leg curl|machine/i, 'cable / machine'],
+  [/medicine ball|wall ball/i, 'medicine ball'],
+  [/\bring\b|rings|\btrx\b/i, 'rings / trx'],
+  [/jump rope|double under|skipping/i, 'jump rope'],
+  [/sandbag/i, 'sandbag'],
+];
+
+function nameEquipmentHints(name) {
+  return name ? NAME_HINTS.filter(([re]) => re.test(name)).map(([, token]) => token) : [];
+}
+
 function workoutEquipmentTokens(w, blocks) {
   const out = new Set();
   let unknown = false;
@@ -66,6 +83,9 @@ function workoutEquipmentTokens(w, blocks) {
       if (s.step_type === 'rest') continue;
       if (s.equipment?.length) s.equipment.forEach((t) => out.add(t));
       else unknown = true;
+      // Steps that did not resolve to an exercise record (or whose record has no equipment)
+      // still name their gear: "Barbell Bench Press", "Skull Crusher".
+      nameEquipmentHints(s.name).forEach((t) => out.add(t));
     }
   }
   if (unknown || !out.size) equipmentTokens(w.equipment).forEach((t) => out.add(t));
