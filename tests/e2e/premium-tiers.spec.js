@@ -104,9 +104,13 @@ test.describe('Free / premium tiers', () => {
     await expect(cards.first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Premium', { exact: true }).first()).toBeVisible();
 
-    await cards.filter({ hasText: workout.name }).first().click();
+    // Locked cards are blurred, and tapping one goes straight to the upgrade
+    // sheet rather than revealing the workout.
+    const locked = page.getByRole('button', { name: `${workout.name} (Premium)` });
+    await expect(locked).toBeVisible();
+    await locked.click();
     const sheet = page.getByRole('dialog');
-    await expect(sheet.getByRole('button', { name: /unlock with premium/i })).toBeVisible();
+    await expect(sheet.getByText('This workout is premium')).toBeVisible();
     await expect(sheet.getByRole('link', { name: /start workout/i })).toHaveCount(0);
   });
 

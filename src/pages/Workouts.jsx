@@ -495,9 +495,17 @@ export default function Workouts() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((w) => (
-            <button key={w.id} onClick={() => setSelected(w)} className="w-full text-left">
+          {filtered.map((w) => {
+            const locked = !canAccess(w);
+            return (
+            <button
+              key={w.id}
+              onClick={() => (locked ? setUpgradeOpen(true) : setSelected(w))}
+              aria-label={locked ? `${w.name} (Premium)` : undefined}
+              className="w-full text-left relative"
+            >
               <Card className="rounded-2xl border-border p-4 hover:border-foreground/20 transition-colors">
+                <div className={cn(locked && 'blur-[5px] select-none pointer-events-none')} aria-hidden={locked || undefined}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{w.name}</p>
@@ -506,7 +514,6 @@ export default function Workouts() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {!canAccess(w) && <LockBadge />}
                     <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', WORKOUT_DIFFICULTY_META[w.difficulty]?.color)}>
                       {WORKOUT_DIFFICULTY_META[w.difficulty]?.label}
                     </span>
@@ -529,9 +536,16 @@ export default function Workouts() {
                   )}
                   <span className="capitalize">{w.workout_category}</span>
                 </div>
+                </div>
+                {locked && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <LockBadge className="bg-background/90 shadow-sm border border-border" />
+                  </div>
+                )}
               </Card>
             </button>
-          ))}
+            );
+          })}
           {filtered.length === 0 && !loadingMore && !searchLoading && (
             <p className="text-center text-sm text-muted-foreground py-16">No workouts found.</p>
           )}
