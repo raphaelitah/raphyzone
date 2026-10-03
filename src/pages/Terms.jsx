@@ -72,7 +72,7 @@ export default function Terms() {
           You keep ownership of the workouts, notes and other content you submit. By submitting a workout for review you
           give us a worldwide, non-exclusive, royalty-free licence to host, review, edit and, if we approve it, show it
           to other users of the Service. You promise that you have the right to submit it and that it does not infringe
-          anyone&rsquo;s rights. We may reject or remove submissions at our discretion.
+          anyone&rsquo;s rights. We may reject or remove submissions at our discretion. If you delete your account, workouts and exercises you submitted that we had not approved are deleted, and approved ones may stay in the shared catalog without your name.
         </p>
       </Section>
 
@@ -105,7 +105,7 @@ export default function Terms() {
 
       <Section title="11. Suspension, termination and deleting your account">
         <p>
-          You can stop using the Service at any time. To delete your account and data, email {contactEmail}. We may
+          You can stop using the Service at any time. To delete your account and data, use Profile → Delete account in the app, or email {contactEmail}. We may
           suspend or end your access if you break these terms or misuse the Service. Sections that by their nature should
           survive termination (such as ownership, disclaimers and liability limits) will survive.
         </p>

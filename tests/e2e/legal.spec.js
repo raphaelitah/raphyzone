@@ -36,3 +36,21 @@ test.describe('Terms and Privacy', () => {
     await expect(page.getByRole('heading', { name: 'Terms of Service' })).toBeVisible();
   });
 });
+
+test.describe('Delete account', () => {
+  test('requires typing the account email before the delete button enables', async ({ page }) => {
+    await login(page);
+    await page.goto('/profile');
+    await page.getByRole('button', { name: 'Delete account' }).click();
+    const dialog = page.getByRole('dialog');
+    const confirm = dialog.getByRole('button', { name: 'Delete my account' });
+    await expect(dialog.getByText('This cannot be undone', { exact: false }).or(dialog.getByText('cannot be undone'))).toBeVisible();
+    await expect(confirm).toBeDisabled();
+    await dialog.getByLabel(/type your email/i).fill('someone-else@example.com');
+    await expect(confirm).toBeDisabled();
+    await dialog.getByLabel(/type your email/i).fill('test-athlete@raphyzone.dev');
+    await expect(confirm).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+  });
+});

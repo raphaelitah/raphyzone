@@ -12,6 +12,7 @@ import ProfileEditor from '@/components/ProfileEditor';
 import ExerciseNotifications from '@/components/ExerciseNotifications';
 import ProfileCalibrationCard from '@/components/ProfileCalibrationCard';
 import PlanCard from '@/components/PlanCard';
+import DeleteAccountDialog from '@/components/DeleteAccountDialog';
 import { getProfileCompleteness } from '@/lib/profileGaps';
 import { IconButton } from '@/components/ui/icon-button';
 import { LogOut, Dumbbell, Target, Calendar, Settings, ChevronRight, Sparkles, Pencil, Gauge, Send } from 'lucide-react';
@@ -24,6 +25,7 @@ export default function Profile() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const toggleAutoApprove = async (checked) => {
     await supabase.from('athlete_profiles').update({ auto_approve_plans: checked }).eq('id', profile.id);
@@ -151,7 +153,14 @@ export default function Profile() {
         <p className="text-center text-xs text-muted-foreground pt-1">
           <Link to="/terms" className="hover:underline">Terms of Service</Link> · <Link to="/privacy" className="hover:underline">Privacy Policy</Link>
         </p>
+        <button
+          onClick={() => setDeletingAccount(true)}
+          className="block mx-auto text-xs text-muted-foreground hover:text-rose-600 underline underline-offset-2 pt-1 pb-2"
+        >
+          Delete account
+        </button>
       </div>
+      <DeleteAccountDialog open={deletingAccount} onOpenChange={setDeletingAccount} />
 
       <ProfileEditor profile={profile} open={editing} onOpenChange={setEditing} onSaved={reload} />
     </div>

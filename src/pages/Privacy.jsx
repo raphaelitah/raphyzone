@@ -87,17 +87,18 @@ export default function Privacy() {
 
       <Section title="8. How long we keep it">
         <p>
-          We keep your data while your account is open. When you ask us to delete your account we delete your profile
-          and activity data, except for records we must keep by law (such as payment records, which Stripe also
-          retains) and backups, which are overwritten in the ordinary course.
+          We keep your data while your account is open. You can delete your account yourself under Profile → Delete
+          account, or by emailing us. Deleting removes your profile, plans, workout history, progress and sign-in, and
+          cancels any subscription. Workouts or exercises you submitted and we approved into the shared catalog stay
+          there without your name; unapproved submissions are deleted. We keep only what we must by law (such as payment
+          records held by Stripe), and backups are overwritten in the ordinary course.
         </p>
       </Section>
 
       <Section title="9. Your rights">
         <p>
           Depending on where you live, you can ask us to access, correct, delete or export your data, to restrict or
-          object to certain processing, and to withdraw consent. To use any of these rights, including deleting your
-          account, email <a className="text-primary hover:underline" href={`mailto:${contactEmail}`}>{contactEmail}</a>. We will respond within the time the law
+          object to certain processing, and to withdraw consent. To use any of these rights, email <a className="text-primary hover:underline" href={`mailto:${contactEmail}`}>{contactEmail}</a> (account deletion is also available in the app). We will respond within the time the law
           requires (generally within one month, or 45 days for US requests). We will not discriminate against you for
           exercising your rights.
         </p>
