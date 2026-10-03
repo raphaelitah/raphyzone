@@ -42,6 +42,8 @@ or `TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD` env vars if needed.
   admin-review tests
 - `premium-tiers.spec.js` — free vs. premium: entitlement status, locked workouts can't be started
   (RLS) until an admin flags them free, locks/banner in the UI, and clients can't self-grant access
+- `security.spec.js` — privilege-escalation regressions: a user can't set `profiles.role` to admin,
+  self-approve a workout, or read `social_credentials`
 - `legal.spec.js` — public /terms and /privacy pages, the agreement note on sign-up, Profile links
 - `auth.spec.js` — login/logout, protected-route redirects
 - `navigation.spec.js` — bottom-nav smoke test across all main tabs
