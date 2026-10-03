@@ -20,6 +20,9 @@ on:
 
 concurrency: social-render
 
+permissions:
+  contents: read
+
 jobs:
   render-images:
     if: ${{ !inputs.sample_reel }}

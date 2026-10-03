@@ -19,6 +19,9 @@ on:
 
 concurrency: social-writer
 
+permissions:
+  contents: read
+
 jobs:
   write:
     runs-on: ubuntu-latest
