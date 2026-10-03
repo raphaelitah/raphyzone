@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { Home, Dumbbell, TrendingUp, Library, User, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { cn } from '@/lib/utils';
+import { usePendingReviewCount } from '@/hooks/usePendingReviewCount';
 
 const tabs = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -15,6 +16,7 @@ const adminTab = { to: '/admin', label: 'Admin', icon: ShieldCheck };
 
 export default function BottomNav() {
   const { user } = useAuth();
+  const pendingReview = usePendingReviewCount();
   const items = user?.role === 'admin' ? [...tabs, adminTab] : tabs;
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 h-16 border-t border-border bg-background/90 backdrop-blur-lg">
@@ -33,7 +35,17 @@ export default function BottomNav() {
           >
             {({ isActive }) => (
               <>
-                <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
+                <span className="relative">
+                  <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
+                  {to === '/admin' && pendingReview > 0 && (
+                    <span
+                      data-testid="admin-review-badge"
+                      className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] leading-4 text-center font-semibold"
+                    >
+                      {pendingReview > 99 ? '99+' : pendingReview}
+                    </span>
+                  )}
+                </span>
                 {label}
               </>
             )}

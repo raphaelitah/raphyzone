@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { Card } from '@/components/ui/card';
+import { usePendingReviewCount } from '@/hooks/usePendingReviewCount';
 import { ChevronRight, ShieldCheck, Tags, Activity, Users } from 'lucide-react';
 
 const items = [
@@ -14,6 +15,7 @@ const items = [
 export default function Admin() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const pendingReview = usePendingReviewCount();
 
   useEffect(() => {
     if (user && user.role !== 'admin') navigate('/');
@@ -31,6 +33,9 @@ export default function Admin() {
               <p className="text-sm font-medium">{label}</p>
               <p className="text-xs text-muted-foreground">{desc}</p>
             </div>
+            {to === '/admin-review' && pendingReview > 0 && (
+              <span className="min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs leading-5 text-center font-semibold">{pendingReview}</span>
+            )}
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Card>
         ))}
