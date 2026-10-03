@@ -15,6 +15,13 @@ const providerOf = (model) => {
   const head = String(model || '').split('/')[0];
   return head === 'openai' ? 'groq' : head;
 };
+// Always listed, even before a key has made its first call (Gemini 4 was added after most logs).
+const EXPECTED_PROVIDERS = ['groq', 'gemini', 'gemini_2', 'gemini_3', 'gemini_4'];
+const providerLabel = (name) => {
+  if (name === 'groq') return 'Groq';
+  const m = /^gemini(?:_(\d+))?$/.exec(name);
+  return m ? `Gemini ${m[1] || 1}` : name;
+};
 const errorKind = (msg) => {
   const m = String(msg || '');
   if (/quota|per day|daily/i.test(m)) return 'quota exhausted';
@@ -36,7 +43,9 @@ function summarize(logs) {
     p.tokens += (l.prompt_tokens || 0) + (l.completion_tokens || 0);
     by.set(name, p);
   }
-  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+  for (const name of EXPECTED_PROVIDERS) if (!by.has(name)) by.set(name, { name, calls: 0, errors: 0, tokens: 0, kinds: {}, latest: null, lastOk: null });
+  const order = (n) => { const i = EXPECTED_PROVIDERS.indexOf(n); return i < 0 ? 99 : i; };
+  return [...by.values()].sort((a, b) => order(a.name) - order(b.name) || a.name.localeCompare(b.name));
 }
 
 export default function AdminAlerts() {
@@ -87,15 +96,24 @@ export default function AdminAlerts() {
 
       <h2 className="text-sm font-medium mb-2">Providers</h2>
       <div className="space-y-2 mb-5">
-        {providers.length === 0 && <p className="text-sm text-muted-foreground">No calls in the last {LOOKBACK_DAYS} days.</p>}
         {providers.map((p) => {
+          if (!p.latest) {
+            return (
+              <Card key={p.name} className="rounded-2xl border-border p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{providerLabel(p.name)}</span>
+                  <span className="text-xs text-muted-foreground">No calls in {LOOKBACK_DAYS} days</span>
+                </div>
+              </Card>
+            );
+          }
           const healthy = p.latest.status === 'ok';
           const lastKind = healthy ? null : errorKind(p.latest.error_message);
           const rate = Math.round((p.errors / p.calls) * 100);
           return (
             <Card key={p.name} className="rounded-2xl border-border p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium">{p.name}</span>
+                <span className="text-sm font-medium">{providerLabel(p.name)}</span>
                 <span className={cn('text-xs font-medium', healthy ? 'text-emerald-600' : 'text-rose-600')}>{healthy ? 'Last call OK' : `Last call: ${lastKind}`}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -135,7 +153,7 @@ export default function AdminAlerts() {
             <Card key={l.id} className="rounded-xl border-rose-200 bg-rose-50 p-3">
               <div className="flex items-start justify-between gap-2 mb-1">
                 <span className="text-xs font-medium text-rose-800 flex items-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5" /> {providerOf(l.model)} · {l.function_name} (attempt {l.attempt})
+                  <AlertTriangle className="h-3.5 w-3.5" /> {providerLabel(providerOf(l.model))} · {l.function_name} (attempt {l.attempt})
                 </span>
                 <span className="text-[11px] text-rose-600 whitespace-nowrap">{new Date(l.created_at).toLocaleString()}</span>
               </div>
