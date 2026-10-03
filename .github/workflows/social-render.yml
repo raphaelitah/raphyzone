@@ -13,11 +13,16 @@ on:
         description: 'Re-render posts that are already rendered'
         type: boolean
         default: false
+      sample_reel:
+        description: 'Only render a sample reel (no database writes) and attach it as an artifact'
+        type: boolean
+        default: false
 
 concurrency: social-render
 
 jobs:
   render-images:
+    if: ${{ !inputs.sample_reel }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,3 +37,49 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  render-reels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/social/requirements-reels.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: pip install -r scripts/social/requirements-reels.txt
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: ffmpeg
+        run: ffmpeg -version | head -1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      # Kokoro model (~120 MB) and the CC0 music tracks are cached between runs.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/raphyzone-social
+          key: raphyzone-social-assets-v1
+      - name: Sample reel
+        if: ${{ inputs.sample_reel }}
+        run: python scripts/social/render_reels.py --sample out
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.sample_reel }}
+        with:
+          name: sample-reel
+          path: out
+      - name: Render reels
+        if: ${{ !inputs.sample_reel }}
+        run: python scripts/social/render_reels.py ${{ inputs.force && '--force' || '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}

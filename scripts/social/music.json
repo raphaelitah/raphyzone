@@ -1,0 +1,18 @@
+{
+  "_note": "Background music for reels. Every track is CC0 (public domain dedication) by Sonatema on Wikimedia Commons, so no attribution is required. reel_audio.pick_music re-checks the licence via the Commons API before using a track and skips any that is not CC0. `start` is the offset (seconds) into the track where the reel's slice begins.",
+  "calm": [
+    { "file": "Sonatema - Viento helado.wav", "start": 20 },
+    { "file": "Sonatema - Angustia.wav", "start": 20 },
+    { "file": "Sonatema - Hidrosfera.wav", "start": 20 }
+  ],
+  "driving": [
+    { "file": "Sonatema - El mundo se rompe.wav", "start": 20 },
+    { "file": "Sonatema - Nuevos límites.wav", "start": 20 },
+    { "file": "Sonatema - Submarino.wav", "start": 20 }
+  ],
+  "upbeat": [
+    { "file": "Sonatema - Decadance.wav", "start": 20 },
+    { "file": "Sonatema - Disfruta de tus fracasos.wav", "start": 20 },
+    { "file": "Sonatema - Nuevos límites.wav", "start": 20 }
+  ]
+}

@@ -1,0 +1,6 @@
+Pillow>=10.3
+requests>=2.31
+numpy
+soundfile
+kokoro-onnx>=0.5
+imageio-ffmpeg
