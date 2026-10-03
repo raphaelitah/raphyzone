@@ -11,7 +11,7 @@ Uploads the MP4 (+ a cover PNG) to the social-assets bucket and records the URLs
   --sample DIR       render a built-in sample reel into DIR (no Supabase needed)
   --local DIR        render posts from Supabase into DIR, skip upload/DB writes
   --week / --force   as in render_images.py
-Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PEXELS_API_KEY (optional: brand backgrounds if unset),
+Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PIXABAY_API_KEY and/or PEXELS_API_KEY (optional: animated brand backgrounds if neither is set),
      TTS_ENGINE=say (macOS-only local testing), APP_URL.
 """
 import argparse
@@ -153,11 +153,20 @@ def silent_audio_chain(d):
     return f"anullsrc=r=44100:cl=stereo,atrim=0:{d:.3f},asetpts=N/SR/TB[a]"
 
 
-def build_scene(out, d, bg, overlay=None, vo=None, bg_is_video=False, fade=True):
+def animated_gradient(seed):
+    """ffmpeg lavfi source: slowly rotating indigo gradient, used when no stock footage is available."""
+    return (f"gradients=s={W}x{H}:r={FPS}:c0=0x5048e5:c1=0x3a33b8:c2=0x6c64ff:c3=0x2a2488:nb_colors=4:"
+            f"speed=0.03:type=linear:seed={seed}")
+
+
+def build_scene(out, d, bg, overlay=None, vo=None, bg_is_video=False, fade=True, bg_lavfi=None):
     """One scene: background (video loop or still), optional text overlay, voiceover padded to d seconds."""
     ff = ffmpeg_exe()
     cmd = [ff, "-y"]
-    cmd += (["-stream_loop", "-1", "-i", bg] if bg_is_video else ["-loop", "1", "-framerate", str(FPS), "-i", bg])
+    if bg_lavfi:
+        cmd += ["-f", "lavfi", "-i", bg_lavfi]
+    else:
+        cmd += (["-stream_loop", "-1", "-i", bg] if bg_is_video else ["-loop", "1", "-framerate", str(FPS), "-i", bg])
     idx = 1
     if overlay:
         cmd += ["-loop", "1", "-framerate", str(FPS), "-i", overlay]
@@ -234,13 +243,11 @@ def render_reel(post, work, app_shot_fn):
         clip = find_clip(sc.get("footage_query") or "gym workout", d, f"{seed}{i}", used_clips)
         bg = clip
         is_video = bool(clip)
-        if not clip:
-            bg = work / f"bg{i}.png"
-            gradient_bg(*(((ri.INDIGO, ri.INDIGO_DARK), (ri.INDIGO_DARK, ri.INK))[i % 2])).save(bg)
+        lavfi = None if clip else animated_gradient(int(hashlib.sha1(f"{seed}{i}".encode()).hexdigest()[:6], 16))
         ov = work / f"ov{i}.png"
         caption_overlay(sc.get("on_screen_text") or "").save(ov)
         out = work / f"scene{i}.mp4"
-        build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, vo=v, bg_is_video=is_video)
+        build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, vo=v, bg_is_video=is_video, bg_lavfi=lavfi)
         voiced.append((len(parts), duration(v)))
         parts.append(out)
 
