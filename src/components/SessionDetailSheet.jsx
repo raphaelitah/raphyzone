@@ -46,6 +46,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [saving, setSaving] = useState(false);
   const [blocks, setBlocks] = useState([]);
   const [runExerciseIds, setRunExerciseIds] = useState(() => new Set());
+  const [bodyweightExerciseIds, setBodyweightExerciseIds] = useState(() => new Set());
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     setChartKeys([]);
     setBlocks([]);
     setRunExerciseIds(new Set());
+    setBodyweightExerciseIds(new Set());
     setBlockExercisesByBlock({});
     (async () => {
       try {
@@ -79,9 +81,10 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         setExerciseSessions(thisEs);
         const codes = [...new Set(thisEs.map((es) => es.exercise_id).filter(Boolean))];
         if (codes.length) {
-          const { data: exRows } = await supabase.from('exercises').select('exercise_code, movement_pattern, modality').in('exercise_code', codes);
+          const { data: exRows } = await supabase.from('exercises').select('exercise_code, movement_pattern, modality, requires_load').in('exercise_code', codes);
           if (!active) return;
           setRunExerciseIds(new Set((exRows || []).filter((r) => isRunningExercise(r)).map((r) => r.exercise_code)));
+          setBodyweightExerciseIds(new Set((exRows || []).filter((r) => r.requires_load === false).map((r) => r.exercise_code)));
         }
 
         const textWorkoutId = workoutRow?.workout_id || null;
@@ -152,9 +155,11 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const startEdit = () => {
     const d = {};
     exerciseSessions.forEach((es) => {
+      // Exercises that are bodyweight by definition default to Bodyweight when no weight was logged.
+      const defaultBodyweight = es.max_weight == null && bodyweightExerciseIds.has(es.exercise_id);
       d[es.id] = {
-        max_weight: es.max_weight ?? null,
-        bodyweight: es.max_weight === 0,
+        max_weight: defaultBodyweight ? 0 : (es.max_weight ?? null),
+        bodyweight: es.max_weight === 0 || defaultBodyweight,
         distance_km: es.distance_km ?? null,
         duration_seconds: es.duration_seconds ?? (runExerciseIds.has(es.exercise_id) && es.elapsed_seconds > 0 ? Number(es.elapsed_seconds) : null),
         difficulty: es.difficulty || 'normal',
