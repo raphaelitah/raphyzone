@@ -2,17 +2,17 @@
 """Saturday renderer, part 2: 9:16 reels.
 
 For each draft reel post with render_status='pending':
-  hook/story scenes (Pexels footage or brand background + on-screen text, Kokoro voiceover)
+  hook/story scenes (Pexels footage or brand background + on-screen text)
   -> "workout card" scene built from the real catalog data in post.script.workout
   -> app screen scene (live capture of the workout in the Raphyzone app)
-  -> end card, with CC0 music ducked under the voice. Output: 1080x1920 H.264/AAC, <= 90 s.
+  -> end card, with CC0 music underneath. No voiceover: music + on-screen text only. Output: 1080x1920 H.264/AAC, <= 90 s.
 Uploads the MP4 (+ a cover PNG) to the social-assets bucket and records the URLs on the post.
 
   --sample DIR       render a built-in sample reel into DIR (no Supabase needed)
   --local DIR        render posts from Supabase into DIR, skip upload/DB writes
   --week / --force   as in render_images.py
 Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PIXABAY_API_KEY and/or PEXELS_API_KEY (optional: animated brand backgrounds if neither is set),
-     TTS_ENGINE=say (macOS-only local testing), APP_URL.
+     APP_URL.
 """
 import argparse
 import hashlib
@@ -28,14 +28,16 @@ import requests
 from PIL import Image, ImageDraw
 
 import render_images as ri
-from reel_audio import duration, ffmpeg_exe, pick_music, synth
+from reel_audio import duration, ffmpeg_exe, pick_music
 from reel_footage import find_clip
 
 ROOT = Path(__file__).resolve().parent
 W, H, FPS = 1080, 1920, 30
 MAX_SECONDS = 88          # Instagram reels via API: 3-90 s
-VO_PAD = 0.35             # breathing room after each voiceover line
 END_CARD_SECONDS = 2.5
+MIN_TEXT_SECONDS = 3.0    # enough time to read the on-screen text
+CARD_SECONDS = 5.5
+APP_SECONDS = 5.5
 
 
 # ---------- frames (Pillow) ----------
@@ -145,10 +147,6 @@ def run(cmd):
 ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "160k"]
 
 
-def vo_chain(d):
-    return f"[{{a}}:a]aresample=44100,loudnorm=I=-16:TP=-1.5:LRA=11,apad,atrim=0:{d:.3f},asetpts=N/SR/TB[a]"
-
-
 def silent_audio_chain(d):
     return f"anullsrc=r=44100:cl=stereo,atrim=0:{d:.3f},asetpts=N/SR/TB[a]"
 
@@ -159,20 +157,16 @@ def animated_gradient(seed):
             f"speed=0.03:type=linear:seed={seed}")
 
 
-def build_scene(out, d, bg, overlay=None, vo=None, bg_is_video=False, fade=True, bg_lavfi=None):
-    """One scene: background (video loop or still), optional text overlay, voiceover padded to d seconds."""
+def build_scene(out, d, bg, overlay=None, bg_is_video=False, fade=True, bg_lavfi=None):
+    """One scene: background (video loop or still) and optional text overlay, d seconds, with a silent audio track."""
     ff = ffmpeg_exe()
     cmd = [ff, "-y"]
     if bg_lavfi:
         cmd += ["-f", "lavfi", "-i", bg_lavfi]
     else:
         cmd += (["-stream_loop", "-1", "-i", bg] if bg_is_video else ["-loop", "1", "-framerate", str(FPS), "-i", bg])
-    idx = 1
     if overlay:
         cmd += ["-loop", "1", "-framerate", str(FPS), "-i", overlay]
-        idx += 1
-    if vo:
-        cmd += ["-i", vo]
     vf = f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1"
     if bg_is_video:
         vf += ",eq=brightness=-0.12:saturation=1.05"
@@ -182,7 +176,7 @@ def build_scene(out, d, bg, overlay=None, vo=None, bg_is_video=False, fade=True,
     else:
         vf = vf.replace("[bg]", "[v0]")
     vf += f";[v0]{'fade=t=in:st=0:d=0.2,' if fade else ''}format=yuv420p[v]"
-    af = vo_chain(d).format(a=idx) if vo else silent_audio_chain(d)
+    af = silent_audio_chain(d)
     run(cmd + ["-filter_complex", vf + ";" + af, "-map", "[v]", "-map", "[a]", "-t", f"{d:.3f}"] + ENC + [out])
 
 
@@ -192,34 +186,15 @@ def concat(parts, out, tmp):
     run([ffmpeg_exe(), "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", out])
 
 
-def duck_expr(intervals, depth=0.7, ramp=0.25):
-    """ffmpeg gain expression: 1.0 normally, dips by `depth` (smoothly) while a voiceover line plays.
-    (sidechaincompress was tried first but truncates the music on some inputs; the voice timings are
-    known exactly here, so the envelope is built directly.)"""
-    if not intervals:
-        return "1"
-    terms = [f"clip((t-({a:.3f}-{ramp}))/{ramp},0,1)*clip(({b + 0.2:.3f}+{ramp}-t)/{ramp},0,1)" for a, b in intervals]
-    env = terms[0]
-    for t in terms[1:]:
-        env = f"max({env},{t})"
-    return f"1-{depth}*({env})"
-
-
-def mix_music(video, music, start, total, intervals, out):
-    gain = duck_expr(intervals).replace(",", "\\,")
-    af = (f"[1:a]atrim=0:{total:.2f},asetpts=N/SR/TB,loudnorm=I=-24:TP=-3,afade=t=in:d=1,"
-          f"afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5,volume='{gain}':eval=frame[m];"
+def mix_music(video, music, start, total, out):
+    af = (f"[1:a]atrim=0:{total:.2f},asetpts=N/SR/TB,loudnorm=I=-18:TP=-2,afade=t=in:d=1,"
+          f"afade=t=out:st={max(total - 2.5, 0):.2f}:d=2.5[m];"
           "[0:a][m]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]")
     run([ffmpeg_exe(), "-y", "-i", video, "-ss", str(start), "-i", music, "-filter_complex", af, "-map", "0:v", "-map", "[a]",
          "-c:v", "copy", "-c:a", "aac", "-ar", "44100", "-b:a", "160k", "-movflags", "+faststart", out])
 
 
 # ---------- reel assembly ----------
-def phrase_equipment(equip):
-    gear = [e for e in equip if e != "bodyweight"]
-    return "No equipment needed." if not gear else "You need: " + ", ".join(gear[:3]) + "."
-
-
 def render_reel(post, work, app_shot_fn):
     """Returns (mp4_path, cover_png_path, music_title)."""
     work = Path(work)
@@ -228,18 +203,10 @@ def render_reel(post, work, app_shot_fn):
     seed = post["id"]
     used_clips = set()
     parts = []
-    voiced = []  # (scene index in parts, voiceover seconds)
-
-    def vo(text, name):
-        return synth(text, work / f"{name}.wav")
-
-    def dur(seconds, vo_path):
-        return max(float(seconds), (duration(vo_path) if vo_path else 0) + VO_PAD)
 
     # 1. story scenes from the LLM script
     for i, sc in enumerate(script["scenes"]):
-        v = vo(sc["voiceover"], f"vo{i}")
-        d = dur(sc.get("seconds", 4), v)
+        d = max(float(sc.get("seconds", 4)), MIN_TEXT_SECONDS)
         clip = find_clip(sc.get("footage_query") or "gym workout", d, f"{seed}{i}", used_clips)
         bg = clip
         is_video = bool(clip)
@@ -247,30 +214,24 @@ def render_reel(post, work, app_shot_fn):
         ov = work / f"ov{i}.png"
         caption_overlay(sc.get("on_screen_text") or "").save(ov)
         out = work / f"scene{i}.mp4"
-        build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, vo=v, bg_is_video=is_video, bg_lavfi=lavfi)
-        voiced.append((len(parts), duration(v)))
+        build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, bg_is_video=is_video, bg_lavfi=lavfi)
         parts.append(out)
 
     # 2. workout card, straight from catalog data
     if facts:
         card = work / "card.png"
         workout_card(facts).save(card)
-        line = f"{facts['name']}. {int(facts['minutes'])} minutes. {phrase_equipment(facts.get('equipment') or [])}" if facts.get("minutes") else facts["name"]
-        v = vo(line, "vo_card")
         out = work / "scene_card.mp4"
-        build_scene(out, max(5.5, duration(v) + 1.2), card, vo=v)
-        voiced.append((len(parts), duration(v)))
+        build_scene(out, CARD_SECONDS, card)
         parts.append(out)
 
     # 3. app screen (live capture)
     shot = app_shot_fn(facts["name"]) if facts else None
     if shot:
         frame = work / "app.png"
-        app_scene_frame(shot, "Pick it. Press start.").save(frame)
-        v = vo(script["app_scene"]["voiceover"], "vo_app")
+        app_scene_frame(shot, script["app_scene"].get("headline") or "Pick it. Press start.").save(frame)
         out = work / "scene_app.mp4"
-        build_scene(out, max(5.0, duration(v) + VO_PAD + 0.6), frame, vo=v)
-        voiced.append((len(parts), duration(v)))
+        build_scene(out, APP_SECONDS, frame)
         parts.append(out)
 
     # 4. end card
@@ -289,11 +250,7 @@ def render_reel(post, work, app_shot_fn):
     music, start, title = pick_music(script.get("music_mood") or "upbeat", seed)
     final = work / "final.mp4"
     if music:
-        starts, acc = [], 0.0
-        for part in parts:
-            starts.append(acc)
-            acc += duration(part)
-        mix_music(joined, music, start, total, [(starts[i], starts[i] + vlen) for i, vlen in voiced], final)
+        mix_music(joined, music, start, total, final)
     else:
         joined.rename(final)
     cover = work / "cover.png"
@@ -318,12 +275,12 @@ SAMPLE = {
     "id": "sample", "hook": "Hotel gym. 30 minutes. Zero thinking.",
     "script": {
         "scenes": [
-            {"seconds": 4, "voiceover": "You walk into the hotel gym with half an hour and no plan.", "on_screen_text": "No plan. 30 minutes.", "footage_query": "hotel gym"},
-            {"seconds": 4, "voiceover": "So you stand there. Scrolling. Deciding.", "on_screen_text": "Scrolling is not training", "footage_query": "man scrolling phone gym"},
+            {"seconds": 4, "on_screen_text": "No plan. 30 minutes.", "footage_query": "hotel gym"},
+            {"seconds": 4, "on_screen_text": "Scrolling is not training", "footage_query": "man scrolling phone gym"},
         ],
         "workout": {"workout_id": "e3c35bfeb3555ea6354b84d5", "name": "Chelsea", "minutes": 30, "difficulty": "intermediate", "format": "EMOM", "equipment": ["pull-up bar", "bodyweight"],
                     "blocks": [{"label": "A", "type": "superset", "rounds": 30, "items": ["Strict Pronated Pull-up × 5", "Push-Up × 10", "Air Squat × 15"]}]},
-        "app_scene": {"voiceover": "Let Raphyzone decide. Thirty days free."}, "music_mood": "driving",
+        "app_scene": {"headline": "Let Raphyzone decide."}, "music_mood": "driving",
     },
 }
 

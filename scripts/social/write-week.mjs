@@ -8,7 +8,7 @@
 //
 // Workout content (exercises, sets, durations, equipment) is pulled from the real
 // catalog and passed to the model as facts; the model only writes hooks, captions
-// and voiceover around them. The CTA is appended in code, never left to the model.
+// and on-screen text around them. The CTA is appended in code, never left to the model.
 // Posts with status 'redo' are rewritten using the reviewer's note.
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
@@ -30,7 +30,7 @@ const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout
 const COMMON_SHAPE = `"hook": string (max 60 chars, the first line / slide-1 text), "caption": string (max 700 chars, no hashtags, no call-to-action), "hashtags": string[] (8-12, no # sign, lowercase)`;
 
 const SHAPES = {
-  reel: `{ ${COMMON_SHAPE}, "scenes": [ { "seconds": number (2-6), "voiceover": string (max 18 words), "on_screen_text": string (max 8 words), "footage_query": string (2-4 words for stock-video search, no people's faces needed) } ] (4-7 scenes, total seconds 25-45), "app_scene": { "voiceover": string (max 14 words, invites viewer to let the app decide) }, "music_mood": "calm"|"driving"|"upbeat" }`,
+  reel: `{ ${COMMON_SHAPE}, "scenes": [ { "seconds": number (3-6), "on_screen_text": string (max 10 words, the only narration: there is no voiceover, so it must carry the beat on its own), "footage_query": string (2-4 words for stock-video search, no people's faces needed) } ] (4-7 scenes, total seconds 25-45), "app_scene": { "headline": string (max 6 words, invites viewer to let the app decide) }, "music_mood": "calm"|"driving"|"upbeat" }`,
   carousel: `{ ${COMMON_SHAPE}, "slides": [ { "title": string (max 8 words), "body": string (max 25 words, may be empty) } ] (6-9 slides; slide 1 is the cover and repeats the hook; the last slide is a soft nudge to try Raphyzone) }`,
   single: `{ ${COMMON_SHAPE}, "slides": [ { "title": string (max 6 words), "body": string (the split: one line per day, "Day — focus", max 7 lines) } ] (exactly 1 slide) }`,
 };
@@ -71,7 +71,7 @@ function validatePost(kind, out) {
     if (!Array.isArray(out.scenes) || out.scenes.length < 3) throw new Error('reel needs scenes');
     const total = out.scenes.reduce((a, s) => a + Number(s.seconds || 0), 0);
     if (total > 70) throw new Error(`reel too long (${total}s)`);
-    if (!out.app_scene?.voiceover) throw new Error('missing app_scene');
+    if (!out.app_scene?.headline) throw new Error('missing app_scene');
   } else {
     if (!Array.isArray(out.slides) || !out.slides.length) throw new Error('missing slides');
     if (out.slides.length > 10) throw new Error('more than 10 slides');
@@ -97,7 +97,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       return {
         workoutIds: [w.workout_id],
         script: { scenario: sc.label, workout: facts },
-        user: `Write a reel: "Today's workout, decided". Scenario: someone arrives at ${sc.label} with ${sc.minutes} minutes and no plan. The reel shows the workout Raphyzone picked, then ends on the app screen.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly. Do not list every exercise in voiceover; the on-screen list is rendered separately.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+        user: `Write a reel: "Today's workout, decided". Scenario: someone arrives at ${sc.label} with ${sc.minutes} minutes and no plan. The reel shows the workout Raphyzone picked, then ends on the app screen.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly. Do not list every exercise in the on-screen text; the workout list is rendered separately.\n${perf}\nJSON shape: ${SHAPES.reel}`,
       };
     }
     throw new Error('No workout matches any gym scenario');

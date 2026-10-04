@@ -60,7 +60,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: ffmpeg
         run: ffmpeg -version | head -1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
-      # Kokoro model (~120 MB) and the CC0 music tracks are cached between runs.
+      # The CC0 music tracks are cached between runs.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/raphyzone-social

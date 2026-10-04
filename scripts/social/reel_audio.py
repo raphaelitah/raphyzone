@@ -1,4 +1,4 @@
-"""Voiceover (Kokoro, Apache-2.0) and background music (CC0 tracks from Wikimedia Commons)."""
+"""Background music (CC0 tracks from Wikimedia Commons) and ffmpeg helpers."""
 import hashlib
 import json
 import os
@@ -11,8 +11,6 @@ import requests
 
 ROOT = Path(__file__).resolve().parent
 UA = {"User-Agent": "RaphyzoneSocialBot/1.0 (https://raphyzone.pages.dev; raphael.itah@gmail.com)"}
-KOKORO_ONNX = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
-KOKORO_VOICES = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 CACHE = Path(os.environ.get("SOCIAL_CACHE", Path.home() / ".cache" / "raphyzone-social"))
 
 
@@ -29,33 +27,6 @@ def download(url, dest, headers=UA):
                 f.write(chunk)
     tmp.rename(dest)
     return dest
-
-
-_kokoro = None
-
-
-def _get_kokoro():
-    global _kokoro
-    if _kokoro is None:
-        from kokoro_onnx import Kokoro
-        model = download(KOKORO_ONNX, CACHE / "kokoro.int8.onnx")
-        voices = download(KOKORO_VOICES, CACHE / "kokoro-voices.bin")
-        _kokoro = Kokoro(str(model), str(voices))
-    return _kokoro
-
-
-def synth(text, out_wav):
-    """Write a voiceover WAV for `text`. TTS_ENGINE=say uses macOS `say` (local testing only)."""
-    out_wav = Path(out_wav)
-    if os.environ.get("TTS_ENGINE") == "say":
-        aiff = out_wav.with_suffix(".aiff")
-        subprocess.run(["say", "-v", "Samantha", "-r", "175", "-o", str(aiff), text], check=True)
-        return aiff
-    import soundfile as sf
-    k = _get_kokoro()
-    samples, sr = k.create(text, voice=os.environ.get("TTS_VOICE", "af_heart"), speed=1.05, lang="en-us")
-    sf.write(str(out_wav), samples, sr)
-    return out_wav
 
 
 def _commons_license(file_title):
