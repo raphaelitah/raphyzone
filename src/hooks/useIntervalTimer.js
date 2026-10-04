@@ -44,10 +44,11 @@ export default function useIntervalTimer(config) {
   const phaseIndexRef = useRef(0);
   const sequenceRef = useRef(sequence);
   const statusRef = useRef('idle');
+  const lastRemainingRef = useRef(null);
 
   useEffect(() => { sequenceRef.current = sequence; }, [sequence]);
   useEffect(() => { phaseIndexRef.current = phaseIndex; }, [phaseIndex]);
-  useEffect(() => { statusRef.current = status; }, [status]);
+  useEffect(() => { statusRef.current = status; lastRemainingRef.current = null; }, [status]);
 
   // Advances phaseIndex as many times as needed to catch up with elapsed wall-clock
   // time (e.g. after the phone was locked through one or more phases).
@@ -98,18 +99,26 @@ export default function useIntervalTimer(config) {
   // whether the current remaining time lands exactly on 3/2/1 — setInterval
   // ticks aren't guaranteed to land on exact second boundaries (throttling,
   // event-loop jitter), so an exact-match check can silently skip a beep.
-  const playPhaseSounds = useCallback((prevStatus, prevPhaseIdx, prevRemainingSec) => {
+  const playPhaseSounds = useCallback((prevStatus, prevPhaseIdx) => {
     const newStatus = statusRef.current;
     const newPhaseIdx = phaseIndexRef.current;
     const transitioned = (prevStatus === 'leadin' && newStatus === 'running')
       || (prevStatus === 'running' && newStatus === 'running' && newPhaseIdx !== prevPhaseIdx);
     if (transitioned) {
+      lastRemainingRef.current = null;
       playGoBeep();
       return;
     }
-    if ((newStatus !== 'running' && newStatus !== 'leadin') || phaseEndAtRef.current == null) return;
-    if (prevRemainingSec == null) return;
+    if ((newStatus !== 'running' && newStatus !== 'leadin') || phaseEndAtRef.current == null) {
+      lastRemainingRef.current = null;
+      return;
+    }
     const remaining = (phaseEndAtRef.current - Date.now()) / 1000;
+    // The remaining time at the previous check (not re-derived now, which
+    // would equal `remaining` and never cross anything). Unknown right after a
+    // start/resume/phase change, where the last check was ~one tick ago.
+    const prevRemainingSec = lastRemainingRef.current ?? remaining + 1;
+    lastRemainingRef.current = remaining;
     for (const boundary of COUNTDOWN_BOUNDARIES) {
       if (prevRemainingSec >= boundary && remaining < boundary) {
         playCountdownBeep();
@@ -123,11 +132,8 @@ export default function useIntervalTimer(config) {
     const id = setInterval(() => {
       const prevStatus = statusRef.current;
       const prevPhaseIdx = phaseIndexRef.current;
-      const prevRemainingSec = phaseEndAtRef.current != null
-        ? (phaseEndAtRef.current - Date.now()) / 1000
-        : null;
       catchUp();
-      playPhaseSounds(prevStatus, prevPhaseIdx, prevRemainingSec);
+      playPhaseSounds(prevStatus, prevPhaseIdx);
       setTick((t) => t + 1);
     }, 1000);
     return () => clearInterval(id);
@@ -138,11 +144,8 @@ export default function useIntervalTimer(config) {
       if (document.visibilityState === 'visible') {
         const prevStatus = statusRef.current;
         const prevPhaseIdx = phaseIndexRef.current;
-        const prevRemainingSec = phaseEndAtRef.current != null
-          ? (phaseEndAtRef.current - Date.now()) / 1000
-          : null;
         catchUp();
-        playPhaseSounds(prevStatus, prevPhaseIdx, prevRemainingSec);
+        playPhaseSounds(prevStatus, prevPhaseIdx);
         setTick((t) => t + 1);
       }
     };

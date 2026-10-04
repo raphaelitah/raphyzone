@@ -94,7 +94,11 @@ export default function WorkoutExecution() {
   // instead of pausing while the athlete logs their performance.
   const [blockRestUntil, setBlockRestUntil] = useState(null);
   const blockRestUntilRef = useRef(null);
-  useEffect(() => { blockRestUntilRef.current = blockRestUntil; }, [blockRestUntil]);
+  const blockRestPrevRemainingRef = useRef(null);
+  useEffect(() => {
+    blockRestUntilRef.current = blockRestUntil;
+    blockRestPrevRemainingRef.current = null;
+  }, [blockRestUntil]);
   const [blockRestFromId, setBlockRestFromId] = useState(null);
   const [pendingTabataStart, setPendingTabataStart] = useState(null); // Tabata start values held while confirming an early start during rest
   const [logPrompt, setLogPrompt] = useState(null); // { keys: string[], blockId: string|null }
@@ -156,11 +160,22 @@ export default function WorkoutExecution() {
       setTick((t) => t + 1);
       const until = blockRestUntilRef.current;
       if (until == null) return;
-      const remaining = Math.round((until - Date.now()) / 1000);
+      // Exact remaining time plus "which of 3/2/1 was crossed since the last
+      // tick" (as in useIntervalTimer): rounding fired the Go up to 0.5s early
+      // and then again on the next tick, since the rest hadn't expired yet.
+      const remaining = (until - Date.now()) / 1000;
       if (remaining <= 0) {
+        blockRestUntilRef.current = null;
         playGoBeep();
-      } else if (remaining === 3 || remaining === 2 || remaining === 1) {
-        playCountdownBeep();
+        return;
+      }
+      const prev = blockRestPrevRemainingRef.current ?? remaining + 1;
+      blockRestPrevRemainingRef.current = remaining;
+      for (const boundary of [3.5, 2.5, 1.5]) {
+        if (prev >= boundary && remaining < boundary) {
+          playCountdownBeep();
+          break;
+        }
       }
     }, 1000);
     return () => clearInterval(id);

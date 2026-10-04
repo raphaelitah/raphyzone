@@ -123,13 +123,13 @@ export default function SupersetPanel({
         // Beep whenever a countdown boundary was crossed since the last tick,
         // rather than only when remaining lands exactly on 3/2/1 — setInterval
         // ticks can drift/throttle and skip past an exact-match value.
-        const prevRemaining = prevRemainingRef.current;
-        if (prevRemaining != null) {
-          for (const boundary of COUNTDOWN_BOUNDARIES) {
-            if (prevRemaining >= boundary && remaining < boundary) {
-              playCountdownBeep();
-              break;
-            }
+        // First tick of a phase has no previous sample; the last one would
+        // have been ~1s ago, so a short phase (e.g. a 4s rest) still beeps.
+        const prevRemaining = prevRemainingRef.current ?? remaining + 1;
+        for (const boundary of COUNTDOWN_BOUNDARIES) {
+          if (prevRemaining >= boundary && remaining < boundary) {
+            playCountdownBeep();
+            break;
           }
         }
         prevRemainingRef.current = remaining;
@@ -148,13 +148,13 @@ export default function SupersetPanel({
           emitState({ phase: 'ready', round: round + 1, exIndex: 0 });
           return;
         }
-        const prevRemaining = prevRemainingRef.current;
-        if (prevRemaining != null) {
-          for (const boundary of COUNTDOWN_BOUNDARIES) {
-            if (prevRemaining >= boundary && remaining < boundary) {
-              playCountdownBeep();
-              break;
-            }
+        // First tick of a phase has no previous sample; the last one would
+        // have been ~1s ago, so a short phase (e.g. a 4s rest) still beeps.
+        const prevRemaining = prevRemainingRef.current ?? remaining + 1;
+        for (const boundary of COUNTDOWN_BOUNDARIES) {
+          if (prevRemaining >= boundary && remaining < boundary) {
+            playCountdownBeep();
+            break;
           }
         }
         prevRemainingRef.current = remaining;
