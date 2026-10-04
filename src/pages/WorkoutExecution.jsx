@@ -140,6 +140,9 @@ export default function WorkoutExecution() {
   const indexRef = useRef(0);
   const exerciseElapsedRef = useRef({});
   const enterTimeRef = useRef(Date.now());
+  // Seconds of the current stretch (since enterTimeRef) already credited to exercises
+  // by SupersetPanel's per-set tracking, so flushCurrentTime doesn't count them twice.
+  const attributedSinceEnterRef = useRef(0);
   const sessionStartMsRef = useRef(null);
   const sessionCreatedMsRef = useRef(null); // fallback for elapsed-time if the clock never got an explicit start
   const loadedExerciseSessionsRef = useRef([]);
@@ -182,7 +185,7 @@ export default function WorkoutExecution() {
   }, [sessionStartMs]);
 
   // Reset per-exercise enter time whenever the active exercise changes
-  useEffect(() => { enterTimeRef.current = Date.now(); }, [index]);
+  useEffect(() => { enterTimeRef.current = Date.now(); attributedSinceEnterRef.current = 0; }, [index]);
 
   // Clears the inter-block rest once its wall-clock deadline passes, checked
   // on every 1s tick (above) so it expires whether or not the log/tracking
@@ -542,6 +545,8 @@ export default function WorkoutExecution() {
         sessionStartMsRef.current += pausedMs;
         setSessionStartMs(sessionStartMsRef.current);
       }
+      // Paused time isn't workout time for the exercise either.
+      enterTimeRef.current += pausedMs;
       if (blockTimerWasRunningRef.current && (timer.status === 'paused' || timer.status === 'pausedLeadin')) timer.resume();
       blockTimerWasRunningRef.current = false;
       setWorkoutPaused(false);
@@ -657,6 +662,7 @@ export default function WorkoutExecution() {
   const handleSupersetExerciseElapsed = (key, deltaSeconds) => {
     if (!deltaSeconds || deltaSeconds <= 0) return;
     exerciseElapsedRef.current[key] = (exerciseElapsedRef.current[key] || 0) + deltaSeconds;
+    attributedSinceEnterRef.current += deltaSeconds;
     scheduleSave(key);
   };
 
@@ -839,9 +845,10 @@ export default function WorkoutExecution() {
   const flushCurrentTime = () => {
     const cur = exercisesRef.current[indexRef.current];
     if (!cur) return;
-    const delta = (Date.now() - enterTimeRef.current) / 1000;
+    const delta = (Date.now() - enterTimeRef.current) / 1000 - attributedSinceEnterRef.current;
     if (delta > 0) exerciseElapsedRef.current[cur.key] = (exerciseElapsedRef.current[cur.key] || 0) + delta;
     enterTimeRef.current = Date.now();
+    attributedSinceEnterRef.current = 0;
   };
 
   const saveLogToBackend = async (key) => {
