@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  parsePrescribedDistanceKm,
   isEMOMBlock,
   isAlternatingEmomBlock,
   isTabataBlock,
@@ -379,5 +380,18 @@ describe('Ladder blocks (Ben\'s Therapy: 10-9-8...-1 devil\'s press paired with 
     expect(list.map((e) => e.reps)).toEqual(['10-9-8-7-6-5-4-3-2-1', '20-18-16-14-12-10-8-6-4-2']);
     expect(list.map((e) => e.rounds)).toEqual([10, 10]);
     expect(list[0].ladder).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+  });
+});
+
+describe('parsePrescribedDistanceKm', () => {
+  it('parses metres, km and thousands separators', () => {
+    expect(parsePrescribedDistanceKm('400m')).toBe(0.4);
+    expect(parsePrescribedDistanceKm('1,000 m')).toBe(1);
+    expect(parsePrescribedDistanceKm('5km')).toBe(5);
+  });
+  it('treats a bare number as metres only for distance prescriptions', () => {
+    expect(parsePrescribedDistanceKm('400', 'distance')).toBe(0.4);
+    expect(parsePrescribedDistanceKm('400', 'reps')).toBeNull();
+    expect(parsePrescribedDistanceKm('', 'distance')).toBeNull();
   });
 });

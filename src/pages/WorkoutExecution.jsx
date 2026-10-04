@@ -35,7 +35,9 @@ import {
   buildExerciseMapByCode,
   buildFlatExerciseList,
   deriveBlockTimerConfig,
+  parsePrescribedDistanceKm,
 } from '@/lib/workoutStructure';
+import DurationInput from '@/components/DurationInput';
 
 function formatDuration(sec) {
   const s = Math.floor(sec || 0);
