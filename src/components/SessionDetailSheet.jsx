@@ -271,7 +271,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                 </div>
               ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>
             ) : exerciseSessions.length ? (
-              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} />
+              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} totalSeconds={session.elapsed_seconds} />
             ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>}
           </div>
 
@@ -351,7 +351,19 @@ function blockTotalSeconds(items) {
   return total > 0 ? total : null;
 }
 
-function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions }) {
+function TransitionTime({ totalSeconds, exerciseSessions }) {
+  const gap = Math.round((totalSeconds || 0) - (sessionDurationSeconds(exerciseSessions) || 0));
+  if (gap <= 0) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="h-6 w-6 rounded-full bg-muted flex items-center justify-center"><Clock className="h-3 w-3" /></span>
+      <span className="font-medium">Transition time</span>
+      <span className="inline-flex items-center gap-1 ml-auto"><Clock className="h-3 w-3" />{fmtDuration(gap)}</span>
+    </div>
+  );
+}
+
+function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions, totalSeconds }) {
   const { groups, leftover } = groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions);
 
   if (!groups.length) {
@@ -418,6 +430,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
           </div>
         </div>
       )}
+      <TransitionTime totalSeconds={totalSeconds} exerciseSessions={exerciseSessions} />
     </div>
   );
 }
