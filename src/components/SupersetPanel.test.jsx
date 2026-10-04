@@ -21,28 +21,28 @@ function clickStartSet() {
 }
 
 describe('SupersetPanel lead-in', () => {
-  it('shows a 10s "Get ready" lead-in on the very first Start set, before the onStartTimer callback fires', () => {
+  it('shows a 10s "Get ready" lead-in on the very first Start set; onStartTimer fires at click (cancelling any inter-block rest) but the set itself has not started', () => {
     const onStartTimer = vi.fn();
     render(<SupersetPanel exercises={exercises} rounds={2} restSec={30} onStartTimer={onStartTimer} />);
 
     clickStartSet();
 
     expect(screen.getByText('Get ready')).not.toBeNull();
-    expect(onStartTimer).not.toHaveBeenCalled();
+    expect(onStartTimer).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /done/i })).toBeNull();
   });
 
-  it('starts the set (calling onStartTimer) once the lead-in elapses', () => {
+  it('starts the set (calling onStartTimer again) once the lead-in elapses', () => {
     const onStartTimer = vi.fn();
     render(<SupersetPanel exercises={exercises} rounds={2} restSec={30} onStartTimer={onStartTimer} />);
 
     clickStartSet();
     act(() => { vi.advanceTimersByTime(9999); });
     expect(screen.getByText('Get ready')).not.toBeNull();
-    expect(onStartTimer).not.toHaveBeenCalled();
+    expect(onStartTimer).toHaveBeenCalledTimes(1);
 
     act(() => { vi.advanceTimersByTime(1); });
-    expect(onStartTimer).toHaveBeenCalledTimes(1);
+    expect(onStartTimer).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: /done/i })).not.toBeNull();
   });
 
@@ -58,7 +58,8 @@ describe('SupersetPanel lead-in', () => {
     // Second exercise's "Start set" should go straight to running.
     clickStartSet();
     expect(screen.queryByText('Get ready')).toBeNull();
-    expect(onStartTimer).toHaveBeenCalledTimes(2);
+    // click + lead-in end for the first set, then click + start for the second.
+    expect(onStartTimer).toHaveBeenCalledTimes(4);
     expect(screen.getByRole('button', { name: /done/i })).not.toBeNull();
   });
 });

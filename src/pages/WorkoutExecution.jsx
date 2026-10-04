@@ -320,7 +320,7 @@ export default function WorkoutExecution() {
     // save. Match by saved position first, then fall back to the first
     // not-yet-claimed exercise with that id (rows saved before order_index).
     const claimedKeys = new Set();
-    const sortedSaved = [...loadedExerciseSessionsRef.current].sort((a, b) => (a.order_index == null) - (b.order_index == null));
+    const sortedSaved = [...loadedExerciseSessionsRef.current].sort((a, b) => Number(a.order_index == null) - Number(b.order_index == null));
     sortedSaved.forEach((es) => {
       const ex = (es.order_index != null
         ? finalExercises.find((e) => e.order === es.order_index && e.exercise_id === es.exercise_id && !claimedKeys.has(e.key))
