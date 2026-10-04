@@ -42,6 +42,7 @@ export default function SupersetPanel({
   rounds,
   restSec,
   onExerciseElapsed,
+  onSetStart = null,
   onFinish,
   onSkip = null,
   onStartTimer,
@@ -95,6 +96,7 @@ export default function SupersetPanel({
 
   const startSetActual = () => {
     onStartTimer?.();
+    onSetStart?.();
     startAtRef.current = Date.now();
     setPhase('running');
     emitState({ phase: 'running' });

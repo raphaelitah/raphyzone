@@ -418,21 +418,28 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
 }
 
 function ExercisePerformanceRow({ es, className = '' }) {
+  const timeSec = es.duration_seconds ?? es.elapsed_seconds ?? 0;
+  const isRun = es.distance_km != null;
+  const repsLabel = !isRun && es.reps ? `${es.reps}${/^\d+$/.test(String(es.reps).trim()) ? ' reps' : ''}` : null;
+  const weightLabel = isRun ? null : es.max_weight > 0 ? `${es.max_weight}kg` : es.max_weight === 0 ? 'Bodyweight' : null;
   return (
     <Card className={cn('rounded-xl border-border p-3', className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-        {es.distance_km != null ? (
-          <span className="text-sm font-semibold shrink-0">{es.distance_km}km</span>
-        ) : es.max_weight > 0 ? (
-          <span className="text-sm font-semibold shrink-0">{es.max_weight}kg</span>
-        ) : es.max_weight === 0 ? (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand shrink-0">Bodyweight</span>
-        ) : null}
+        {isRun && <span className="text-sm font-semibold shrink-0">{es.distance_km}km</span>}
       </div>
-      {es.difficulty && (
-        <span className={cn('inline-block mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[es.difficulty]?.color)}>{DIFFICULTY_META[es.difficulty]?.label}</span>
-      )}
+      <div className="flex items-center gap-x-3 gap-y-1 mt-1.5 flex-wrap text-xs text-muted-foreground">
+        {repsLabel && <span className="font-semibold text-foreground">{es.sets > 1 ? `${es.sets} × ` : ''}{repsLabel}</span>}
+        {weightLabel && (
+          weightLabel === 'Bodyweight'
+            ? <span className="font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
+            : <span className="font-semibold text-foreground">{weightLabel}</span>
+        )}
+        {timeSec > 0 && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{fmtDuration(timeSec)}</span>}
+        {es.difficulty && (
+          <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', DIFFICULTY_META[es.difficulty]?.color)}>{DIFFICULTY_META[es.difficulty]?.label}</span>
+        )}
+      </div>
       {es.note && <p className="text-xs text-muted-foreground mt-1.5">{es.note}</p>}
     </Card>
   );
@@ -456,11 +463,11 @@ function EditableExerciseRow({ es, draft, onChange, runExercise = false }) {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[11px] text-muted-foreground">Distance (km)</label>
-            <input type="number" inputMode="decimal" value={draft.distance_km ?? ''} onChange={(e) => onChange({ distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+            <input type="number" inputMode="decimal" value={draft.distance_km ?? ''} onChange={(e) => onChange({ distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 h-8 text-[10px] font-medium focus:outline-none focus:ring-2 focus:ring-brand" />
           </div>
           <div>
             <label className="text-[11px] text-muted-foreground">Time</label>
-            <DurationInput valueSeconds={draft.duration_seconds} onChange={(sec) => onChange({ duration_seconds: sec, elapsed_seconds: sec ?? 0 })} />
+            <DurationInput compact valueSeconds={draft.duration_seconds} onChange={(sec) => onChange({ duration_seconds: sec, elapsed_seconds: sec ?? 0 })} />
           </div>
         </div>
       ) : (
@@ -480,13 +487,13 @@ function EditableExerciseRow({ es, draft, onChange, runExercise = false }) {
         <label className="text-[11px] text-muted-foreground">Difficulty</label>
         <div className="grid grid-cols-4 gap-1.5 mt-1">
           {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
-            <button key={val} type="button" onClick={() => onChange({ difficulty: val })} className={cn('py-1.5 rounded-lg border text-[10px] font-medium', draft.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
+            <button key={val} type="button" onClick={() => onChange({ difficulty: val })} className={cn('h-8 rounded-lg border text-[10px] font-medium', draft.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
           ))}
         </div>
       </div>}
       {!draft.skipped && !isRun && <div>
         <label className="text-[11px] text-muted-foreground">Time</label>
-        <DurationInput valueSeconds={draft.elapsed_seconds || null} onChange={(sec) => onChange({ elapsed_seconds: sec ?? 0 })} />
+        <DurationInput compact valueSeconds={draft.elapsed_seconds || null} onChange={(sec) => onChange({ elapsed_seconds: sec ?? 0 })} />
       </div>}
       {!draft.skipped && <textarea value={draft.note || ''} onChange={(e) => onChange({ note: e.target.value })} placeholder="Note…" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand" />}
     </Card>

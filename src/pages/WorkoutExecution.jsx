@@ -143,6 +143,9 @@ export default function WorkoutExecution() {
   // Seconds of the current stretch (since enterTimeRef) already credited to exercises
   // by SupersetPanel's per-set tracking, so flushCurrentTime doesn't count them twice.
   const attributedSinceEnterRef = useRef(0);
+  // The exercise whose set just finished, and when: the wait until the next set
+  // starts (rest, transitions) is credited back to it, not to the next exercise.
+  const trailingRef = useRef(null); // { key, since }
   const sessionStartMsRef = useRef(null);
   const sessionCreatedMsRef = useRef(null); // fallback for elapsed-time if the clock never got an explicit start
   const loadedExerciseSessionsRef = useRef([]);
@@ -547,6 +550,7 @@ export default function WorkoutExecution() {
       }
       // Paused time isn't workout time for the exercise either.
       enterTimeRef.current += pausedMs;
+      if (trailingRef.current) trailingRef.current.since += pausedMs;
       if (blockTimerWasRunningRef.current && (timer.status === 'paused' || timer.status === 'pausedLeadin')) timer.resume();
       blockTimerWasRunningRef.current = false;
       setWorkoutPaused(false);
@@ -663,7 +667,21 @@ export default function WorkoutExecution() {
     if (!deltaSeconds || deltaSeconds <= 0) return;
     exerciseElapsedRef.current[key] = (exerciseElapsedRef.current[key] || 0) + deltaSeconds;
     attributedSinceEnterRef.current += deltaSeconds;
+    trailingRef.current = { key, since: Date.now() };
     scheduleSave(key);
+  };
+
+  // A new set is starting: everything since the previous set ended (rest,
+  // inter-block rest, waiting to tap start) belongs to that previous exercise.
+  const handleSetStart = () => {
+    const t = trailingRef.current;
+    trailingRef.current = null;
+    if (!t) return;
+    const gap = (Date.now() - t.since) / 1000;
+    if (gap <= 0) return;
+    exerciseElapsedRef.current[t.key] = (exerciseElapsedRef.current[t.key] || 0) + gap;
+    attributedSinceEnterRef.current += gap;
+    scheduleSave(t.key);
   };
 
   // Seeds one editable entry per exercise so the completion screen can
@@ -1495,7 +1513,7 @@ export default function WorkoutExecution() {
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="text-xs font-medium text-muted-foreground">Distance (km)</label>
-                          <input type="number" inputMode="decimal" value={entry.distance_km ?? ''} onChange={(ev) => updateBlockLogEntry(e.key, { distance_km: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                          <input type="number" inputMode="decimal" value={entry.distance_km ?? ''} onChange={(ev) => updateBlockLogEntry(e.key, { distance_km: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 h-10 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand" />
                         </div>
                         <div>
                           <label className="text-xs font-medium text-muted-foreground">Time</label>
@@ -1518,7 +1536,7 @@ export default function WorkoutExecution() {
                     <label className="text-xs font-medium text-muted-foreground">How did it feel?</label>
                     <div className="grid grid-cols-4 gap-2 mt-1 mb-3">
                       {Object.entries(DIFFICULTY_META).map(([val, meta]) => (
-                        <button key={val} onClick={() => updateBlockLogEntry(e.key, { difficulty: val })} className={cn('py-2.5 rounded-xl border text-xs font-medium transition-all', entry.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
+                        <button key={val} onClick={() => updateBlockLogEntry(e.key, { difficulty: val })} className={cn('h-10 rounded-xl border text-xs font-medium transition-all', entry.difficulty === val ? meta.color + ' border-current' : 'border-border text-muted-foreground')}>{meta.label}</button>
                       ))}
                     </div>
                     <textarea value={entry.note || ''} onChange={(ev) => updateBlockLogEntry(e.key, { note: ev.target.value })} placeholder="Optional note…" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand" />
@@ -1552,6 +1570,7 @@ export default function WorkoutExecution() {
                 rounds={timerDefaultConfig?.rounds || 1}
                 restSec={restOverrides[current.block_id] ?? (timerDefaultConfig?.restSec ?? 0)}
                 onExerciseElapsed={handleSupersetExerciseElapsed}
+                onSetStart={handleSetStart}
                 onFinish={handleSupersetFinish}
                 onSkip={handleSupersetSkip}
                 onRoundSkip={handleRoundSkip}
@@ -1590,6 +1609,7 @@ export default function WorkoutExecution() {
                 rounds={soloRounds}
                 restSec={restOverrides[current.block_id] ?? (current.rest_seconds || 0)}
                 onExerciseElapsed={handleSupersetExerciseElapsed}
+                onSetStart={handleSetStart}
                 onFinish={handleSoloFinish}
                 onRoundSkip={handleRoundSkip}
                 onStartTimer={startTimer}
