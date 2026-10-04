@@ -420,16 +420,16 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
 function ExercisePerformanceRow({ es, className = '' }) {
   const timeSec = es.duration_seconds ?? es.elapsed_seconds ?? 0;
   const isRun = es.distance_km != null;
-  const repsLabel = !isRun && es.reps ? `${es.reps}${/^\d+$/.test(String(es.reps).trim()) ? ' reps' : ''}` : null;
+  const repsLabel = !isRun && es.reps ? `${es.sets > 1 ? `${es.sets} × ` : ''}${es.reps}${/^\d+$/.test(String(es.reps).trim()) ? ' reps' : ''}` : null;
+  const primaryLabel = isRun ? `${es.distance_km}km` : repsLabel;
   const weightLabel = isRun ? null : es.max_weight > 0 ? `${es.max_weight}kg` : es.max_weight === 0 ? 'Bodyweight' : null;
   return (
     <Card className={cn('rounded-xl border-border p-3', className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium truncate">{es.exercise_name}</p>
-        {isRun && <span className="text-sm font-semibold shrink-0">{es.distance_km}km</span>}
+        {primaryLabel && <span className="text-sm font-semibold shrink-0">{primaryLabel}</span>}
       </div>
       <div className="flex items-center gap-x-3 gap-y-1 mt-1.5 flex-wrap text-xs text-muted-foreground">
-        {repsLabel && <span className="font-semibold text-foreground">{es.sets > 1 ? `${es.sets} × ` : ''}{repsLabel}</span>}
         {weightLabel && (
           weightLabel === 'Bodyweight'
             ? <span className="font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">Bodyweight</span>
