@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { Clock, Loader2, Pencil, Save } from 'lucide-react';
 import { parseISO, format } from 'date-fns';
-import { DIFFICULTY_META } from '@/lib/fitness';
+import { DIFFICULTY_META, isRunningExercise } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { buildBlocksByWorkout, buildBlockExercisesByBlock } from '@/lib/workoutStructure';
 import { useToast } from '@/components/ui/use-toast';
@@ -45,6 +45,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(false);
   const [blocks, setBlocks] = useState([]);
+  const [runExerciseIds, setRunExerciseIds] = useState(() => new Set());
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     setChartData([]);
     setChartKeys([]);
     setBlocks([]);
+    setRunExerciseIds(new Set());
     setBlockExercisesByBlock({});
     (async () => {
       try {
@@ -75,6 +77,12 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         });
         if (!active) return;
         setExerciseSessions(thisEs);
+        const codes = [...new Set(thisEs.map((es) => es.exercise_id).filter(Boolean))];
+        if (codes.length) {
+          const { data: exRows } = await supabase.from('exercises').select('exercise_code, movement_pattern, modality').in('exercise_code', codes);
+          if (!active) return;
+          setRunExerciseIds(new Set((exRows || []).filter((r) => isRunningExercise(r)).map((r) => r.exercise_code)));
+        }
 
         const textWorkoutId = workoutRow?.workout_id || null;
         if (textWorkoutId) {
@@ -148,7 +156,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         max_weight: es.max_weight ?? null,
         bodyweight: es.max_weight === 0,
         distance_km: es.distance_km ?? null,
-        duration_seconds: es.duration_seconds ?? null,
+        duration_seconds: es.duration_seconds ?? (runExerciseIds.has(es.exercise_id) && es.elapsed_seconds > 0 ? Number(es.elapsed_seconds) : null),
         difficulty: es.difficulty || 'normal',
         note: es.note || '',
         elapsed_seconds: es.elapsed_seconds ?? 0,
@@ -253,7 +261,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
               exerciseSessions.length ? (
                 <div className="space-y-2">
                   {exerciseSessions.map((es, i) => (
-                    <EditableExerciseRow key={es.id || i} es={es} draft={drafts[es.id] || {}} onChange={(patch) => setDraft(es.id, patch)} />
+                    <EditableExerciseRow key={es.id || i} es={es} runExercise={runExerciseIds.has(es.exercise_id)} draft={drafts[es.id] || {}} onChange={(patch) => setDraft(es.id, patch)} />
                   ))}
                 </div>
               ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>
@@ -430,8 +438,8 @@ function ExercisePerformanceRow({ es, className = '' }) {
   );
 }
 
-function EditableExerciseRow({ es, draft, onChange }) {
-  const isRun = es.distance_km != null || es.duration_seconds != null;
+function EditableExerciseRow({ es, draft, onChange, runExercise = false }) {
+  const isRun = runExercise || es.distance_km != null || es.duration_seconds != null;
   return (
     <Card className={cn('rounded-xl border-border p-3 space-y-2.5', draft.skipped && 'opacity-60')}>
       <div className="flex items-center justify-between gap-2">
