@@ -1388,24 +1388,27 @@ export default function WorkoutExecution() {
             // One pill — and one click target — per block (or per standalone
             // exercise) instead of one per exercise: members of the same block
             // lead to the same place when tapped (goToExercise renders the whole
-            // block either way), so the whole pill is a single button, colored
-            // as one unit for the block's overall state. The per-member
-            // <span>s inside are purely a hairline visual divider (cut to the
-            // page background) showing there's more than one exercise here,
-            // not separately-colored/navigable steps. Sized by member count so
-            // total width still matches the exercise count.
+            // block either way), so the whole pill is a single button. Each
+            // member <span> inside is colored on its own (current / logged /
+            // upcoming) so a workout that is a single multi-exercise block
+            // still shows where you are; hairline dividers cut to the page
+            // background. Sized by member count so total width still matches
+            // the exercise count.
             <button
               key={group.block_id ?? group.items[0].e.key}
               type="button"
               onClick={() => goToExercise(group.items[0].i)}
-              className={cn(
-                'rounded-full overflow-hidden flex divide-x divide-background transition-colors',
-                group.items.some(({ i }) => i === index) ? 'bg-brand' : group.items.every(({ e }) => logs[e.key]) ? 'bg-brand/40' : 'bg-muted'
-              )}
+              className="rounded-full overflow-hidden flex divide-x divide-background"
               style={{ flex: `${group.items.length} 1 0%` }}
             >
-              {group.items.map(({ e }) => (
-                <span key={e.key} className="h-1 flex-1" />
+              {group.items.map(({ e, i }) => (
+                <span
+                  key={e.key}
+                  className={cn(
+                    'h-1 flex-1 transition-colors',
+                    i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted'
+                  )}
+                />
               ))}
             </button>
           ))}
