@@ -312,9 +312,20 @@ export default function WorkoutExecution() {
 
     // Hydrate logs + per-exercise time from any previously saved exercise sessions
     const hydrated = {};
-    loadedExerciseSessionsRef.current.forEach((es) => {
-      const ex = finalExercises.find((e) => e.exercise_id === es.exercise_id);
+    // A workout can repeat one exercise (Bert has six Runs and two Burpees), so
+    // matching on exercise_id alone would pile every saved Run onto the first
+    // Run's key — losing the others and re-inserting duplicates on the next
+    // save. Match by saved position first, then fall back to the first
+    // not-yet-claimed exercise with that id (rows saved before order_index).
+    const claimedKeys = new Set();
+    const sortedSaved = [...loadedExerciseSessionsRef.current].sort((a, b) => (a.order_index == null) - (b.order_index == null));
+    sortedSaved.forEach((es) => {
+      const ex = (es.order_index != null
+        ? finalExercises.find((e) => e.order === es.order_index && e.exercise_id === es.exercise_id && !claimedKeys.has(e.key))
+        : null)
+        || finalExercises.find((e) => e.exercise_id === es.exercise_id && !claimedKeys.has(e.key));
       if (ex) {
+        claimedKeys.add(ex.key);
         hydrated[ex.key] = {
           max_weight: es.max_weight || null,
           bodyweight: es.max_weight === 0,
@@ -637,16 +648,21 @@ export default function WorkoutExecution() {
   // real block (blockId set) that's every exercise in it; for a solo
   // exercise it's just the one.
   const openLogPrompt = (keys, blockId = null, review = false) => {
+    flushCurrentTime();
     const entries = {};
     keys.forEach((key) => {
       const existing = logs[key] || {};
+      const ex = exercises.find((e) => e.key === key);
+      const isRun = ex && isRunningExercise(ex.details);
+      const elapsed = Math.round(exerciseElapsedRef.current[key] || 0);
+      const prescribedKm = isRun ? parsePrescribedDistanceKm(ex.reps, ex.prescription_type) : null;
       entries[key] = {
         difficulty: existing.difficulty || null,
         note: existing.note || '',
         max_weight: existing.max_weight ?? null,
         bodyweight: !!existing.bodyweight,
-        distance_km: existing.distance_km ?? null,
-        duration_seconds: existing.duration_seconds ?? null,
+        distance_km: existing.distance_km ?? (prescribedKm != null ? Math.round(prescribedKm * 1000) / 1000 : null),
+        duration_seconds: existing.duration_seconds ?? (isRun && elapsed > 0 ? elapsed : null),
       };
     });
     setBlockLogEntries(entries);
@@ -711,6 +727,8 @@ export default function WorkoutExecution() {
     const { keys, blockId, review } = logPrompt;
     keys.forEach((key) => {
       const entry = blockLogEntries[key] || {};
+      // A time the athlete entered (or confirmed) replaces the tracked exercise time.
+      if (entry.duration_seconds != null) exerciseElapsedRef.current[key] = entry.duration_seconds;
       updateLog(key, {
         difficulty: entry.difficulty || 'normal',
         note: entry.note || '',
@@ -1385,32 +1403,30 @@ export default function WorkoutExecution() {
         </div>
         <div className="flex gap-1 mt-2">
           {breadcrumbGroups.map((group) => (
-            // One pill — and one click target — per block (or per standalone
-            // exercise) instead of one per exercise: members of the same block
-            // lead to the same place when tapped (goToExercise renders the whole
-            // block either way), so the whole pill is a single button. Each
-            // member <span> inside is colored on its own (current / logged /
-            // upcoming) so a workout that is a single multi-exercise block
-            // still shows where you are; hairline dividers cut to the page
-            // background. Sized by member count so total width still matches
-            // the exercise count.
-            <button
+            // One pill per block (or standalone exercise). Each member segment
+            // inside is its own button, colored (current / logged / upcoming)
+            // and navigable on its own — a circuit is a single block whose
+            // exercises are done one by one, so a block-level target would
+            // always jump to its first exercise. Hairline dividers cut to the
+            // page background; width is sized by member count.
+            <div
               key={group.block_id ?? group.items[0].e.key}
-              type="button"
-              onClick={() => goToExercise(group.items[0].i)}
               className="rounded-full overflow-hidden flex divide-x divide-background"
               style={{ flex: `${group.items.length} 1 0%` }}
             >
               {group.items.map(({ e, i }) => (
-                <span
+                <button
                   key={e.key}
+                  type="button"
+                  aria-label={`Go to exercise ${i + 1}`}
+                  onClick={() => goToExercise(i)}
                   className={cn(
                     'h-1 flex-1 transition-colors',
                     i === index ? 'bg-brand' : logs[e.key] ? 'bg-brand/40' : 'bg-muted'
                   )}
                 />
               ))}
-            </button>
+            </div>
           ))}
         </div>
       </header>
@@ -1458,8 +1474,8 @@ export default function WorkoutExecution() {
                           <input type="number" inputMode="decimal" value={entry.distance_km ?? ''} onChange={(ev) => updateBlockLogEntry(e.key, { distance_km: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
                         </div>
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground">Time (min)</label>
-                          <input type="number" inputMode="decimal" value={entry.duration_seconds != null ? entry.duration_seconds / 60 : ''} onChange={(ev) => updateBlockLogEntry(e.key, { duration_seconds: ev.target.value === '' ? null : Math.max(0, Number(ev.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-xl border border-border bg-background px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand" />
+                          <label className="text-xs font-medium text-muted-foreground">Time</label>
+                          <DurationInput key={e.key + (logPrompt.review ? '-r' : '')} valueSeconds={entry.duration_seconds} onChange={(sec) => updateBlockLogEntry(e.key, { duration_seconds: sec })} />
                         </div>
                       </div>
                     ) : exRequiresWeight && (

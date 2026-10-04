@@ -208,6 +208,11 @@ export default function SupersetPanel({
     startAtRef.current = null;
     roundElapsedRef.current += delta;
     onExerciseElapsed?.(current.key, delta);
+    // Persist the cleared start time now: otherwise the last emitted state
+    // still says "running since startAt", and coming back to this exercise
+    // restores a timer counting from the original start (and adds that whole
+    // stretch to the exercise's elapsed time when it's finished again).
+    emitState({ phase: 'ready' });
 
     if (isLastInRound) {
       if (isLastRound) {

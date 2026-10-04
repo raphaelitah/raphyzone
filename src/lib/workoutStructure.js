@@ -94,6 +94,7 @@ export function buildFlatExerciseList(
         target_weight: targetWeight,
         rest_seconds: block.rest_between_rounds_sec ?? null,
         coach_note: be.notes || '',
+        prescription_type: be.prescription_type || null,
         order: order++,
         details,
         key: be.block_exercise_id,
@@ -364,5 +365,19 @@ export function deriveBlockTimerConfig(block, exerciseCount, blockExs = null) {
     };
   }
 
+  return null;
+}
+// Distance in km prescribed for a step (e.g. "400m", "1,000 m", "5km"), or
+// null when the prescription isn't a distance. A bare number counts as metres
+// only when the step is typed as a distance.
+export function parsePrescribedDistanceKm(reps, prescriptionType = null) {
+  const match = String(reps ?? '').trim().toLowerCase().match(/^(\d[\d,]*(?:\.\d+)?)\s*(km|m|mi)?\b/);
+  if (!match) return null;
+  const n = parseFloat(match[1].replace(/,/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = match[2] || (prescriptionType === 'distance' ? (n >= 50 ? 'm' : 'km') : null);
+  if (unit === 'km') return n;
+  if (unit === 'm') return n / 1000;
+  if (unit === 'mi') return n * 1.609344;
   return null;
 }
