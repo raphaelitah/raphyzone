@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DurationInput from '@/components/DurationInput';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -430,6 +431,7 @@ function ExercisePerformanceRow({ es, className = '' }) {
 }
 
 function EditableExerciseRow({ es, draft, onChange }) {
+  const isRun = es.distance_km != null || es.duration_seconds != null;
   return (
     <Card className={cn('rounded-xl border-border p-3 space-y-2.5', draft.skipped && 'opacity-60')}>
       <div className="flex items-center justify-between gap-2">
@@ -442,15 +444,15 @@ function EditableExerciseRow({ es, draft, onChange }) {
           {draft.skipped ? 'Skipped · Undo' : 'Skip'}
         </button>
       </div>
-      {draft.skipped ? null : es.distance_km != null || es.duration_seconds != null ? (
+      {draft.skipped ? null : isRun ? (
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-[11px] text-muted-foreground">Distance (km)</label>
             <input type="number" inputMode="decimal" value={draft.distance_km ?? ''} onChange={(e) => onChange({ distance_km: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
           </div>
           <div>
-            <label className="text-[11px] text-muted-foreground">Time (min)</label>
-            <input type="number" inputMode="decimal" value={draft.duration_seconds != null ? draft.duration_seconds / 60 : ''} onChange={(e) => onChange({ duration_seconds: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+            <label className="text-[11px] text-muted-foreground">Time</label>
+            <DurationInput valueSeconds={draft.duration_seconds} onChange={(sec) => onChange({ duration_seconds: sec, elapsed_seconds: sec ?? 0 })} />
           </div>
         </div>
       ) : (
@@ -474,9 +476,9 @@ function EditableExerciseRow({ es, draft, onChange }) {
           ))}
         </div>
       </div>}
-      {!draft.skipped && <div>
-        <label className="text-[11px] text-muted-foreground">Time (min)</label>
-        <input type="number" inputMode="numeric" value={draft.elapsed_seconds ? Math.round(draft.elapsed_seconds / 60) : ''} onChange={(e) => onChange({ elapsed_seconds: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) * 60 })} placeholder="0" className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+      {!draft.skipped && !isRun && <div>
+        <label className="text-[11px] text-muted-foreground">Time</label>
+        <DurationInput valueSeconds={draft.elapsed_seconds || null} onChange={(sec) => onChange({ elapsed_seconds: sec ?? 0 })} />
       </div>}
       {!draft.skipped && <textarea value={draft.note || ''} onChange={(e) => onChange({ note: e.target.value })} placeholder="Note…" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs min-h-[44px] focus:outline-none focus:ring-2 focus:ring-brand" />}
     </Card>
