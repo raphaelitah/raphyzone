@@ -10647,3 +10647,12 @@ Call log:
 - ⚠️ 1 approved workout(s) have exercises with no movement_pattern set, which breaks warm-up movement matching: E2E-SUPERSET-1791224444140
 
 ---
+## Equipment Fuzz Run 2026-10-05T18:25:37.181Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_kettlebell: generated plan, checked 14 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
