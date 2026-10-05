@@ -4,6 +4,7 @@ import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { generateWarmup } from '../_shared/warmupGenerator.ts';
 import { resolveWorkoutExercises } from '../_shared/resolveWorkoutExercises.ts';
+import { loadExerciseCatalog } from '../_shared/exerciseCatalog.ts';
 
 // Generates a warm up for a single workout for the calling user's profile.
 // Used wherever a workout is assigned to a plan slot outside of applySwap
@@ -24,7 +25,7 @@ Deno.serve(async (req: Request) => {
     const [{ data: workout }, { data: profiles }, { data: exerciseCatalog }] = await Promise.all([
       supabase.from('workouts').select('*').eq('id', workout_id).maybeSingle(),
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
-      supabase.from('exercises').select('id, name, exercise_code, movement_category, body_region, movement_pattern, primary_muscle_group, secondary_muscle_group, equipment_tags, modality, dumbbell_substitutable'),
+      loadExerciseCatalog(supabase),
     ]);
 
     if (!workout) return Response.json({ error: 'Workout not found' }, { status: 404, headers: corsHeaders });
