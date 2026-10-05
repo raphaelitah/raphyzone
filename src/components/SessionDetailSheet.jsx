@@ -47,6 +47,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [blocks, setBlocks] = useState([]);
   const [runExerciseIds, setRunExerciseIds] = useState(() => new Set());
   const [bodyweightExerciseIds, setBodyweightExerciseIds] = useState(() => new Set());
+  const [unilateralExerciseIds, setUnilateralExerciseIds] = useState(() => new Set());
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
@@ -81,10 +82,11 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         setExerciseSessions(thisEs);
         const codes = [...new Set(thisEs.map((es) => es.exercise_id).filter(Boolean))];
         if (codes.length) {
-          const { data: exRows } = await supabase.from('exercises').select('exercise_code, movement_pattern, modality, requires_load').in('exercise_code', codes);
+          const { data: exRows } = await supabase.from('exercises').select('exercise_code, movement_pattern, modality, requires_load, laterality').in('exercise_code', codes);
           if (!active) return;
           setRunExerciseIds(new Set((exRows || []).filter((r) => isRunningExercise(r)).map((r) => r.exercise_code)));
           setBodyweightExerciseIds(new Set((exRows || []).filter((r) => r.requires_load === false).map((r) => r.exercise_code)));
+          setUnilateralExerciseIds(new Set((exRows || []).filter((r) => r.laterality === 'Unilateral').map((r) => r.exercise_code)));
         }
 
         const textWorkoutId = workoutRow?.workout_id || null;
@@ -271,7 +273,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                 </div>
               ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>
             ) : exerciseSessions.length ? (
-              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} totalSeconds={session.elapsed_seconds} />
+              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} totalSeconds={session.elapsed_seconds} unilateralExerciseIds={unilateralExerciseIds} />
             ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>}
           </div>
 
@@ -363,13 +365,13 @@ function TransitionTime({ totalSeconds, exerciseSessions }) {
   );
 }
 
-function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions, totalSeconds }) {
+function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions, totalSeconds, unilateralExerciseIds }) {
   const { groups, leftover } = groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions);
 
   if (!groups.length) {
     return (
       <div className="space-y-2">
-        {exerciseSessions.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} />)}
+        {exerciseSessions.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} unilateral={unilateralExerciseIds.has(es.exercise_id)} />)}
       </div>
     );
   }
@@ -408,7 +410,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
                       <span className="relative z-10 shrink-0 w-6 text-center text-[10px] font-semibold text-purple-700 bg-purple-100 rounded px-1 py-0.5">{stepLabel}</span>
                     )}
                     {es ? (
-                      <ExercisePerformanceRow es={es} className="flex-1 min-w-0" />
+                      <ExercisePerformanceRow es={es} unilateral={unilateralExerciseIds.has(es.exercise_id)} className="flex-1 min-w-0" />
                     ) : (
                       <div className="flex-1 min-w-0 flex items-center justify-between gap-2 rounded-xl border border-dashed border-border p-3">
                         <p className="text-sm font-medium text-muted-foreground truncate">{be.exercise_title_raw}</p>
@@ -426,7 +428,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-2">Other</p>
           <div className="space-y-2">
-            {leftover.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} />)}
+            {leftover.map((es, i) => <ExercisePerformanceRow key={es.id || i} es={es} unilateral={unilateralExerciseIds.has(es.exercise_id)} />)}
           </div>
         </div>
       )}
@@ -435,10 +437,15 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
   );
 }
 
-function ExercisePerformanceRow({ es, className = '' }) {
+function ExercisePerformanceRow({ es, unilateral = false, className = '' }) {
   const timeSec = es.duration_seconds ?? es.elapsed_seconds ?? 0;
   const isRun = es.distance_km != null;
-  const repsLabel = !isRun && es.reps ? `${es.sets > 1 ? `${es.sets} × ` : ''}${es.reps}${/^\d+$/.test(String(es.reps).trim()) ? ' reps' : ''}` : null;
+  // Stored reps for unilateral exercises are the total across both sides, so show per side.
+  const isNumericReps = /^\d+$/.test(String(es.reps).trim());
+  const perSide = unilateral && isNumericReps && Number(es.reps) % 2 === 0;
+  const repsText = perSide ? `${Number(es.reps) / 2}` : es.reps;
+  const repsSuffix = perSide ? ' reps each' : isNumericReps ? ' reps' : '';
+  const repsLabel = !isRun && es.reps ? `${es.sets > 1 ? `${es.sets} × ` : ''}${repsText}${repsSuffix}` : null;
   const primaryLabel = isRun ? `${es.distance_km}km` : repsLabel;
   const weightLabel = isRun ? null : es.max_weight > 0 ? `${es.max_weight}kg` : es.max_weight === 0 ? 'Bodyweight' : null;
   return (
