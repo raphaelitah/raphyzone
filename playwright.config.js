@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   globalSetup: './tests/e2e/global-setup.js',
+  globalTeardown: './tests/e2e/global-teardown.js',
   fullyParallel: true,
   // Capped: many specs still sign in directly against the real Supabase project via
   // makeApiClient() (for setup/teardown as a specific user), whose password-auth rate

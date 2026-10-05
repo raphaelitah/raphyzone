@@ -27,6 +27,10 @@ export async function seedSupersetWorkout() {
     await api.from('workout_sessions').delete().eq('workout_id', orphan.id);
     await api.from('workouts').delete().eq('id', orphan.id);
   }
+  // Orphaned catalog exercises from crashed runs (admin-only delete).
+  await api.auth.signInWithPassword(ADMIN);
+  await api.from('exercises').delete().like('exercise_code', 'E2E-SS-%');
+  await api.auth.signInWithPassword(ATHLETE);
 
   const stamp = Date.now();
   const workoutId = `E2E-SUPERSET-${stamp}`;
