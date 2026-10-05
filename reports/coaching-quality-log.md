@@ -10679,3 +10679,30 @@ Call log:
 - ✓ Did "Strength day" — everything is good, 17/17 rest transitions felt natural.
 
 ---
+## Run 2026-10-05T19:20:11.560Z
+
+**Result: 4 anomaly(ies) found.**
+
+### duration
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 33 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 12 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~9 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e22d42f5b541a7ef79ed8a4b "The Ghost": declared 23 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+
+### warmup
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-10-12): "Calisthenics Tri-set" is dominantly "Horizontal Push" but its warm-up first-movement pick "Goblet Split Squat" is "Squat"
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-10-12): "Magnificent Nine" is dominantly "Locomotion / Cardio" but its warm-up first-movement pick "Dumbbell Bear Complex" is "Full Body Complex"
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-10-05): "Magnificent Nine" is dominantly "Locomotion / Cardio" but its warm-up first-movement pick "Dumbbell Bear Complex" is "Full Body Complex"
+- ⚠️ Plan for athlete d0415ac8-859f-4b74-9b12-3b9987294595 (week 2026-10-05): "Shoulders + Core" is dominantly "Shoulder Isolation" but its warm-up first-movement pick "Single Arm Kettlebell Sit-Up" is "Core - Flexion"
+
+### equipment
+- ✓ checked 21 plan-day workout assignments across 17 weekly plans
+
+---
