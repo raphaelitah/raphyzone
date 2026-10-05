@@ -60,10 +60,16 @@ function firstNumber(value) {
 // "Bodyweight" is a descriptive tag (used elsewhere to skip weight-load
 // calculations), not gear an athlete needs to own — every athlete has their
 // own body regardless of equipment profile, so it never counts as missing.
+// Matching is case-insensitive and honors a dumbbell_substitutable Kettlebell
+// tag being met by Dumbbells, same as planContext.ts / warmupGenerator.ts.
 function missingEquipment(exercise, availableSet) {
   const tags = (exercise?.equipment_tags || []).filter((t) => t !== 'Bodyweight');
   if (!tags.length) return [];
-  return tags.filter((t) => !availableSet.has(t));
+  return tags.filter((t) => {
+    const tag = t.toLowerCase().trim();
+    if (availableSet.has(tag)) return false;
+    return !(tag === 'kettlebell' && !!exercise.dumbbell_substitutable && availableSet.has('dumbbells'));
+  });
 }
 
 // Supabase caps a single request at 1000 rows by default. Several tables here
@@ -88,7 +94,7 @@ async function main() {
     fetchAll('workouts', 'id, workout_id, name, status, est_duration_min, duration_minutes, created_date', (q) => q.eq('status', 'approved')),
     fetchAll('workout_blocks', 'block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, time_cap_sec'),
     fetchAll('block_exercises', 'block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value'),
-    fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags'),
+    fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags, dumbbell_substitutable'),
     fetchAll('athlete_profiles', 'user_id, available_equipment, custom_equipment, equipment_profile'),
     fetchAll('weekly_plans', 'user_id, week_start_date, status, workouts', (q) => q.order('week_start_date', { ascending: false }).limit(200)),
   ]);
@@ -362,8 +368,8 @@ async function main() {
     // (an athlete just sets the weight) — same equivalency planContext.ts's
     // real filter and the warm-up generator apply, so this audit doesn't
     // flag the same false positive they were fixed to ignore.
-    const available = new Set([...(profile.available_equipment || []), ...(profile.custom_equipment || [])]);
-    if (available.has('Adjustable Dumbbells')) available.add('Dumbbells');
+    const available = new Set([...(profile.available_equipment || []), ...(profile.custom_equipment || [])].map((e) => String(e).toLowerCase().trim()));
+    if (available.has('adjustable dumbbells')) available.add('dumbbells');
     for (const day of plan.workouts || []) {
       if (!day.workout_id) continue;
       const workout = workoutById.get(day.workout_id);
