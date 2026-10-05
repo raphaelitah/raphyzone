@@ -182,11 +182,16 @@ begin
       'fixed', 45, 60,
       '[]'::jsonb, 'Trains consistently for 3+ years, no injuries.', 'kg', true,
       jsonb_build_array(
+        -- One entry per CALIBRATION_PATTERNS key (src/lib/fitness.js); a missing key
+        -- makes WorkoutExecution pop QuickCalibrationSheet over the first exercise
+        -- of any workout in that pattern, which stalls the QA agent at zero steps.
         jsonb_build_object('pattern', 'squat', 'exercise', 'Barbell Back Squat', 'weight_kg', 80),
-        jsonb_build_object('pattern', 'hinge', 'exercise', 'Barbell Deadlift', 'weight_kg', 100),
-        jsonb_build_object('pattern', 'push', 'exercise', 'Barbell Bench Press', 'weight_kg', 60),
-        jsonb_build_object('pattern', 'pull', 'exercise', 'Pull-up', 'weight_kg', 0),
-        jsonb_build_object('pattern', 'overhead_press', 'exercise', 'Barbell Overhead Press', 'weight_kg', 40)
+        jsonb_build_object('pattern', 'hinge', 'exercise', 'Deadlift', 'weight_kg', 100),
+        jsonb_build_object('pattern', 'horizontal_push', 'exercise', 'Bench Press', 'weight_kg', 60),
+        jsonb_build_object('pattern', 'vertical_push', 'exercise', 'Standing Overhead Press', 'weight_kg', 40),
+        jsonb_build_object('pattern', 'horizontal_pull', 'exercise', 'Dumbbell Row', 'weight_kg', 30),
+        jsonb_build_object('pattern', 'vertical_pull', 'exercise', 'Lat Pulldown', 'weight_kg', 50),
+        jsonb_build_object('pattern', 'olympic_power', 'exercise', 'Single DB Snatch', 'weight_kg', 15)
       ),
       true
     );
