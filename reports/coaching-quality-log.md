@@ -10656,3 +10656,12 @@ Call log:
 - ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
 
 ---
+## Equipment Fuzz Run 2026-10-05T18:25:37.181Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_kettlebell: generated plan, checked 14 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
