@@ -28,7 +28,7 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
   return (
     <div className="grid grid-cols-4 gap-2 mb-4">
       <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
-      <Spec label="Reps" value={exercise.reps} />
+      <Spec label="Reps" value={!isRunning && exercise.details?.laterality === 'Unilateral' && exercise.reps ? exercise.reps + ' each' : exercise.reps} />
       {isRunning ? (
         <Spec label="Pace" value={distanceKm && durationSeconds ? `${(durationSeconds / 60 / distanceKm).toFixed(1)}/km` : '—'} />
       ) : (
