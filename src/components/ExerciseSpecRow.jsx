@@ -25,10 +25,16 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
   const setsValue = exercise.rounds > 1 ? exercise.effective_sets : exercise.sets;
   const setsSubtext = exercise.rounds > 1 ? `${exercise.rounds} rounds` : null;
   const requiresWeight = !isRunning && exercise.details?.requires_load !== false;
+  // Authored reps for unilateral exercises are the total across both sides
+  // (16 = 8 each leg), so show the per-side count.
+  const repsNum = /^\d+$/.test(String(exercise.reps ?? '')) ? Number(exercise.reps) : null;
+  const repsValue = !isRunning && exercise.details?.laterality === 'Unilateral' && repsNum && repsNum % 2 === 0
+    ? `${repsNum / 2} each`
+    : exercise.reps;
   return (
     <div className="grid grid-cols-4 gap-2 mb-4">
       <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
-      <Spec label="Reps" value={!isRunning && exercise.details?.laterality === 'Unilateral' && exercise.reps ? exercise.reps + ' each' : exercise.reps} />
+      <Spec label="Reps" value={repsValue} />
       {isRunning ? (
         <Spec label="Pace" value={distanceKm && durationSeconds ? `${(durationSeconds / 60 / distanceKm).toFixed(1)}/km` : '—'} />
       ) : (
