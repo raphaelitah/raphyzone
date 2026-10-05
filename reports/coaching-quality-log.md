@@ -10706,3 +10706,12 @@ Call log:
 - ✓ checked 21 plan-day workout assignments across 17 weekly plans
 
 ---
+## Equipment Fuzz Run 2026-10-05T19:20:52.499Z
+
+**Result: clean — no anomalies found.**
+
+### equipment-fuzz
+- ✓ only_kettlebell: generated plan, checked 22 exercise assignments across 4 assigned workouts
+- ✓ restored test-athlete@raphyzone.dev's original equipment_profile/available_equipment/custom_equipment after 1/1 profile generations
+
+---
