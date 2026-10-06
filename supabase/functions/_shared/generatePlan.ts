@@ -1,5 +1,5 @@
 import { callLLM } from './llm.ts';
-import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, computeEquipmentByWorkoutId, WEEK_DAYS } from './planContext.ts';
+import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeBaseSlots, computeEquipmentByWorkoutId, activityMatchesWorkout, WEEK_DAYS } from './planContext.ts';
 import { verifyWorkoutReasons } from './verifyWorkoutReasons.ts';
 import { generateWarmup } from './warmupGenerator.ts';
 import { resolveWorkoutExercises } from './resolveWorkoutExercises.ts';
@@ -240,7 +240,14 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
       warmup: null,
     };
     if (slot.slot_type === 'train' || slot.slot_type === 'activity') {
-      const sel = selByDay[slot.day];
+      let sel = selByDay[slot.day];
+      if (sel && slot.slot_type === 'activity' && !activityMatchesWorkout(slot.activity, workoutMap.get(sel.workout_id))) {
+        // LLM picked a workout that doesn't fit the activity (e.g. Mobility Flow on
+        // a Running day). Substitute the first unused equipment-safe workout that does.
+        const taken = new Set(Object.values(selByDay).map((d: any) => d?.workout_id).filter(Boolean));
+        const fix = filteredWorkouts.find((w: any) => !taken.has(w.id) && activityMatchesWorkout(slot.activity, w));
+        sel = fix ? { workout_id: fix.id, reason: `Matches your scheduled ${slot.activity} activity.` } : null;
+      }
       if (sel) {
         const wo: any = workoutMap.get(sel.workout_id);
         entry.workout_id = sel.workout_id;

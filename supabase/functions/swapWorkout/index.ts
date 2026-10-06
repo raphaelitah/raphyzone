@@ -3,7 +3,7 @@ import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeEquipmentByWorkoutId } from '../_shared/planContext.ts';
+import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeEquipmentByWorkoutId, activityMatchesWorkout } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
 import { consumeAiAction, refundAiAction, loadApprovedCatalog, type AiQuota } from '../_shared/entitlements.ts';
 
@@ -119,6 +119,7 @@ Return JSON with an "alternatives" array of { workout_id, reason }.`;
       .map((a: any) => {
         const wo: any = workoutMap.get(a.workout_id);
         if (!wo) return null;
+        if (slot_type === 'activity' && !activityMatchesWorkout(activity, wo)) return null;
         return {
           workout_id: wo.id,
           workout_name: wo.name,

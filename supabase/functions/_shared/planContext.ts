@@ -99,6 +99,16 @@ export function buildProfileContext(profile: any, feedback: any[]) {
 // that could plausibly contain a literal "|" (there are none in this dataset)
 // would break a row; exercise names are comma-joined, which is a minor
 // ambiguity risk only if an exercise name itself contains a comma.
+// Code-level guard for activity days. The prompts only ask the LLM to match the
+// activity, which let "Mobility Flow" land on a "Running" day. Running is the only
+// activity with a dedicated catalog tag (sub_modality = 'Running'; the broader
+// "Cyclical / Monostructural" modality also covers rowing/biking), so enforce it
+// there. Other activities have no precise tag and pass through unchanged.
+export function activityMatchesWorkout(activity: string | null | undefined, workout: any): boolean {
+  if (!activity || !/\brun(ning)?\b/i.test(activity)) return true;
+  return workout?.sub_modality === 'Running';
+}
+
 export function buildWorkoutCatalog(workouts: any[], equipmentByWorkoutId?: Map<string, string[]>) {
   const header = 'id|name|modality|movement_focus|duration_min|equipment|exercises';
   const rows = (workouts || []).map((w) => [
