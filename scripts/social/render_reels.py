@@ -19,13 +19,14 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 import render_images as ri
 from reel_audio import duration, ffmpeg_exe, pick_music
@@ -50,16 +51,18 @@ def gradient_bg(top=ri.INDIGO, bottom=ri.INDIGO_DARK):
     return img
 
 
-def caption_overlay(text):
-    """Transparent 1080x1920 layer with the on-screen text in a rounded dark pill, lower-middle."""
+def caption_overlay(text, anchor="lower"):
+    """Transparent 1080x1920 layer with the on-screen text in a rounded dark pill.
+    anchor="center": vertically centred (plain scenes). anchor="lower": below the middle, leaving the
+    upper area to the scene's background visual (logo, workout / warm-up / format card)."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     fnt, lines, size = ri.fit(d, text, W - 2 * 120, 460, 92, 54, 800, 1.12)
     block_h = len(lines) * size * 1.12
     widest = max(d.textlength(l, font=fnt) for l in lines)
-    top = 1180
     pad = 44
-    d.rounded_rectangle([(W - widest) / 2 - pad, top - pad, (W + widest) / 2 + pad, top + block_h + pad - 10], radius=44, fill=(11, 11, 20, 170))
+    top = (H - block_h) / 2 if anchor == "center" else 1330
+    d.rounded_rectangle([(W - widest) / 2 - pad, top - pad, (W + widest) / 2 + pad, top + block_h + pad - 10], radius=44, fill=(11, 11, 20, 215 if anchor == "lower" else 170))
     y = top
     for l in lines:
         d.text(((W - d.textlength(l, font=fnt)) / 2, y), l, font=fnt, fill=(255, 255, 255, 255))
@@ -92,6 +95,122 @@ def workout_card(facts):
         ef, el, es = ri.fit(d, it, W - 176 - 120, row_h - 28, 42, 26, 700, 1.05)
         ri.draw_lines(d, el[:2], ef, es, 190, top + (row_h - 14 - min(len(el), 2) * es * 1.05) / 2, ri.WHITE, 1.05)
     return img
+
+
+def dimmed(img, factor=0.5):
+    """Background version of a card: the details stay readable, the caption pill on top carries the beat."""
+    return ImageEnhance.Brightness(img).enhance(factor)
+
+
+def logo_scene_frame():
+    img = gradient_bg()
+    d = ImageDraw.Draw(img)
+    for r, c in ((520, (88, 80, 236)), (400, (96, 88, 244))):
+        d.ellipse([W / 2 - r, 640 - r, W / 2 + r, 640 + r], fill=c)
+    ri.logo(d, (W - 440) // 2, 420, 440, bg=ri.WHITE, fg=ri.INDIGO)
+    f = ri.font(64, 800)
+    d.text(((W - d.textlength("raphyzone", font=f)) / 2, 920), "raphyzone", font=f, fill=ri.WHITE)
+    return img
+
+
+FORMAT_BLURB = {"EMOM": "Every minute, on the minute", "AMRAP": "As many rounds as possible", "TABATA": "20 s on · 10 s off", "FOR TIME": "Beat the clock"}
+
+
+def _format_key(facts):
+    f = str(facts.get("format") or "").strip().upper().replace("_", " ")
+    return f if f in FORMAT_BLURB else None
+
+
+def format_card(facts):
+    """What the format means: big label, one-line explanation, a minute grid (when timed) and what happens each round."""
+    img = Image.new("RGB", (W, H), ri.INK)
+    d = ImageDraw.Draw(img)
+    d.ellipse([W - 600, -300, W + 300, 600], fill=ri.INDIGO_DARK)
+    d.text((88, 200), "THE FORMAT", font=ri.font(38, 800), fill=ri.ACCENT)
+    key = _format_key(facts)
+    d.text((88, 270), key, font=ri.font(230, 800), fill=ri.WHITE)
+    d.text((92, 540), FORMAT_BLURB[key], font=ri.font(52, 700), fill=ri.MUTED_ON_INK)
+    y = 640
+    n = int(facts.get("minutes") or 0)
+    if key == "EMOM" and n:
+        cells, cols, cell, gap = min(n, 24), 8, 100, 14
+        x0 = (W - (cols * cell + (cols - 1) * gap)) // 2
+        for i in range(cells):
+            cx, cy = x0 + (i % cols) * (cell + gap), y + (i // cols) * (cell + gap)
+            on = i < 2
+            d.rounded_rectangle([cx, cy, cx + cell, cy + cell], radius=30, fill=ri.INDIGO if on else (30, 30, 52))
+            nf = ri.font(38, 800)
+            t = str(i + 1)
+            d.text((cx + (cell - d.textlength(t, font=nf)) / 2, cy + 28), t, font=nf, fill=ri.WHITE if on else ri.MUTED_ON_INK)
+        y += ((cells + cols - 1) // cols) * (cell + gap) + 24
+    block = next((b for b in facts["blocks"] if b.get("items")), None)
+    if block:
+        d.text((88, y), "EACH ROUND", font=ri.font(34, 800), fill=ri.ACCENT)
+        y += 56
+        for it in block["items"][:4]:
+            d.rounded_rectangle([88, y, W - 88, y + 96], radius=26, fill=(30, 30, 52))
+            ef, el, es = ri.fit(d, it, W - 176 - 60, 72, 40, 26, 700, 1.05)
+            ri.draw_lines(d, el[:2], ef, es, 118, y + (96 - min(len(el), 2) * es * 1.05) / 2, ri.WHITE, 1.05)
+            y += 108
+    return img
+
+
+def warmup_card(facts):
+    """The warm-up the app builds: mobility, an easy cardio primer, a light prep set of the first lift. Not tracked."""
+    img = Image.new("RGB", (W, H), ri.INK)
+    d = ImageDraw.Draw(img)
+    d.ellipse([W - 600, -300, W + 300, 600], fill=ri.INDIGO_DARK)
+    d.text((88, 200), "WARM-UP", font=ri.font(38, 800), fill=ri.ACCENT)
+    d.text((88, 270), "Before the work", font=ri.font(120, 800), fill=ri.WHITE)
+    d.text((92, 430), "Built around today's session · not tracked", font=ri.font(42, 600), fill=ri.MUTED_ON_INK)
+    first = next((it for b in facts["blocks"] for it in b["items"]), None)
+    first = re.sub(r"\s*×.*$", "", first or "")
+    rows = [("1", "Mobility", "Dynamic moves for the muscles you are about to use"), ("2", "Cardio primer", "Easy pace, just enough to get warm")]
+    if first:
+        rows.append(("3", "Prep set", f"{first}, light"))
+    y = 600
+    for n, title, sub in rows:
+        d.rounded_rectangle([88, y, W - 88, y + 190], radius=32, fill=(30, 30, 52))
+        d.ellipse([124, y + 69, 176, y + 121], fill=ri.INDIGO)
+        nf = ri.font(30, 800)
+        d.text((150 - d.textlength(n, font=nf) / 2, y + 80), n, font=nf, fill=ri.WHITE)
+        d.text((212, y + 28), title, font=ri.font(52, 800), fill=ri.WHITE)
+        sf, sl, ss = ri.fit(d, sub, W - 176 - 150, 90, 38, 28, 500, 1.1)
+        ri.draw_lines(d, sl[:2], sf, ss, 212, y + 98, ri.MUTED_ON_INK, 1.1)
+        y += 210
+    return img
+
+
+# What sits behind a story scene's caption. The writer may set scene["visual"]; older drafts without it are inferred.
+VISUALS = ("logo", "plain", "workout", "warmup", "format")
+_WARM = re.compile(r"warm", re.I)
+_FORMAT = re.compile(r"emom|amrap|tabata|for time|superset|circuit|every minute|keep the clock", re.I)
+
+
+def scene_visual(sc, i, facts):
+    text = sc.get("on_screen_text") or ""
+    v = sc.get("visual") if sc.get("visual") in VISUALS else None
+    if v is None:
+        if i == 0:
+            v = "logo"
+        elif facts and _WARM.search(text):
+            v = "warmup"
+        elif facts and _format_key(facts) and _FORMAT.search(text):
+            v = "format"
+        elif facts and facts.get("name") and facts["name"].lower() in text.lower():
+            v = "workout"
+        else:
+            v = "plain"
+    if v in ("workout", "warmup") and not facts:
+        return "plain"
+    if v == "format" and not (facts and _format_key(facts)):
+        return "plain"
+    return v
+
+
+def visual_frame(v, facts):
+    return {"logo": logo_scene_frame, "workout": lambda: dimmed(workout_card(facts)), "warmup": lambda: dimmed(warmup_card(facts)),
+            "format": lambda: dimmed(format_card(facts))}[v]()
 
 
 def app_scene_frame(shot_path, headline):
@@ -204,15 +323,21 @@ def render_reel(post, work, app_shot_fn):
     used_clips = set()
     parts = []
 
-    # 1. story scenes from the LLM script
+    # 1. story scenes from the LLM script: each caption sits over a background that shows what it is talking about
     for i, sc in enumerate(script["scenes"]):
         d = max(float(sc.get("seconds", 4)), MIN_TEXT_SECONDS)
-        clip = find_clip(sc.get("footage_query") or "gym workout", d, f"{seed}{i}", used_clips)
+        visual = scene_visual(sc, i, facts)
+        clip = find_clip(sc.get("footage_query") or "gym workout", d, f"{seed}{i}", used_clips) if visual == "plain" else None
         bg = clip
         is_video = bool(clip)
-        lavfi = None if clip else animated_gradient(int(hashlib.sha1(f"{seed}{i}".encode()).hexdigest()[:6], 16))
+        lavfi = None
+        if visual != "plain":
+            bg = work / f"bg{i}.png"
+            visual_frame(visual, facts).save(bg)
+        elif not clip:
+            lavfi = animated_gradient(int(hashlib.sha1(f"{seed}{i}".encode()).hexdigest()[:6], 16))
         ov = work / f"ov{i}.png"
-        caption_overlay(sc.get("on_screen_text") or "").save(ov)
+        caption_overlay(sc.get("on_screen_text") or "", "center" if visual == "plain" else "lower").save(ov)
         out = work / f"scene{i}.mp4"
         build_scene(out, d, bg, overlay=ov if sc.get("on_screen_text") else None, bg_is_video=is_video, bg_lavfi=lavfi)
         parts.append(out)
@@ -275,8 +400,11 @@ SAMPLE = {
     "id": "sample", "hook": "Hotel gym. 30 minutes. Zero thinking.",
     "script": {
         "scenes": [
-            {"seconds": 4, "on_screen_text": "No plan. 30 minutes.", "footage_query": "hotel gym"},
-            {"seconds": 4, "on_screen_text": "Scrolling is not training", "footage_query": "man scrolling phone gym"},
+            {"seconds": 4, "on_screen_text": "No plan. 30 minutes.", "visual": "logo"},
+            {"seconds": 4, "on_screen_text": "Scrolling is not training", "visual": "plain", "footage_query": "man scrolling phone gym"},
+            {"seconds": 4, "on_screen_text": "Chelsea · 30 min · bodyweight", "visual": "workout"},
+            {"seconds": 4, "on_screen_text": "Quick warm-up, then dive in", "visual": "warmup"},
+            {"seconds": 4, "on_screen_text": "EMOM: keep the clock moving", "visual": "format"},
         ],
         "workout": {"workout_id": "e3c35bfeb3555ea6354b84d5", "name": "Chelsea", "minutes": 30, "difficulty": "intermediate", "format": "EMOM", "equipment": ["pull-up bar", "bodyweight"],
                     "blocks": [{"label": "A", "type": "superset", "rounds": 30, "items": ["Strict Pronated Pull-up × 5", "Push-Up × 10", "Air Squat × 15"]}]},
