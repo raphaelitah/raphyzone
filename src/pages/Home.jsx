@@ -877,6 +877,8 @@ export default function Home() {
         warmup={selectedSlot?.warmup}
         startDate={inProgressSession && selectedWorkout && inProgressSession.workout_id === selectedWorkout.id ? inProgressSession.date : null}
         resuming={!!inProgressSession && !!selectedWorkout && inProgressSession.workout_id === selectedWorkout.id}
+        recordDate={selectedSlot?.date || null}
+        onRecorded={(session) => setSessions((prev) => [session, ...prev])}
       />
 
       <SessionDetailSheet

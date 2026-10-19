@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { Play, Loader2, ChevronDown, Flame, X } from 'lucide-react';
+import RecordResultForm from '@/components/RecordResultForm';
+import { Play, Loader2, ChevronDown, Flame, X, ClipboardCheck } from 'lucide-react';
 import { WORKOUT_DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import {
@@ -17,18 +18,20 @@ import {
   getWorkoutMetaLine,
 } from '@/lib/workoutStructure';
 
-export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null, warmup = null, startDate = null, resuming = false }) {
+export default function WorkoutDetailSheet({ workout, open, onOpenChange, contextLine = null, reason = null, selectMode = false, onSelect = null, warmup = null, startDate = null, resuming = false, recordDate = null, onRecorded = null }) {
   const [blocksByWorkout, setBlocksByWorkout] = useState({});
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
   const [loading, setLoading] = useState(false);
   const [warmupSkipped, setWarmupSkipped] = useState(false);
   const [warmupOpen, setWarmupOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
 
   // Reset the local skip/collapse state whenever a different workout is opened.
   useEffect(() => {
     setWarmupSkipped(false);
     setWarmupOpen(false);
+    setRecording(false);
   }, [workout?.id, workout?.workout_id, open]);
 
   useEffect(() => {
@@ -77,6 +80,14 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
           </div>
           {contextLine && <p className="text-sm text-muted-foreground text-left -mt-1">{contextLine}</p>}
         </SheetHeader>
+        {recording ? (
+          <RecordResultForm
+            workout={workout}
+            date={recordDate}
+            onBack={() => setRecording(false)}
+            onRecorded={(session) => { setRecording(false); onOpenChange(false); onRecorded?.(session); }}
+          />
+        ) : (
         <div className="px-5 pb-8 space-y-4">
           <p className="text-sm text-muted-foreground">
             {workout.format_label}
@@ -249,7 +260,13 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
               </Link>
             </Button>
           )}
+          {!selectMode && onRecorded && (
+            <Button type="button" variant="outline" onClick={() => setRecording(true)} className="w-full rounded-xl h-12">
+              <ClipboardCheck className="h-4 w-4 mr-2" /> Record result
+            </Button>
+          )}
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
