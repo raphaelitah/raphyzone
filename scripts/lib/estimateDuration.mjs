@@ -170,7 +170,18 @@ function estimateStepSeconds(step) {
 export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
   let seconds = 0;
   let reliable = true;
-  for (const b of blocks) {
+  // order_index can be fractional ("1.1"), so compare numerically; blocks may
+  // arrive unsorted, and "last" decides whether an inter-block rest applies.
+  const ordered = [...blocks].sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0));
+  for (const [blockIndex, b] of ordered.entries()) {
+    // Time-capped blocks (AMRAP, EMOM) fill exactly their cap, so their
+    // rest_between_rounds_sec can only mean the rest taken AFTER the block,
+    // before the next one (WorkoutExecution's startInterBlockRest() reads it
+    // off the block that just finished, and never after the last block) —
+    // e.g. Magnificent Nine's 3 min between three 12-min AMRAPs. Rounds-based
+    // blocks already count it as between-set rest below, so it isn't added
+    // again for them.
+    const interBlockRest = blockIndex < ordered.length - 1 ? (b.rest_between_rounds_sec || 0) : 0;
     const steps = exercisesByBlock.get(b.block_id) || [];
     const exCount = steps.length || 1;
     const hasRounds = b.rounds != null;
@@ -194,6 +205,7 @@ export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
       } else {
         seconds += rounds * exCount * EMOM_SECONDS_PER_SLOT;
       }
+      seconds += interBlockRest;
       continue;
     }
 
@@ -201,7 +213,7 @@ export function estimateWorkoutMinutes(blocks, exercisesByBlock) {
     // authored time cap by definition — the point is you fill the whole cap,
     // not something derivable from rep counts. Trust time_cap_sec when set.
     if (b.workout_format === 'amrap' && b.time_cap_sec) {
-      seconds += b.time_cap_sec;
+      seconds += b.time_cap_sec + interBlockRest;
       continue;
     }
 
