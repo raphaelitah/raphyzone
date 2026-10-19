@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BLOCK_TYPES, BLOCK_FORMATS } from '@/lib/blockOptions';
 import { Button } from '@/components/ui/button';
 import { Pencil, Trash2, Plus, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { IconButton } from '@/components/ui/icon-button';
+
+const NO_FORMAT = '__none__';
 
 export default function BlockEditor({
   block,
@@ -90,12 +94,23 @@ export default function BlockEditor({
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Type</label>
-              <Input value={form.block_type} onChange={(e) => setForm({ ...form, block_type: e.target.value })} placeholder="main, warmup…" className="mt-0.5" />
+              <Select value={form.block_type || undefined} onValueChange={(v) => setForm({ ...form, block_type: v })}>
+                <SelectTrigger className="mt-0.5"><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectContent>
+                  {BLOCK_TYPES.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Format</label>
-            <Input value={form.workout_format} onChange={(e) => setForm({ ...form, workout_format: e.target.value })} placeholder="AMRAP, For Time…" className="mt-0.5" />
+            <Select value={form.workout_format || NO_FORMAT} onValueChange={(v) => setForm({ ...form, workout_format: v === NO_FORMAT ? '' : v })}>
+              <SelectTrigger className="mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_FORMAT}>None</SelectItem>
+                {BLOCK_FORMATS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div>

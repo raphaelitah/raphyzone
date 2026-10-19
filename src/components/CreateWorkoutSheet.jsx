@@ -89,7 +89,7 @@ export default function CreateWorkoutSheet({ open, onOpenChange, onSubmitted }) 
       block_id: blockId,
       order_index: 0,
       block_label: 'A',
-      block_type: 'main',
+      block_type: 'standalone',
       rounds: 1,
     });
     if (blockError) {
