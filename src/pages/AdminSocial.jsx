@@ -128,6 +128,8 @@ export default function AdminSocial() {
   const [week, setWeek] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [approveAllError, setApproveAllError] = useState(null);
 
   const load = useCallback(async (weekStart) => {
     let q = supabase.from('social_posts').select('*').order('week_start', { ascending: false }).order('slot');
@@ -152,6 +154,21 @@ export default function AdminSocial() {
 
   const refresh = async (ws = week) => { if (ws) setPosts(await load(ws)); };
 
+  const approvable = posts.filter((p) => p.status === 'draft' && p.render_status === 'rendered');
+
+  const approveAll = async () => {
+    if (!approvable.length) return;
+    setApprovingAll(true);
+    setApproveAllError(null);
+    const { error: err } = await supabase
+      .from('social_posts')
+      .update({ status: 'approved', updated_date: new Date().toISOString() })
+      .in('id', approvable.map((p) => p.id));
+    setApprovingAll(false);
+    if (err) setApproveAllError(err.message);
+    else refresh();
+  };
+
   if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-muted border-t-brand rounded-full animate-spin" /></div>;
 
   const counts = posts.reduce((acc, p) => ({ ...acc, [p.status]: (acc[p.status] || 0) + 1 }), {});
@@ -174,6 +191,11 @@ export default function AdminSocial() {
           <p className="text-sm text-muted-foreground mb-4">
             {Object.entries(counts).map(([s, n]) => `${n} ${s}`).join(' · ')}
           </p>
+          <Button className="w-full mb-4" disabled={approvingAll || !approvable.length} onClick={approveAll}
+            data-testid="approve-all">
+            <Check className="h-4 w-4 mr-1" /> Approve All{approvable.length ? ` (${approvable.length})` : ''}
+          </Button>
+          {approveAllError && <p className="text-xs text-rose-600 mb-4">{approveAllError}</p>}
           <div className="space-y-4">
             {posts.map((p) => <PostCard key={p.id + p.updated_date} post={p} onChange={() => refresh()} />)}
           </div>
