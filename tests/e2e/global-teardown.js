@@ -9,9 +9,14 @@ export async function sweepE2EData() {
   const { error } = await api.auth.signInWithPassword(ADMIN);
   if (error) throw new Error(`global-teardown: failed to sign in as admin: ${error.message}`);
 
-  const { data: workouts } = await api.from('workouts').select('id, workout_id').like('workout_id', 'E2E-%');
-  for (const w of workouts || []) {
-    const { data: blocks } = await api.from('workout_blocks').select('block_id').eq('workout_id', w.workout_id);
+  const { data: byCode } = await api.from('workouts').select('id, workout_id').like('workout_id', 'E2E-%');
+  // Also catches UGC submissions seeded by name (reviewSeed) and specs that name their workout "E2E ...".
+  const { data: byName } = await api.from('workouts').select('id, workout_id').like('name', 'E2E %');
+  const workouts = [...new Map([...(byCode || []), ...(byName || [])].map((w) => [w.id, w])).values()];
+  for (const w of workouts) {
+    const { data: blocks } = w.workout_id
+      ? await api.from('workout_blocks').select('block_id').eq('workout_id', w.workout_id)
+      : { data: [] };
     const blockIds = (blocks || []).map((b) => b.block_id);
     if (blockIds.length) {
       await api.from('block_exercises').delete().in('block_id', blockIds);

@@ -35,6 +35,8 @@ export async function seedPendingWorkout(namePrefix = 'E2E test workout') {
 // Deletes rows as admin (required by exercises_delete_admin / workouts_write_owner_or_admin RLS).
 export async function cleanupReviewItem(table, id) {
   const api = makeApiClient();
-  await api.auth.signInWithPassword(ADMIN);
-  await api.from(table).delete().eq('id', id);
+  const { error: signInError } = await api.auth.signInWithPassword(ADMIN);
+  if (signInError) throw signInError;
+  const { error } = await api.from(table).delete().eq('id', id);
+  if (error) throw error;
 }
