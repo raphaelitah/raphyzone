@@ -523,6 +523,10 @@ export default function WorkoutExecution() {
   const isSuperset = blockTimerMeta?.isSuperset ?? false;
   const isAmrap = blockTimerMeta?.isAmrap ?? false;
   const timerDefaultConfig = blockTimerMeta?.timerDefaultConfig ?? null;
+  // One continuous phase for blocks where every exercise runs together (AMRAP,
+  // default EMOM); only rotating blocks (Tabata, alternating EMOM) get one phase
+  // per exercise.
+  const timerExerciseCount = ((isEmomFamily && !isAlternatingEmom) || isAmrap) ? 1 : currentBlockExercises.length;
   const adjustRest = (blockId, baseSec, delta) => {
     setRestOverrides((prev) => ({ ...prev, [blockId]: Math.max(0, (prev[blockId] ?? baseSec) + delta) }));
   };
@@ -625,7 +629,7 @@ export default function WorkoutExecution() {
       workSec: values.workSec,
       restSec: values.restSec,
       rounds: values.rounds,
-      exerciseCount: (isEmomFamily && !isAlternatingEmom) ? 1 : currentBlockExercises.length,
+      exerciseCount: timerExerciseCount,
       blockId: current.block_id,
     });
   };
@@ -641,7 +645,7 @@ export default function WorkoutExecution() {
       workSec: values.workSec,
       restSec: values.restSec,
       rounds: values.rounds,
-      exerciseCount: (isEmomFamily && !isAlternatingEmom) ? 1 : currentBlockExercises.length,
+      exerciseCount: timerExerciseCount,
       blockId: current.block_id,
     });
   };
