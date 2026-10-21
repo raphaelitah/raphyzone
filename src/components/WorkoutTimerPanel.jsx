@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Pause, RotateCcw, SkipForward, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, RotateCcw, SkipForward, RefreshCw, Volume2, VolumeX, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import YouTubeVideo from '@/components/YouTubeVideo';
-import ExerciseSpecRow from '@/components/ExerciseSpecRow';
+import ExerciseSpecRow, { exerciseSummary } from '@/components/ExerciseSpecRow';
 import BlockPanel from '@/components/BlockPanel';
 import { isTimerAudioMuted, setTimerAudioMuted } from '@/lib/timerSounds';
 
@@ -42,6 +42,8 @@ export default function WorkoutTimerPanel({
   // Before the block timer is armed, tapping a pill just previews that
   // exercise's details — it doesn't start anything.
   const [previewKey, setPreviewKey] = useState(null);
+  // Which exercise is expanded in the non-rotating (AMRAP/circuit) list; one at a time.
+  const [openKey, setOpenKey] = useState(null);
   const [muted, setMuted] = useState(() => isTimerAudioMuted());
 
   const toggleMuted = () => {
@@ -64,9 +66,9 @@ export default function WorkoutTimerPanel({
     ? `Round ${timer.round} of ${timer.totalRounds}`
     : `Round 1 of ${Math.max(1, parseInt(rounds, 10) || 1)}`;
 
-  const exerciseInfo = (exercise, allowSwap) => (
+  const exerciseInfo = (exercise, allowSwap, showName = true) => (
     <>
-      <p className="text-lg font-semibold text-center">{exercise?.exercise_name}</p>
+      {showName && <p className="text-lg font-semibold text-center">{exercise?.exercise_name}</p>}
       {exercise?.details?.video_url && (
         <YouTubeVideo url={exercise.details.video_url} title={exercise.exercise_name} className="w-full" />
       )}
@@ -180,12 +182,30 @@ export default function WorkoutTimerPanel({
             )}
           </>
         ) : (
-          <div className="w-full space-y-3">
-            {(exercises || []).map((e) => (
-              <div key={e.key} className="rounded-xl border border-border p-3 flex flex-col items-center gap-3">
-                {exerciseInfo(e, true)}
-              </div>
-            ))}
+          <div className="w-full rounded-xl border border-border divide-y divide-border">
+            {(exercises || []).map((e) => {
+              const open = openKey === e.key;
+              return (
+                <div key={e.key}>
+                  <button
+                    onClick={() => setOpenKey(open ? null : e.key)}
+                    aria-expanded={open}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left"
+                  >
+                    <span className="flex flex-col min-w-0">
+                      <span className="font-semibold truncate">{e.exercise_name}</span>
+                      <span className="text-xs text-muted-foreground">{exerciseSummary(e)}</span>
+                    </span>
+                    <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
+                  </button>
+                  {open && (
+                    <div className="flex flex-col items-center gap-3 px-3 pb-3">
+                      {exerciseInfo(e, true, false)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

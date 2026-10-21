@@ -17,6 +17,31 @@ export function Spec({ label, value, subtext = null, loading = false, onClick = 
   );
 }
 
+function displayReps(exercise, isRunning) {
+  // Authored reps for unilateral exercises are the total across both sides
+  // (16 = 8 each leg), so show the per-side count.
+  const repsNum = /^\d+$/.test(String(exercise.reps ?? '')) ? Number(exercise.reps) : null;
+  return !isRunning && exercise.details?.laterality === 'Unilateral' && repsNum && repsNum % 2 === 0
+    ? `${repsNum / 2} each`
+    : exercise.reps;
+}
+
+function displayWeight(exercise, requiresWeight) {
+  if (!requiresWeight) return 'Bodyweight';
+  return exercise.target_weight ? exercise.target_weight + 'kg' + (exercise.details?.implement_count === 2 ? ' each' : '') : '—';
+}
+
+// One-line "5 each · Bodyweight" summary for collapsed exercise rows.
+export function exerciseSummary(exercise) {
+  if (!exercise) return '';
+  const isRunning = isRunningExercise(exercise.details);
+  const reps = displayReps(exercise, isRunning);
+  const parts = [];
+  if (reps) parts.push(`${reps}${/^\d+$/.test(String(reps)) ? ' reps' : ''}`);
+  if (!isRunning) parts.push(displayWeight(exercise, exercise.details?.requires_load !== false));
+  return parts.join(' · ');
+}
+
 // Sets/Reps/Weight/Rest tile row shared by standalone exercises and block
 // (superset/EMOM/Tabata) exercises so the tracking experience is consistent.
 export default function ExerciseSpecRow({ exercise, distanceKm = null, durationSeconds = null, weightLoading = false, onWeightClick = null }) {
@@ -25,12 +50,7 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
   const setsValue = exercise.rounds > 1 ? exercise.effective_sets : exercise.sets;
   const setsSubtext = exercise.rounds > 1 ? `${exercise.rounds} rounds` : null;
   const requiresWeight = !isRunning && exercise.details?.requires_load !== false;
-  // Authored reps for unilateral exercises are the total across both sides
-  // (16 = 8 each leg), so show the per-side count.
-  const repsNum = /^\d+$/.test(String(exercise.reps ?? '')) ? Number(exercise.reps) : null;
-  const repsValue = !isRunning && exercise.details?.laterality === 'Unilateral' && repsNum && repsNum % 2 === 0
-    ? `${repsNum / 2} each`
-    : exercise.reps;
+  const repsValue = displayReps(exercise, isRunning);
   return (
     <div className="grid grid-cols-4 gap-2 mb-4">
       <Spec label="Sets" value={setsValue} subtext={setsSubtext} />
@@ -40,7 +60,7 @@ export default function ExerciseSpecRow({ exercise, distanceKm = null, durationS
       ) : (
         <Spec
           label="Weight"
-          value={!requiresWeight ? 'Bodyweight' : exercise.target_weight ? exercise.target_weight + 'kg' + (exercise.details?.implement_count === 2 ? ' each' : '') : '—'}
+          value={displayWeight(exercise, requiresWeight)}
           loading={weightLoading}
           onClick={requiresWeight && !exercise.target_weight ? onWeightClick : null}
         />
