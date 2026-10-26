@@ -10863,3 +10863,28 @@ Call log:
 - ✓ Did "Flight Simulator" — everything is good, no block transitions to check.
 
 ---
+## Run 2026-10-26T14:44:45.016Z
+
+**Result: 5 anomaly(ies) found.**
+
+### duration
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 33 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ 73690b8decc61478c6f51692 "Popeye": declared 18 min but structure implies ~50 min — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 12 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~9 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+
+### equipment
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-10-26): "Push Strength A" includes "Cable Tricep Pushdown with Straight Bar" which needs [Cable] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-10-26): "4th of July 1776" includes "Box Jump Step Down" which needs [Step Box] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-10-26): "Pull Strength A" includes "Lat Pulldown" which needs [Cable, Lat Pulldown] — not in the athlete's equipment (profile: custom)
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-10-26): "Pull Strength A" includes "Seated Row Machine" which needs [Cable, Seated Cable Row] — not in the athlete's equipment (profile: custom)
+- ✓ checked 5 plan-day workout assignments across 20 weekly plans
+
+---
