@@ -334,10 +334,21 @@ async function checkConsecutiveMovement(page, log) {
 // blocks (see the file header); a coarser block-level "Start"/"Skip <block>" for
 // timer-driven circuit/EMOM/tabata blocks, since the app offers no per-phase control
 // or weight-logging screen for those.
+// Console errors that look like the network/gateway failing rather than the app
+// misbehaving: a Supabase edge-function cold start or redeploy can 502 a CORS
+// preflight (the gateway's response carries no CORS headers, so the browser
+// reports it as a CORS failure), or drop the connection. Seen live on
+// assignWorkoutWeights. These are retried once and, if they persist with nothing
+// else wrong, reported as infra instead of flagging the workout — a real CORS
+// misconfig fails the retry too and still gets flagged.
+const TRANSIENT_NETWORK_ERROR = /blocked by CORS policy|net::ERR_|Failed to fetch|NetworkError|status of 50[234]/i;
+
 async function runWorkout(page, candidate, qaCoachId) {
   const consoleErrors = [];
-  const onConsole = (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); };
-  const onPageError = (err) => consoleErrors.push(err.message);
+  const transientErrors = [];
+  const record = (text) => (TRANSIENT_NETWORK_ERROR.test(text) ? transientErrors : consoleErrors).push(text);
+  const onConsole = (msg) => { if (msg.type() === 'error') record(msg.text()); };
+  const onPageError = (err) => record(err.message);
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
 
@@ -521,8 +532,9 @@ async function runWorkout(page, candidate, qaCoachId) {
     workoutId: candidate.workout.workout_id,
     verdict,
     summary,
+    transientErrors,
     details: {
-      warmupShown, sessionStatus, consoleErrorCount: consoleErrors.length, finished,
+      warmupShown, sessionStatus, consoleErrorCount: consoleErrors.length, transientErrorCount: transientErrors.length, finished,
       weightsLogged: log.weightsLogged.length, weightIssues: log.weightIssues, movementIssues: log.movementIssues, transitions: log.transitions, fallbackSkips: log.usedFallbackSkip,
       timerDrivenBlocks: log.timerDrivenBlocks,
     },
@@ -535,15 +547,16 @@ function writeReport(runResults) {
   const logPath = path.join(reportDir, 'coaching-quality-log.md');
   const runAt = new Date().toISOString();
   const flagged = runResults.filter((r) => r.verdict === 'flagged');
+  const infra = runResults.filter((r) => r.verdict === 'infra');
 
   const lines = [`## Agent run ${runAt}`, ''];
   lines.push(runResults.length === 0
     ? '_Nothing new or changed to review — every approved workout is up to date._'
     : flagged.length === 0
-      ? `**Reviewed ${runResults.length} workout(s), all clean.**`
-      : `**Reviewed ${runResults.length} workout(s), ${flagged.length} flagged.**`);
+      ? `**Reviewed ${runResults.length} workout(s), all clean${infra.length ? ` (${infra.length} inconclusive: infra)` : ''}.**`
+      : `**Reviewed ${runResults.length} workout(s), ${flagged.length} flagged${infra.length ? `, ${infra.length} inconclusive: infra` : ''}.**`);
   lines.push('');
-  for (const r of runResults) lines.push(`- ${r.verdict === 'flagged' ? '⚠️' : '✓'} ${r.summary}`);
+  for (const r of runResults) lines.push(`- ${r.verdict === 'flagged' ? '⚠️' : r.verdict === 'infra' ? '🌐' : '✓'} ${r.summary}`);
   lines.push('', '---', '');
   const section = lines.join('\n');
 
@@ -582,18 +595,36 @@ async function main() {
     // An unexpected crash on one workout (a genuinely unrecognized screen state,
     // a browser-level failure) shouldn't take down the rest of the night's batch —
     // record it as flagged and move on, same as any other reviewed problem.
-    let result;
-    try {
-      result = await runWorkout(page, candidate, qaCoachId);
-    } catch (err) {
+    const attempt = async () => {
+      try {
+        return await runWorkout(page, candidate, qaCoachId);
+      } catch (err) {
+        return {
+          workoutId: candidate.workout.workout_id,
+          verdict: 'flagged',
+          summary: `Did "${candidate.workout.name}" — the agent itself crashed mid-run: ${err.message}`,
+          details: { crashed: true, error: err.message },
+          transientErrors: [],
+        };
+      }
+    };
+    let result = await attempt();
+    // Gateway/network blips (see TRANSIENT_NETWORK_ERROR) get one fresh retry.
+    if (result.transientErrors.length) {
+      await db.from('workout_sessions').delete().eq('user_id', qaCoachId).eq('status', 'in_progress');
+      result = await attempt();
+    }
+    // Still only transient errors and nothing else wrong: inconclusive, not a
+    // workout problem. Not recorded as reviewed, so the next run re-reviews it.
+    if (result.transientErrors.length && result.verdict === 'clean') {
       result = {
-        workoutId: candidate.workout.workout_id,
-        verdict: 'flagged',
-        summary: `Did "${candidate.workout.name}" — the agent itself crashed mid-run: ${err.message}`,
-        details: { crashed: true, error: err.message },
+        ...result,
+        verdict: 'infra',
+        summary: `Did "${candidate.workout.name}" — inconclusive: ${result.transientErrors.length} network/gateway error(s) persisted after a retry, nothing else wrong (${result.transientErrors.slice(0, 1).join('')}). Will be re-reviewed next run.`,
       };
     }
     results.push(result);
+    if (result.verdict === 'infra') continue;
     await db.from('coaching_agent_reviews').upsert({
       workout_id: result.workoutId,
       content_updated_at: candidate.effectiveUpdatedAt,
