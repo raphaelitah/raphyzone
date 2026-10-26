@@ -96,7 +96,7 @@ async function main() {
     fetchAll('block_exercises', 'block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value'),
     fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags, dumbbell_substitutable'),
     fetchAll('athlete_profiles', 'user_id, available_equipment, custom_equipment, equipment_profile'),
-    fetchAll('weekly_plans', 'user_id, week_start_date, status, workouts', (q) => q.order('week_start_date', { ascending: false }).limit(200)),
+    fetchAll('weekly_plans', 'user_id, week_start_date, status, workouts, setup_equipment', (q) => q.order('week_start_date', { ascending: false }).limit(200)),
   ]);
 
   const exerciseByCode = new Map(exercises.filter((e) => e.exercise_code).map((e) => [e.exercise_code, e]));
@@ -368,7 +368,13 @@ async function main() {
     // (an athlete just sets the weight) — same equivalency planContext.ts's
     // real filter and the warm-up generator apply, so this audit doesn't
     // flag the same false positive they were fixed to ignore.
-    const available = new Set([...(profile.available_equipment || []), ...(profile.custom_equipment || [])].map((e) => String(e).toLowerCase().trim()));
+    // A week can carry its own equipment override (travelling, less/more gear —
+    // weekly_plans.setup_equipment). Generation replaces the athlete's normal
+    // equipment with it for that week (generatePlan.ts effectiveProfile), so the
+    // audit must check against the same set or it flags exercises the plan was
+    // correctly built for.
+    const weekOverride = Array.isArray(plan.setup_equipment) && plan.setup_equipment.length ? plan.setup_equipment : null;
+    const available = new Set((weekOverride || [...(profile.available_equipment || []), ...(profile.custom_equipment || [])]).map((e) => String(e).toLowerCase().trim()));
     if (available.has('adjustable dumbbells')) available.add('dumbbells');
     for (const day of plan.workouts || []) {
       if (!day.workout_id) continue;
