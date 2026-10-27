@@ -32,6 +32,18 @@ function proposeAdjustment(recent: { max_weight: number | null; difficulty: stri
   return null;
 }
 
+// Kettlebells come in even-kg sizes, so step by 2 and keep the result even.
+function isKettlebell(equipment: string | null | undefined): boolean {
+  return (equipment || '').toLowerCase().includes('kettlebell');
+}
+
+function nextWeight(current: number, direction: 'up' | 'down', pattern: string | null, equipment: string | null | undefined): number {
+  const kb = isKettlebell(equipment);
+  const step = kb ? 2 : isUpperBody(pattern) ? 2.5 : 5;
+  const raw = direction === 'up' ? current + step : Math.max(current - step, 0);
+  return kb ? Math.max(Math.round(raw / 2) * 2, 0) : raw;
+}
+
 function latestWeight(recent: { max_weight: number | null }[]): number | null {
   return recent.find((s) => typeof s.max_weight === 'number')?.max_weight ?? null;
 }
@@ -143,8 +155,7 @@ Deno.serve(async (req: Request) => {
       if (!proposal) continue;
       const current = overrideByExercise[s.exercise_id]?.weight_kg ?? latestWeight(s.recent);
       if (current == null) continue;
-      const step = isUpperBody(s.pattern) ? 2.5 : 5;
-      const suggested = proposal.direction === 'up' ? current + step : Math.max(current - step, 0);
+      const suggested = nextWeight(current, proposal.direction, s.pattern, exByCode[s.exercise_id]?.equipment);
       recommendations.push({
         adjustment_type: 'per_exercise',
         exercise_id: s.exercise_id,
@@ -170,9 +181,8 @@ Deno.serve(async (req: Request) => {
       const cal = calibrationByPattern[s.pattern];
       const current = cal?.weight_kg ?? latestWeight(s.recent);
       if (current == null) continue;
-      const step = isUpperBody(s.pattern) ? 2.5 : 5;
-      const suggested = proposal.direction === 'up' ? current + step : Math.max(current - step, 0);
       const repRef = s.recent[0];
+      const suggested = nextWeight(current, proposal.direction, s.pattern, exByCode[repRef?.exercise_id]?.equipment);
       recommendations.push({
         adjustment_type: 'pattern_baseline',
         exercise_id: repRef?.exercise_id || cal?.exercise || s.pattern,
