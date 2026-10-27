@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Pencil, Trash2, Plus, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { IconButton } from '@/components/ui/icon-button';
+import { formatStepPrescription } from '@/lib/prescriptionLabel';
 
 const NO_FORMAT = '__none__';
 
@@ -150,8 +151,6 @@ export default function BlockEditor({
               {exercises.map((be, index) => {
                 const isRest = be.step_type === 'rest';
                 const sets = setsByBlockExercise[be.block_exercise_id] || [];
-                const setCount = sets.length || 1;
-                const reps = sets[0]?.target_reps?.toString() || be.prescription_value || '';
                 return (
                   <Draggable key={be.block_exercise_id} draggableId={be.block_exercise_id} index={index}>
                     {(p) => (
@@ -162,7 +161,7 @@ export default function BlockEditor({
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{isRest ? 'Rest' : be.exercise_title_raw}</p>
                           <p className="text-xs text-muted-foreground">
-                            {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
+                            {formatStepPrescription(be, sets)}
                           </p>
                           {!isRest && be.notes && (
                             <p className="text-xs text-brand italic truncate mt-0.5">{be.notes}</p>

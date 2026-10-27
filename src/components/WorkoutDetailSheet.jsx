@@ -8,6 +8,7 @@ import RecordResultForm from '@/components/RecordResultForm';
 import { Play, Loader2, ChevronDown, Flame, X, ClipboardCheck } from 'lucide-react';
 import { WORKOUT_DIFFICULTY_META } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
+import { formatStepPrescription } from '@/lib/prescriptionLabel';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -223,8 +224,6 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
                           {blockExs.map((be, index) => {
                             const isRest = be.step_type === 'rest';
                             const sets = setsByBlockExercise[be.block_exercise_id] || [];
-                            const setCount = sets.length || 1;
-                            const reps = sets[0]?.target_reps?.toString() || be.prescription_value || '';
                             const stepLabel = blockExs.length > 1 ? `${block.block_label}${index + 1}` : null;
                             return (
                               <div key={be.block_exercise_id} className="flex items-center gap-2 mb-2 last:mb-0">
@@ -235,7 +234,7 @@ export default function WorkoutDetailSheet({ workout, open, onOpenChange, contex
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium truncate">{isRest ? 'Rest' : be.exercise_title_raw}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {isRest ? be.prescription_value : `${setCount} ${setCount === 1 ? 'set' : 'sets'} × ${reps}${be.load_value ? ` · ${be.load_value}` : ''}`}
+                                      {formatStepPrescription(be, sets)}
                                     </p>
                                     {!isRest && be.notes && (
                                       <p className="text-xs text-brand italic mt-0.5">{be.notes}</p>
