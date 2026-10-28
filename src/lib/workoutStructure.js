@@ -1,6 +1,8 @@
 // Helpers for building workout structure from normalized entities
 // (Workout → WorkoutBlock → BlockExercise → PrescribedSet)
 
+import { formatStepTarget } from '@/lib/prescriptionLabel';
+
 export function buildBlocksByWorkout(blocks) {
   const map = {};
   blocks.forEach((b) => {
@@ -74,6 +76,9 @@ export function buildFlatExerciseList(
       const setCount = sets.length || 1;
       const ladder = getLadderSequence(be);
       const reps = ladder ? ladder.join('-') : (sets[0]?.target_reps?.toString() || be.prescription_value || '');
+      // Same unit-aware target the workout editor shows ("6 cals", "300m"), so
+      // a cardio step isn't flattened to "6 reps" while the athlete is logging.
+      const target = ladder ? null : formatStepTarget(be, sets);
       const targetWeight = be.load_value ? parseFloat(be.load_value) : null;
       const details = exerciseMap[be.exercise_id] || null;
       const rounds = getEffectiveRounds(block, blockExs.length, blockExs);
@@ -90,6 +95,7 @@ export function buildFlatExerciseList(
         rounds,
         effective_sets: rounds * setCount,
         reps,
+        reps_label: target?.cardio ? target.text : null,
         ladder,
         target_weight: targetWeight,
         rest_seconds: block.rest_between_rounds_sec ?? null,

@@ -18,6 +18,7 @@ export function Spec({ label, value, subtext = null, loading = false, onClick = 
 }
 
 function displayReps(exercise, isRunning) {
+  if (exercise.reps_label) return exercise.reps_label;
   // Authored reps for unilateral exercises are the total across both sides
   // (16 = 8 each leg), so show the per-side count.
   const repsNum = /^\d+$/.test(String(exercise.reps ?? '')) ? Number(exercise.reps) : null;
