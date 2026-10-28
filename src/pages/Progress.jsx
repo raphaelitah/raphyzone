@@ -5,7 +5,7 @@ import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { Dumbbell, Flame, CheckCircle2, Sparkles, Trophy, Loader2, Footprints } from 'lucide-react';
+import { Dumbbell, Flame, CheckCircle2, Sparkles, Trophy, Loader2, Footprints, Minus, Plus } from 'lucide-react';
 import { fmtDate, parseDate, mondayOf, fmtISO, DIFFICULTY_META, isRunningWorkout } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { recalcPlanWeights } from '@/lib/weightRecalc';
@@ -21,6 +21,7 @@ export default function Progress() {
   const [sessions, setSessions] = useState([]);
   const [exerciseSessions, setExerciseSessions] = useState([]);
   const [recs, setRecs] = useState([]);
+  const [weightEdits, setWeightEdits] = useState({});
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [detailSession, setDetailSession] = useState(null);
@@ -82,8 +83,27 @@ export default function Progress() {
     return () => { active = false; };
   }, [user]);
 
-  const resolveRec = async (rec, approved) => {
-    await supabase.from('progression_recommendations').update({ status: approved ? 'approved' : 'rejected' }).eq('id', rec.id);
+  const recWeight = (rec) => weightEdits[rec.id] ?? rec.new_weight_kg ?? rec.suggested_weight ?? '';
+  // Nudge by the size of the suggested jump when it is small (e.g. 2kg kettlebell
+  // steps), otherwise 2.5kg so larger suggested jumps can be fine-tuned.
+  const recStep = (rec) => {
+    const diff = Math.abs((rec.new_weight_kg ?? rec.suggested_weight ?? 0) - (rec.current_weight ?? 0));
+    return diff > 0 && diff <= 2.5 ? diff : 2.5;
+  };
+  const adjustRecWeight = (rec, dir) => {
+    const next = Math.max(Math.round(((Number(recWeight(rec)) || 0) + dir * recStep(rec)) * 100) / 100, 0);
+    setWeightEdits((e) => ({ ...e, [rec.id]: next }));
+  };
+
+  const resolveRec = async (recIn, approved) => {
+    const chosen = Number(recWeight(recIn));
+    const rec = approved && Number.isFinite(chosen) && chosen > 0
+      ? { ...recIn, new_weight_kg: chosen, suggested_weight: chosen }
+      : recIn;
+    await supabase.from('progression_recommendations').update({
+      status: approved ? 'approved' : 'rejected',
+      ...(approved ? { new_weight_kg: rec.new_weight_kg, suggested_weight: rec.suggested_weight } : {}),
+    }).eq('id', rec.id);
     if (approved && profile) {
       try {
         if (rec.adjustment_type === 'pattern_baseline' && rec.pattern) {
@@ -205,7 +225,24 @@ export default function Progress() {
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand/10 text-brand shrink-0">{r.confidence}%</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-1">{r.reason}</p>
-                <p className="text-sm font-medium mb-3">{r.current_weight != null ? `${r.current_weight}kg → ` : ''}<span className="text-brand">{r.new_weight_kg ?? r.suggested_weight}kg</span></p>
+                <div className="flex items-center gap-2 text-sm font-medium mb-3">
+                  {r.current_weight != null && <span>{r.current_weight}kg →</span>}
+                  <Button type="button" size="icon" variant="outline" className="h-8 w-8 rounded-lg" aria-label="Decrease weight" onClick={() => adjustRecWeight(r, -1)}><Minus className="h-4 w-4" /></Button>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="any"
+                      aria-label="Suggested weight in kg"
+                      value={recWeight(r)}
+                      onChange={(e) => setWeightEdits((w) => ({ ...w, [r.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                      className="h-8 w-16 rounded-lg border border-border bg-background text-center text-brand font-semibold"
+                    />
+                    <span className="text-brand">kg</span>
+                  </div>
+                  <Button type="button" size="icon" variant="outline" className="h-8 w-8 rounded-lg" aria-label="Increase weight" onClick={() => adjustRecWeight(r, 1)}><Plus className="h-4 w-4" /></Button>
+                </div>
                 <div className="flex gap-2">
                   <Button onClick={() => resolveRec(r, true)} size="sm" className="flex-1 rounded-lg bg-brand text-brand-foreground hover:bg-brand/90 h-9">Accept</Button>
                   <Button onClick={() => resolveRec(r, false)} size="sm" variant="outline" className="flex-1 rounded-lg h-9">Reject</Button>
