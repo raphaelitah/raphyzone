@@ -446,7 +446,10 @@ function ExercisePerformanceRow({ es, unilateral = false, className = '' }) {
   const repsText = perSide ? `${Number(es.reps) / 2}` : es.reps;
   const repsSuffix = perSide ? ' reps each' : isNumericReps ? ' reps' : '';
   const repsLabel = !isRun && es.reps ? `${es.sets > 1 ? `${es.sets} × ` : ''}${repsText}${repsSuffix}` : null;
-  const primaryLabel = isRun ? `${es.distance_km}km` : repsLabel;
+  // Logged distance is per set (seeded from the prescription, e.g. 300m), so
+  // repeat it like the rep rows do and show sub-km distances in metres.
+  const distanceText = es.distance_km < 1 ? `${Math.round(es.distance_km * 1000)}m` : `${es.distance_km}km`;
+  const primaryLabel = isRun ? `${es.sets > 1 ? `${es.sets} × ` : ''}${distanceText}` : repsLabel;
   const weightLabel = isRun ? null : es.max_weight > 0 ? `${es.max_weight}kg` : es.max_weight === 0 ? 'Bodyweight' : null;
   return (
     <Card className={cn('rounded-xl border-border p-3', className)}>
