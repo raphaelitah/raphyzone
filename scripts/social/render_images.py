@@ -143,7 +143,7 @@ def slide_cta():
     fnt, lines, size = fit(d, "Stop deciding.\nStart training.", W - 2 * MARGIN, 420, 112, 72, 800, 1.06)
     y = draw_lines(d, lines, fnt, size, MARGIN, 540, WHITE, 1.06)
     d.rounded_rectangle([MARGIN, y + 40, W - MARGIN, y + 150], radius=55, fill=WHITE)
-    label = "30 days free · link in bio"
+    label = "Try it free · link in bio"
     lf = font(46, 800)
     d.text(((W - d.textlength(label, font=lf)) / 2, y + 66), label, font=lf, fill=INDIGO)
     d.text((MARGIN, H - 130), "Workouts, decided.", font=font(38, 600), fill=MUTED_ON_INK)

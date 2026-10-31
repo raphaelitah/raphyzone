@@ -34,7 +34,7 @@ const BRAND = `WHAT RAPHYZONE DOES (background for you; weave in at most two of 
 - It keeps track of your performance: every set, the weight, how it felt.
 - It suggests improvements as you go (weights go up when it got easy, down when it was too hard).
 - It has hundreds of workouts and builds a personalised plan from your preferences and the equipment you actually have.
-- You can try it free for 30 days.`;
+- You can try it for free (never mention a number of days or the word trial).`;
 
 // The arc every post follows. Reels map it onto scenes, carousels onto slides.
 const STORY = `STORY RULES (this is the most important part of the brief):
@@ -43,7 +43,7 @@ The post must sound like a person telling something that happened, not a brand a
 2. STAY IN THE FEELING for one more beat. Make it a little more true or a little funnier, so the viewer nods.
 3. THE TURN. Something changes: a small, quiet relief. Only here does Raphyzone appear, and as the thing that took the weight off ("it just told me what to do"), one benefit in plain words.
 4. SHOW IT. Now the specific workout (name, time, equipment, from the FACTS), then what the app looks like. Show, do not explain.
-5. INVITE. End by inviting them to try it free for 30 days, in the same easy voice as the rest.
+5. INVITE. End by inviting them to try it for free, in the same easy voice as the rest.
 Writing rules: write the way people talk, with contractions and short sentences that lean on the one before ("So you go. And then?"). Every line must follow from the previous one; read the on-screen texts in order and they should sound like one little monologue, not seven separate slogans. Concrete beats abstract. Vary rhythm. Do not recite features, do not use marketing words (seamless, effortless, unlock, elevate, journey, game-changer, personalised experience), and do not reuse the slogans "Stop deciding" or "Start training" (the end card already has them).`;
 
 const COMMON_SHAPE = `"hook": string (max 60 chars, the first line / slide-1 text), "caption": string (max 700 chars, no hashtags, no call-to-action), "hashtags": string[] (8-12, no # sign, lowercase)`;
@@ -85,6 +85,8 @@ async function progressionFacts(supabase) {
 function validatePost(kind, out) {
   const isReel = kind.startsWith('reel');
   if (!out.hook || !out.caption) throw new Error('missing hook/caption');
+  const everyText = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
+  if (/\b30[- ]?days?\b|free trial/i.test(everyText)) throw new Error('mentions a number of days / free trial; just say try it for free');
   if (!Array.isArray(out.hashtags) || out.hashtags.length < 5) throw new Error('too few hashtags');
   if (isReel) {
     if (!Array.isArray(out.scenes) || out.scenes.length < 3) throw new Error('reel needs scenes');
@@ -154,13 +156,13 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   if (kind === 'carousel_humour') {
     return {
       workoutIds: [],
-      user: `Write a carousel about decision fatigue in training: the 20 minutes of scrolling for a workout, the hotel gym staring contest, "chest day or legs?", rearranging the same plan. Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided (workouts picked for your equipment, time and level, scheduled for you). The final slide invites them to try it free for 30 days, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a carousel about decision fatigue in training: the 20 minutes of scrolling for a workout, the hotel gym staring contest, "chest day or legs?", rearranging the same plan. Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided (workouts picked for your equipment, time and level, scheduled for you). The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   if (kind === 'carousel_smarter') {
     return {
       workoutIds: [],
-      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, the notes app full of half-remembered weights). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it free for 30 days. Slides read as one short story, not a lecture. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, the notes app full of half-remembered weights). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
@@ -174,7 +176,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   return {
     workoutIds: chosen.map((c) => c.id),
     script: { split: chosen },
-    user: `Write a single save-for-later image: a 3-day push / pull / legs split, built from real Raphyzone workouts. Use exactly these as the three training days and add rest/mobility days only to fill a 5-7 line week. FACTS:\n${JSON.stringify(chosen.map(({ focus, name, minutes }) => ({ focus, name, minutes })))}\nThe title should make people save it. Caption: open with a recognisable feeling (the Sunday-night 'what am I even training this week?'), then how to run the week, then one line on why having the week decided and scheduled for you takes that weight off, and that you can try it free for 30 days.\n${perf}\nJSON shape: ${SHAPES.single}`,
+    user: `Write a single save-for-later image: a 3-day push / pull / legs split, built from real Raphyzone workouts. Use exactly these as the three training days and add rest/mobility days only to fill a 5-7 line week. FACTS:\n${JSON.stringify(chosen.map(({ focus, name, minutes }) => ({ focus, name, minutes })))}\nThe title should make people save it. Caption: open with a recognisable feeling (the Sunday-night 'what am I even training this week?'), then how to run the week, then one line on why having the week decided and scheduled for you takes that weight off, and that you can try it for free.\n${perf}\nJSON shape: ${SHAPES.single}`,
   };
 }
 

@@ -238,7 +238,7 @@ def end_card():
     f1 = ri.font(110, 800)
     for i, line in enumerate(["Stop deciding.", "Start training."]):
         d.text(((W - d.textlength(line, font=f1)) / 2, 820 + i * 124), line, font=f1, fill=ri.WHITE)
-    pill = "30 days free · link in bio"
+    pill = "Try it free · link in bio"
     pf = ri.font(52, 800)
     d.rounded_rectangle([110, 1160, W - 110, 1290], radius=65, fill=ri.WHITE)
     d.text(((W - d.textlength(pill, font=pf)) / 2, 1196), pill, font=pf, fill=ri.INDIGO)

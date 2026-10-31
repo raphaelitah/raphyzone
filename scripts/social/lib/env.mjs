@@ -24,7 +24,7 @@ export function getServiceClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-export const CTA = 'Want this decided for you every day? Link in bio, 30 days free.';
+export const CTA = 'Want this decided for you every day? Link in bio, try it for free.';
 
 // Monday of the week containing `date` (UTC), as YYYY-MM-DD.
 export function mondayOf(date) {
