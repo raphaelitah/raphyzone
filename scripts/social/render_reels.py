@@ -400,15 +400,16 @@ SAMPLE = {
     "id": "sample", "hook": "Hotel gym. 30 minutes. Zero thinking.",
     "script": {
         "scenes": [
-            {"seconds": 4, "on_screen_text": "No plan. 30 minutes.", "visual": "logo"},
-            {"seconds": 4, "on_screen_text": "Scrolling is not training", "visual": "plain", "footage_query": "man scrolling phone gym"},
-            {"seconds": 4, "on_screen_text": "Chelsea · 30 min · bodyweight", "visual": "workout"},
-            {"seconds": 4, "on_screen_text": "Quick warm-up, then dive in", "visual": "warmup"},
-            {"seconds": 4, "on_screen_text": "EMOM: keep the clock moving", "visual": "format"},
+            {"seconds": 4, "on_screen_text": "You've been in the gym for ten minutes.", "visual": "plain", "footage_query": "man gym phone scrolling"},
+            {"seconds": 4, "on_screen_text": "You haven't lifted anything yet.", "visual": "plain", "footage_query": "gym empty weights"},
+            {"seconds": 4, "on_screen_text": "Then something just told me what to do.", "visual": "plain", "footage_query": "man smiling phone gym"},
+            {"seconds": 4, "on_screen_text": "Chelsea. 30 minutes. Pull-up bar, nothing else.", "visual": "workout"},
+            {"seconds": 4, "on_screen_text": "EMOM: a new round every minute", "visual": "format"},
+            {"seconds": 4, "on_screen_text": "30 minutes. I didn't think once.", "visual": "plain", "footage_query": "workout finished smile"},
         ],
         "workout": {"workout_id": "e3c35bfeb3555ea6354b84d5", "name": "Chelsea", "minutes": 30, "difficulty": "intermediate", "format": "EMOM", "equipment": ["pull-up bar", "bodyweight"],
                     "blocks": [{"label": "A", "type": "superset", "rounds": 30, "items": ["Strict Pronated Pull-up × 5", "Push-Up × 10", "Air Squat × 15"]}]},
-        "app_scene": {"headline": "Let Raphyzone decide."}, "music_mood": "driving",
+        "app_scene": {"headline": "Your week, already planned."}, "music_mood": "driving",
     },
 }
 
