@@ -122,6 +122,7 @@ function validatePost(kind, out) {
     const texts = out.scenes.map((s) => s.on_screen_text || '');
     if (texts.some((t) => /stop deciding|start training/i.test(t))) throw new Error('slogan reused in scene text');
     if (/raphyzone/i.test(texts[0])) throw new Error('opening scene must not name the brand');
+    if (kind === 'reel_travel' && !/business trip|work trip/i.test(texts.slice(0, 2).join(' '))) throw new Error('travel reel must say "business trip" in the first two scenes');
   } else {
     if (!Array.isArray(out.slides) || !out.slides.length) throw new Error('missing slides');
     if (out.slides.length > 10) throw new Error('more than 10 slides');
