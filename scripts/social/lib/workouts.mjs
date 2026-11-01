@@ -106,10 +106,10 @@ export function equipmentTokens(equipment) {
 // Equipment scenarios for "Today's workout, decided". Tokens are the normalised
 // (lowercase, singular) values workouts.equipment uses.
 export const GYM_SCENARIOS = [
-  { label: 'a hotel gym with dumbbells, a bench and a treadmill', tokens: ['dumbbell', 'bench / box', 'bodyweight', 'treadmill', 'bike'], minutes: 30 },
-  { label: 'a basic hotel gym: dumbbells and one cardio machine', tokens: ['dumbbell', 'bodyweight', 'treadmill', 'bike', 'rower'], minutes: 25 },
-  { label: 'a hotel gym with kettlebells and a pull-up bar', tokens: ['kettlebell', 'dumbbell', 'pull-up bar', 'bench / box', 'bodyweight'], minutes: 30 },
-  { label: 'a garage-style gym with a barbell and a rack', tokens: ['barbell', 'dumbbell', 'bench / box', 'pull-up bar', 'bodyweight'], minutes: 40 },
+  { label: 'the gym, with dumbbells, a bench and a treadmill', tokens: ['dumbbell', 'bench / box', 'bodyweight', 'treadmill', 'bike'], minutes: 30 },
+  { label: 'a small gym: dumbbells and one cardio machine', tokens: ['dumbbell', 'bodyweight', 'treadmill', 'bike', 'rower'], minutes: 25 },
+  { label: 'the gym, with kettlebells and a pull-up bar', tokens: ['kettlebell', 'dumbbell', 'pull-up bar', 'bench / box', 'bodyweight'], minutes: 30 },
+  { label: 'the gym, with a barbell and a rack', tokens: ['barbell', 'dumbbell', 'bench / box', 'pull-up bar', 'bodyweight'], minutes: 40 },
 ];
 
 export function matchWorkouts(catalog, { tokens, minutes, minMinutes = 10, requireGear = true, minExercises = 3 }) {

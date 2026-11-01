@@ -397,7 +397,7 @@ def app_capture(work, base_url):
 
 
 SAMPLE = {
-    "id": "sample", "hook": "Hotel gym. 30 minutes. Zero thinking.",
+    "id": "sample", "hook": "Gym. 30 minutes. No plan.",
     "script": {
         "scenes": [
             {"seconds": 4, "on_screen_text": "You've been in the gym for ten minutes.", "visual": "plain", "footage_query": "man gym phone scrolling"},
