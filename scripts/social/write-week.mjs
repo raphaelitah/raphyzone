@@ -12,17 +12,18 @@
 // Posts with status 'redo' are rewritten using the reviewer's note.
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
+import { pickAngle } from './lib/angles.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
 // slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
 const PLAN = [
-  { slot: 1, day: 0, kind: 'reel_workout', angle: 'THE HARDEST DECISION IS MADE. You already did the hard part: you decided to train, packed the bag, got there, got changed. And now you are standing in the gym with no plan, about to waste all that effort on a lap of the machines and your phone. The turn: that effort deserves a plan, and having one waiting means it is not wasted.' },
+  { slot: 1, day: 0, kind: 'reel_workout' },
   { slot: 2, day: 1, kind: 'carousel_humour' },
-  { slot: 3, day: 2, kind: 'reel_travel', variant: 'hotel_room', angle: 'THE FREE SLOT. A packed day of meetings, one free gap, a hotel room with a bit of floor and nothing else. Not knowing what you can even do with no equipment is what makes you skip it.' },
+  { slot: 3, day: 2, kind: 'reel_travel', variant: 'hotel_room' },
   { slot: 4, day: 3, kind: 'carousel_smarter' },
-  { slot: 5, day: 4, kind: 'reel_workout', angle: 'THE SAME OLD ROUTINE. You have done the same few exercises for months. You know them by heart, none of it excites you any more, and looking for something new feels like homework, so you do the same thing again. The turn: something new that still fits your gear and your time, picked for you.' },
+  { slot: 5, day: 4, kind: 'reel_workout' },
   { slot: 6, day: 5, kind: 'single_split' },
-  { slot: 7, day: 6, kind: 'reel_travel', variant: 'jet_lag', angle: 'THE BROKEN STREAK. You told yourself you would keep training on this trip. It is day four, you have skipped everything, the guilt is louder than the tiredness, and starting again feels like a big deal. The turn: it does not have to be big, just something gentle and already decided.' },
+  { slot: 7, day: 6, kind: 'reel_travel', variant: 'jet_lag' },
 ];
 
 const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout app for people who travel, train without a coach and are tired of deciding what to do. Positioning: "Stop deciding. Start training." Tone: direct, dry-funny, warm, no hype, no emojis spam (max 2 per caption), no medical claims, no "shred/burn fat fast" language. Faceless brand: never write as if a person is on camera. Never invent workouts, exercises, numbers or app features: use only the FACTS you are given. Do not mention the call-to-action link; it is added automatically. Reply with a single JSON object only.`;
@@ -150,7 +151,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       return {
         workoutIds: [w.workout_id],
         script: { scenario: sc.label, workout: facts },
-        user: `Write a story reel. Premise: someone walks into ${sc.label} with ${sc.minutes} minutes and no plan. Use exactly this angle for the story and do not drift into another one: ${plan.angle || 'the lap around the machines with no plan'} Tell it as a small story that ends with the relief of being told what to do, the workout shown, the app shown, and an invitation to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly, and nothing else about the workout. Do not list every exercise in the on-screen text; the workout list is rendered separately.\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment, in one concrete image. This is the hook; no brand, no logo.\n2) beat "deepen", visual "plain": make it a little more true or funnier.\n3) beat "turn", visual "plain": the small change, "and then it just told me what to do" in your own words; Raphyzone can be named here, once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout, with its name, ${facts.minutes} minutes and equipment (the workout card is shown behind the text).\n5) beat "show", visual "format": say in plain words what the ${facts.format} format means, using only this definition: ${fmt || "none known; use a plain scene instead of a format scene"} (the format explainer is shown behind the text).\n6) beat "show", visual "plain": the payoff in a human voice, e.g. "${facts.minutes} minutes. And I didn't have to think once."\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption (max 700 chars) retells the same story in 3-5 short lines of your own, and may name one more thing the app does (tracking, scheduling or progression), never a list.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+        user: `Write a story reel. Premise: someone is at the gym with about ${sc.minutes} minutes (say nothing about what equipment the gym has beyond the workout's own FACTS). Use exactly this angle for the story and do not drift into another one: ${plan.angle} Tell it as a small story that ends with the relief of being told what to do, the workout shown, the app shown, and an invitation to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly, and nothing else about the workout. Do not list every exercise in the on-screen text; the workout list is rendered separately.\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment, in one concrete image. This is the hook; no brand, no logo.\n2) beat "deepen", visual "plain": make it a little more true or funnier.\n3) beat "turn", visual "plain": the small change, "and then it just told me what to do" in your own words; Raphyzone can be named here, once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout, with its name, ${facts.minutes} minutes and equipment (the workout card is shown behind the text).\n5) beat "show", visual "format": say in plain words what the ${facts.format} format means, using only this definition: ${fmt || "none known; use a plain scene instead of a format scene"} (the format explainer is shown behind the text).\n6) beat "show", visual "plain": the payoff in a human voice, e.g. "${facts.minutes} minutes. And I didn't have to think once."\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption (max 700 chars) retells the same story in 3-5 short lines of your own, and may name one more thing the app does (tracking, scheduling or progression), never a list.\n${perf}\nJSON shape: ${SHAPES.reel}`,
       };
     }
     throw new Error('No workout matches any gym scenario');
@@ -174,13 +175,13 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
     return {
       workoutIds: [w.workout_id],
       script: { scenario: variant, workout: facts },
-      user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle || 'a relatable travel moment'} Then deepen it, then the turn: the relief of having something that already knew your equipment and your time. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief; Raphyzone can be named once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+      user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief of having something that already knew your equipment and your time. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief; Raphyzone can be named once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
     };
   }
   if (kind === 'carousel_humour') {
     return {
       workoutIds: [],
-      user: `Write a carousel about decision fatigue in training: the 20 minutes of scrolling for a workout (on the bench between sets, or the night before to plan tomorrow, never to train at that hour), the staring contest with the dumbbells in the gym, "chest day or legs?", rearranging the same plan. Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided (workouts picked for your equipment, time and level, scheduled for you). The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a humorous carousel about decision fatigue in training. Build it on exactly this angle and do not drift: ${plan.angle} Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided (workouts picked for your equipment, time and level, scheduled for you). The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   if (kind === 'carousel_smarter') {
@@ -221,8 +222,12 @@ async function main() {
   if (!todo.length) { console.log(`Week ${weekStart}: nothing to write.`); return; }
 
   const [catalog, perf, progression] = await Promise.all([loadCatalog(supabase), performanceContext(supabase), progressionFacts(supabase)]);
-  const { data: recent } = await supabase.from('social_posts').select('source_workout_ids').gte('week_start', addDays(weekStart, -42)).neq('week_start', weekStart);
+  const { data: recent } = await supabase.from('social_posts').select('source_workout_ids, hook, script, week_start, slot').gte('week_start', addDays(weekStart, -56)).neq('week_start', weekStart).order('week_start', { ascending: false }).order('slot', { ascending: false });
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
+  // most recent first; the angle of a post being redone counts as the freshest so it is not picked again
+  const recentAngles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id), ...(recent || []).map((r) => r.script?.angle_id)].filter(Boolean);
+  const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
+  const takenAngles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id).filter(Boolean));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
 
   const logCall = (row) => { if (!dry) supabase.from('llm_call_logs').insert(row).then(({ error }) => error && console.error('llm_call_logs insert failed:', error.message)); };
@@ -230,8 +235,12 @@ async function main() {
   for (const plan of todo) {
     try {
     const cur = bySlot.get(plan.slot);
-    const built = await buildPrompt({ plan, catalog, recentIds, used, perf, progression });
+    const angle = pickAngle(plan, recentAngles, takenAngles);
+    if (angle) takenAngles.add(angle.id);
+    const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, progression });
     built.workoutIds.forEach((id) => used.add(id));
+    const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
+    built.user += hookNote;
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
     const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o), log: logCall });
     const { caption, hashtags } = finalize(out);
@@ -245,7 +254,7 @@ async function main() {
       caption,
       hashtags,
       slides: isReel ? [] : out.slides,
-      script: isReel ? { ...built.script, scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : built.script ?? null,
+      script: isReel ? { ...built.script, scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat', angle_id: angle?.id } : angle ? { ...(built.script ?? {}), angle_id: angle.id } : built.script ?? null,
       source_workout_ids: built.workoutIds,
       asset_urls: [],
       render_status: 'pending',
