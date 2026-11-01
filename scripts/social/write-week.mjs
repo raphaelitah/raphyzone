@@ -29,20 +29,16 @@ const PLAN = [
 const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout app for people who travel, train without a coach and are tired of deciding what to do. Positioning: "Stop deciding. Start training." Tone: direct, dry-funny, warm, no hype, no emojis spam (max 2 per caption), no medical claims, no "shred/burn fat fast" language. Faceless brand: never write as if a person is on camera. Never invent workouts, exercises, numbers or app features: use only the FACTS you are given. Do not mention the call-to-action link; it is added automatically. Reply with a single JSON object only.`;
 
 // What Raphyzone is, in one place. The model may use these facts but must never recite them as a list.
-const BRAND = `WHAT RAPHYZONE DOES (background for you; weave in at most two of these per post, as one natural sentence, never as a feature list):
-- It removes the mental load of training: you stop planning, searching and second-guessing.
-- It schedules your workouts for you, around your week.
-- It keeps track of your performance: every set, the weight, how it felt.
-- It suggests improvements as you go (weights go up when it got easy, down when it was too hard).
-- It has hundreds of workouts and builds a personalised plan from your preferences and the equipment you actually have.
-- You can try it for free (never mention a number of days or the word trial).`;
+const BRAND = `THE PITCH (use these exact words, once, in the turn): "Raphyzone removes the mental load."
+That sentence is the whole pitch. Do not add other claims about the app (no scheduling, no tracking, no "hundreds of workouts", no personalised plans, no equipment matching): the workout shown is the proof. The only exception is the progression carousel, whose topic is how the app logs sets and suggests weights; there use only the FACTS.
+You can try it for free (never mention a number of days or the word trial).`;
 
 // The arc every post follows. Reels map it onto scenes, carousels onto slides.
 const STORY = `STORY RULES (this is the most important part of the brief):
 The post must sound like a person telling something that happened, not a brand announcing a product.
 1. FEEL FIRST. The first line is a specific, relatable moment that makes the viewer think "oh, that's me": one concrete image (scrolling through workout videos on the bench between sets, standing in the gym with no plan, the evening-before search for tomorrow's session that never ends, the gym bag packed but no idea what to do with it), not a general statement about fitness. Address the viewer as "you". Never open with the brand name, a feature or a slogan.
 2. STAY IN THE FEELING for one more beat. Make it a little more true or a little funnier, so the viewer nods.
-3. THE TURN. Something changes: a small, quiet relief. Only here does Raphyzone appear, and as the thing that took the weight off ("it just told me what to do"), one benefit in plain words.
+3. THE TURN. Something changes: a small, quiet relief. Only here does Raphyzone appear, with the exact pitch sentence "Raphyzone removes the mental load." and nothing more about the app.
 4. SHOW IT. Now the specific workout (name, time, equipment, from the FACTS), then what the app looks like. Show, do not explain.
 5. INVITE. End by inviting them to try it for free, in the same easy voice as the rest.
 Voice and facts (hard rules):
@@ -53,7 +49,7 @@ Voice and facts (hard rules):
 - Use only what the FACTS give you. Never invent a workout name, exercise, weight, rep count, duration, screen or app feature. If an example needs a number, describe it without one ("a squat day you rated hard") instead of making one up.
 - The scenes, slides and caption must agree with each other (same place, same equipment, same problem).
 - End the caption on the story. Do not finish it with a call to action or "try it": one is appended automatically.
-- Say what the app does in one plain sentence. Do not describe screens you were not told about.
+- Do not describe screens or app features you were not told about.
 Writing rules: write the way people talk, with contractions and short sentences that lean on the one before ("So you go. And then?"). Every line must follow from the previous one; read the on-screen texts in order and they should sound like one little monologue, not seven separate slogans. Concrete beats abstract. Vary rhythm. Do not recite features, do not use marketing words (seamless, effortless, unlock, elevate, journey, game-changer, personalised experience), and do not reuse the slogans "Stop deciding" or "Start training" (the end card already has them).`;
 
 const COMMON_SHAPE = `"hook": string (max 60 chars, the first line / slide-1 text), "caption": string (max 700 chars, no hashtags, no call-to-action), "hashtags": string[] (8-12, no # sign, lowercase)`;
@@ -101,7 +97,17 @@ async function progressionFacts(supabase) {
   ].join('\n');
 }
 
-function validatePost(kind, out) {
+const NUM_WORDS = { five: 5, ten: 10, fifteen: 15, twenty: 20, 'twenty-five': 25, thirty: 30, 'thirty-five': 35, forty: 40, 'forty-five': 45, fifty: 50, sixty: 60, ninety: 90 };
+
+// Every "N minutes" the post mentions (digits or words) must be the chosen workout's length.
+function wrongDurations(text, minutes) {
+  const found = [];
+  for (const m of text.matchAll(/(\d+)\s*(?:-|\s)?\s*(?:min|mins|minutes?)\b/gi)) found.push(Number(m[1]));
+  for (const m of text.matchAll(/\b(five|ten|fifteen|twenty|twenty[- ]five|thirty|thirty[- ]five|forty|forty[- ]five|fifty|sixty|ninety)[- ]?(?:min|mins|minutes?)\b/gi)) found.push(NUM_WORDS[m[1].toLowerCase().replace(' ', '-')]);
+  return found.filter((n) => n !== Math.round(Number(minutes)));
+}
+
+function validatePost(kind, out, ctx = {}) {
   const isReel = kind.startsWith('reel');
   if (!out.hook || !out.caption) throw new Error('missing hook/caption');
   const spoken = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
@@ -120,6 +126,12 @@ function validatePost(kind, out) {
     const firstCard = out.scenes.findIndex((s) => s.visual && s.visual !== 'plain');
     if (firstCard !== -1 && firstCard < 3) throw new Error('need at least 3 plain story scenes before the workout');
     const texts = out.scenes.map((s) => s.on_screen_text || '');
+    if (!texts.some((t) => /raphyzone removes the mental load/i.test(t))) throw new Error('turn scene must use the pitch line "Raphyzone removes the mental load."');
+    if (texts.some((t) => /schedul|track|hundreds|personali[sz]|equipment you|gear you/i.test(t))) throw new Error('scene text makes an extra claim about the app; use only the pitch line');
+    if (ctx.minutes) {
+      const bad = wrongDurations([out.hook, out.caption, ...texts, out.app_scene?.headline].join(' . '), ctx.minutes);
+      if (bad.length) throw new Error(`story mentions ${bad.join(', ')} minutes but the workout is ${ctx.minutes}`);
+    }
     if (texts.some((t) => /stop deciding|start training/i.test(t))) throw new Error('slogan reused in scene text');
     if (/raphyzone/i.test(texts[0])) throw new Error('opening scene must not name the brand');
     if (kind === 'reel_travel' && !/business trip|work trip/i.test(texts.slice(0, 2).join(' '))) throw new Error('travel reel must say "business trip" in the first two scenes');
@@ -152,7 +164,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       return {
         workoutIds: [w.workout_id],
         script: { scenario: sc.label, workout: facts },
-        user: `Write a story reel. Premise: someone is at the gym with about ${sc.minutes} minutes (say nothing about what equipment the gym has beyond the workout's own FACTS). Use exactly this angle for the story and do not drift into another one: ${plan.angle} Tell it as a small story that ends with the relief of being told what to do, the workout shown, the app shown, and an invitation to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly, and nothing else about the workout. Do not list every exercise in the on-screen text; the workout list is rendered separately.\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment, in one concrete image. This is the hook; no brand, no logo.\n2) beat "deepen", visual "plain": make it a little more true or funnier.\n3) beat "turn", visual "plain": the small change, "and then it just told me what to do" in your own words; Raphyzone can be named here, once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout, with its name, ${facts.minutes} minutes and equipment (the workout card is shown behind the text).\n5) beat "show", visual "format": say in plain words what the ${facts.format} format means, using only this definition: ${fmt || "none known; use a plain scene instead of a format scene"} (the format explainer is shown behind the text).\n6) beat "show", visual "plain": the payoff in a human voice, e.g. "${facts.minutes} minutes. And I didn't have to think once."\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption (max 700 chars) retells the same story in 3-5 short lines of your own, and may name one more thing the app does (tracking, scheduling or progression), never a list.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+        user: `Write a story reel. Premise: someone is at the gym, with exactly as much time as the workout below takes: ${facts.minutes} minutes (say nothing about what equipment the gym has beyond the workout's own FACTS). The workout is already chosen, so write the story to fit it. ${facts.minutes} minutes is the only duration you may mention anywhere (no other number of minutes or hours). Use exactly this angle for the story and do not drift into another one: ${plan.angle} Tell it as a small story that ends with the relief of being told what to do, the workout shown, the app shown, and an invitation to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nMention the name, the time and the equipment exactly, and nothing else about the workout. Do not list every exercise in the on-screen text; the workout list is rendered separately.\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment, in one concrete image. This is the hook; no brand, no logo.\n2) beat "deepen", visual "plain": make it a little more true or funnier.\n3) beat "turn", visual "plain": the small change, then the exact line "Raphyzone removes the mental load." (it can be its own short scene text, or the end of one).\n4) beat "show", visual "workout": the workout, with its name, ${facts.minutes} minutes and equipment (the workout card is shown behind the text).\n5) beat "show", visual "format": say in plain words what the ${facts.format} format means, using only this definition: ${fmt || "none known; use a plain scene instead of a format scene"} (the format explainer is shown behind the text).\n6) beat "show", visual "plain": the payoff in a human voice, e.g. "${facts.minutes} minutes. And you didn't have to think once."\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption (max 700 chars) retells the same story in 3-5 short lines of your own, and uses the pitch sentence once; no other claims about the app.\n${perf}\nJSON shape: ${SHAPES.reel}`,
       };
     }
     throw new Error('No workout matches any gym scenario');
@@ -176,13 +188,13 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
     return {
       workoutIds: [w.workout_id],
       script: { scenario: variant, workout: facts },
-      user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief of having something that already knew your equipment and your time. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief; Raphyzone can be named once, with one benefit from the brief.\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+      user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief, using the exact pitch line. The workout below is already chosen: write the story to fit it, and ${facts.minutes} minutes is the only duration you may mention anywhere. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief, with the exact line "Raphyzone removes the mental load."\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
     };
   }
   if (kind === 'carousel_humour') {
     return {
       workoutIds: [],
-      user: `Write a humorous carousel about decision fatigue in training. Build it on exactly this angle and do not drift: ${plan.angle} Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided (workouts picked for your equipment, time and level, scheduled for you). The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a humorous carousel about decision fatigue in training. Build it on exactly this angle and do not drift: ${plan.angle} Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided, using the exact line "Raphyzone removes the mental load." and no other claims about the app. The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   if (kind === 'carousel_smarter') {
@@ -202,7 +214,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   return {
     workoutIds: chosen.map((c) => c.id),
     script: { split: chosen },
-    user: `Write a single save-for-later image: a 3-day push / pull / legs split, built from real Raphyzone workouts. Use exactly these as the three training days and add rest/mobility days only to fill a 5-7 line week. FACTS:\n${JSON.stringify(chosen.map(({ focus, name, minutes }) => ({ focus, name, minutes })))}\nThe title should make people save it. Caption: open with a recognisable feeling (the Sunday-night 'what am I even training this week?'), then how to run the week, then one line on why having the week decided and scheduled for you takes that weight off, and that you can try it for free.\n${perf}\nJSON shape: ${SHAPES.single}`,
+    user: `Write a single save-for-later image: a 3-day push / pull / legs split, built from real Raphyzone workouts. Use exactly these as the three training days and add rest/mobility days only to fill a 5-7 line week. FACTS:\n${JSON.stringify(chosen.map(({ focus, name, minutes }) => ({ focus, name, minutes })))}\nThe title should make people save it. Caption: open with a recognisable feeling (the Sunday-night 'what am I even training this week?'), then how to run the week, then the exact line "Raphyzone removes the mental load." and that you can try it for free.\n${perf}\nJSON shape: ${SHAPES.single}`,
   };
 }
 
@@ -243,7 +255,7 @@ async function main() {
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
     built.user += hookNote;
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
-    const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o), log: logCall });
+    const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes }), log: logCall });
     const { caption, hashtags } = finalize(out);
     const isReel = plan.kind.startsWith('reel');
     const row = {
