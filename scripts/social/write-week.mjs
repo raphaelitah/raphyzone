@@ -138,6 +138,7 @@ function validatePost(kind, out, ctx = {}) {
   } else {
     if (!Array.isArray(out.slides) || !out.slides.length) throw new Error('missing slides');
     if (out.slides.length > 10) throw new Error('more than 10 slides');
+    if (kind === 'carousel_humour' && /\d+\s*(?:-|\s)?(?:min|minutes?|sets?|reps?|kg)\b|circuit|\bAMRAP\b|\bEMOM\b/i.test([out.caption, ...out.slides.flatMap((x) => [x.title, x.body])].join(' '))) throw new Error('humour carousel must not describe a specific workout');
     if (kind === 'single_split' && out.slides.length !== 1) throw new Error('single image needs exactly 1 slide');
   }
   return out;
@@ -194,7 +195,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   if (kind === 'carousel_humour') {
     return {
       workoutIds: [],
-      user: `Write a humorous carousel about decision fatigue in training. Build it on exactly this angle and do not drift: ${plan.angle} Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided, using the exact line "Raphyzone removes the mental load." and no other claims about the app. The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a humorous carousel about decision fatigue in training. Build it on exactly this angle and do not drift: ${plan.angle} Slide 1 must be a moment the viewer recognises as themselves. The middle slides escalate it with dry humour, one beat each, written so each slide follows from the last. The turn comes about two slides from the end: the relief of having it decided, using the exact line "Raphyzone removes the mental load." and no other claims about the app. There are no workout FACTS for this carousel: do not describe any specific workout, exercise list, duration, equipment or app screen after the turn. The slides after the pitch only invite them to try it. The final slide invites them to try it for free, in a human line, not a slogan.\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   if (kind === 'carousel_smarter') {
