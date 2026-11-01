@@ -116,6 +116,7 @@ export function matchWorkouts(catalog, { tokens, minutes, minMinutes = 10, requi
   const allowed = new Set(tokens);
   return catalog.filter((w) => {
     if (!w.minutes || w.minutes > minutes || w.minutes < minMinutes) return false;
+    if (/^\d|\bwork\b.*\brest\b/i.test(w.name || '')) return false; // a description, not a name, makes a poor title card
     if (!w.blocks.length || !w.equipmentTokens.length) return false;
     if (!w.equipmentTokens.every((t) => allowed.has(t))) return false;
     if (requireGear && w.equipmentTokens.every((t) => t === 'bodyweight')) return false;
