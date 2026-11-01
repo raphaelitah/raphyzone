@@ -166,7 +166,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
     if (!w) throw new Error(`No bodyweight workout for ${variant}`);
     const facts = summarizeWorkout(w);
     const brief = jet
-      ? 'Jet-lag session: arrived tired, body clock off, wants to move without wrecking tomorrow. Gentle, short, no heroics. Do not claim it cures jet lag.'
+      ? 'Jet-lag session: arrived tired, body clock off, wants to move without wrecking tomorrow. Gentle, short, no heroics. Do not claim it cures jet lag. The whole story happens in the hotel room (no gym, no treadmill, no machines anywhere in the story).'
       : 'Hotel room, zero equipment (no gym downstairs either: the whole story happens in the room), small space, quiet (no jumping if the workout is low-impact).';
     return {
       workoutIds: [w.workout_id],
@@ -183,7 +183,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   if (kind === 'carousel_smarter') {
     return {
       workoutIds: [],
-      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, the notes app full of half-remembered weights). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, a notes app full of half-remembered, crossed-out weights; do not write any specific weights, reps or exercises into those notes). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. The only numbers allowed are the +2.5 kg / +5 kg bumps and the 2-session rule from the FACTS; describe everything else without numbers. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
