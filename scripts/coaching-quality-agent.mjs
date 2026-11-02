@@ -395,6 +395,20 @@ async function runWorkout(page, candidate, qaCoachId) {
         return 'clicked';
       } catch (err) {
         if (/\/progress/.test(page.url())) return 'finished';
+        // Buttons inside a countdown dialog (the "Still resting" "Start now") re-render
+        // every second, so Playwright's stability check can never settle. Skip the
+        // actionability wait and click directly rather than crash the whole workout.
+        if (/not stable|detached|Timeout/i.test(err.message)) {
+          try {
+            await locator.click({ force: true, timeout: 3000 });
+            return 'clicked';
+          } catch (err2) {
+            if (/\/progress/.test(page.url())) return 'finished';
+            // Dialog re-rendered under us; the loop re-evaluates the page, so move on.
+            if (/detached|not stable|Timeout/i.test(err2.message)) return 'clicked';
+            throw err2;
+          }
+        }
         throw err;
       }
     };

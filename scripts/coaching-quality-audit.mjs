@@ -78,10 +78,23 @@ function missingEquipment(exercise, availableSet) {
 // from every check in this script (equipment, duration, sequencing, ...)
 // with no error. Page through with .range() until a page comes back short.
 const PAGE_SIZE = 1000;
+// PostgREST intermittently rejects the (static, long-issued) service-role key with
+// "JWT issued at future" when the request lands on a node whose clock is behind;
+// it succeeds on the next attempt, so retry that one error instead of failing the run.
+async function fetchPage(table, select, filters, from) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await filters(db.from(table).select(select)).range(from, from + PAGE_SIZE - 1);
+    if (res.error && /JWT issued at future/i.test(res.error.message) && attempt < 5) {
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      continue;
+    }
+    return res;
+  }
+}
 async function fetchAll(table, select, filters = (q) => q) {
   const rows = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await filters(db.from(table).select(select)).range(from, from + PAGE_SIZE - 1);
+    const { data, error } = await fetchPage(table, select, filters, from);
     if (error) throw new Error(`${table}: ${error.message}`);
     rows.push(...(data || []));
     if (!data || data.length < PAGE_SIZE) break;
