@@ -156,19 +156,23 @@ export default function Home() {
   if (!sessionDates.has(fmtISO(cursor))) cursor = new Date(today.getTime() - 86400000);
   while (sessionDates.has(fmtISO(cursor))) { streak++; cursor = new Date(cursor.getTime() - 86400000); }
 
+  // A slot is done only if a completed session matches both its workout AND its date —
+  // matching by workout_id alone marks every repeat of the same workout in the week as done.
+  const isSlotDone = (slot) => !!slot.workout_id && weekSessions.some((s) => s.workout_id === slot.workout_id && sameDay(parseDate(s.date), parseDate(slot.date)));
+
   const todaySlots = plan?.workouts?.filter((w) => w.date === todayISO) || [];
   const todaySlot = todaySlots[0];
   const todayWorkoutSlots = todaySlots.filter((w) => w.workout_id);
-  const todayWorkoutSlot = todayWorkoutSlots.find((w) => !weekSessions.some((s) => s.workout_id === w.workout_id)) || null;
+  const todayWorkoutSlot = todayWorkoutSlots.find((w) => !isSlotDone(w)) || null;
   const todayWorkout = todayWorkoutSlot?.workout_id ? workouts[todayWorkoutSlot.workout_id] : null;
-  const todayDone = todayWorkoutSlots.length > 0 && todayWorkoutSlots.every((w) => weekSessions.some((s) => s.workout_id === w.workout_id));
-  const lastDoneTodaySlot = [...todayWorkoutSlots].reverse().find((w) => weekSessions.some((s) => s.workout_id === w.workout_id)) || todayWorkoutSlots[todayWorkoutSlots.length - 1];
+  const todayDone = todayWorkoutSlots.length > 0 && todayWorkoutSlots.every(isSlotDone);
+  const lastDoneTodaySlot = [...todayWorkoutSlots].reverse().find(isSlotDone) || todayWorkoutSlots[todayWorkoutSlots.length - 1];
   const lastDoneTodayWorkout = lastDoneTodaySlot?.workout_id ? workouts[lastDoneTodaySlot.workout_id] : null;
-  const nextWorkoutSlot = plan?.workouts?.find((w) => w.date > todayISO && w.workout_id && !weekSessions.some((s) => s.workout_id === w.workout_id));
+  const nextWorkoutSlot = plan?.workouts?.find((w) => w.date > todayISO && w.workout_id && !isSlotDone(w));
 
   const countedSlots = plan?.workouts?.filter((w) => w.workout_id || w.slot_type === 'activity') || [];
   const totalCount = countedSlots.length;
-  const completedCount = countedSlots.filter((s) => s.workout_id && weekSessions.some((sess) => sess.workout_id === s.workout_id)).length;
+  const completedCount = countedSlots.filter(isSlotDone).length;
 
   const suggestAlternatives = (() => {
     if (!suggestFor) return [];
