@@ -10931,3 +10931,31 @@ Call log:
 - ✓ Did "Bare Cove Travel" — everything is good, no block transitions to check.
 
 ---
+## Run 2026-11-09T16:59:41.208Z
+
+**Result: 6 anomaly(ies) found.**
+
+### structure
+- ⚠️ W-PULLHEAVYNM-1794402000000: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+- ⚠️ W-PULLHEAVY-1794398400000: 3 consecutive standalone single-exercise blocks all with rounds=3 — looks like it should be one 3-exercise circuit block instead of 3 separate straight-through mini-workouts (standalone blocks don't rotate; see src/lib/workoutStructure.js deriveBlockTimerConfig)
+
+### duration
+- ✓ f3131dd89e502587b9068adb "Amanda": declared 33 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ W-PULLHEAVY-1794398400000 "Pull Heavy": declared 45 min but structure implies ~29 min — worth a human check
+- ✓ b48d0020f65891d07263104b "Donny": declared 20 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ 97d540648f777c0ea47be2a0 "Flight Simulator": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c5229541c61f0e7f551c852e "Bellzebub": declared 25 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ W-PULLHEAVYNM-1794402000000 "Pull Heavy (No Machine)": declared 45 min but structure implies ~29 min — worth a human check
+- ✓ 1c8c16b9079c7783e97ecdcf "Black Hole": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f0245ca620296418081ad7a5 "Morrison": declared 30 min but structure implies ~2 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ c914903226653fe382fc44d0 "Open 17.1": declared 20 min but structure implies ~9 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ e91c0408a6b0baac8f979bdd "Open 21.1": declared 14 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f203215fc4cbfbe84eecba37 "Open 22.2": declared 10 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ✓ f6af81d1cd13bf51d1403c3a "Blackjack": declared 15 min but structure implies ~1 min (low confidence — no rounds or per-exercise reps/time/distance to go on) — worth a human check
+- ⚠️ W-PULLVOLUME-1794405600000 "Pull Volume": declared 50 min but structure implies ~31 min — worth a human check
+
+### equipment
+- ⚠️ Plan for athlete 1d6d9f29-6c41-4786-81f3-7dccc01f973e (week 2026-11-09): "Murph" includes "Strict Pronated Pull-up" which needs [Pull-up Bar] — not in the athlete's equipment (profile: custom)
+- ✓ checked 5 plan-day workout assignments across 22 weekly plans
+
+---
