@@ -364,6 +364,7 @@ export default function SupersetPanel({
       ) : (
         <div className="flex flex-col items-center gap-3 w-full">
           <p className="text-lg font-semibold text-center">{current?.exercise_name}</p>
+          {current?.substitutedFrom && <p className="text-xs text-muted-foreground text-center -mt-1">Dumbbell version of {current.substitutedFrom}</p>}
           {current?.details?.video_url && (
             <YouTubeVideo url={current.details.video_url} title={current.exercise_name} className="w-full" />
           )}

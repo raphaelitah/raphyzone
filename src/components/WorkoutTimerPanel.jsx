@@ -69,6 +69,7 @@ export default function WorkoutTimerPanel({
   const exerciseInfo = (exercise, allowSwap, showName = true) => (
     <>
       {showName && <p className="text-lg font-semibold text-center">{exercise?.exercise_name}</p>}
+      {showName && exercise?.substitutedFrom && <p className="text-xs text-muted-foreground text-center -mt-1">Dumbbell version of {exercise.substitutedFrom}</p>}
       {exercise?.details?.video_url && (
         <YouTubeVideo url={exercise.details.video_url} title={exercise.exercise_name} className="w-full" />
       )}
