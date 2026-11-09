@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { getUserFromRequest } from '../_shared/auth.ts';
 import { getServiceClient } from '../_shared/supabaseAdmin.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { ownedEquipmentSet, needsDumbbellEquivalent, dumbbellEquivalentFor } from '../_shared/equipmentSubstitution.ts';
 
 // Ported from base44/functions/assignWorkoutWeights. Assigns personalized target
 // weights (kg) to a workout's exercises — or to every workout in a weekly plan —
@@ -196,6 +197,29 @@ Deno.serve(async (req: Request) => {
 
     const exerciseMapByCode: Record<string, any> = {};
     allExs.forEach((e: any) => { if (e.exercise_code) exerciseMapByCode[e.exercise_code] = e; });
+
+    // An athlete with Dumbbells and no Kettlebell is shown the dumbbell
+    // counterpart of a mapped kettlebell swing/clean/snatch (see
+    // equipmentSubstitution.ts; the client applies the same rule when it loads
+    // the workout). Weights must therefore be computed for, and keyed by, the
+    // counterpart's exercise_code, which is what the client looks them up by.
+    // A week can override the athlete's equipment (weekly_plans.setup_equipment);
+    // plan generation uses it in place of the profile (generatePlan.ts), so this
+    // has to as well. The on-demand path has no plan row, so the client passes it.
+    const setupEquipment: string[] | null =
+      Array.isArray(plan?.setup_equipment) && plan.setup_equipment.length ? plan.setup_equipment
+        : Array.isArray(body.setup_equipment) && body.setup_equipment.length ? body.setup_equipment
+        : null;
+    const ownedEquipment = ownedEquipmentSet(
+      setupEquipment ? { equipment_profile: 'custom', available_equipment: setupEquipment, custom_equipment: [] } : profile
+    );
+    const counterpartCodes = [...new Set(
+      allExs.filter((e: any) => needsDumbbellEquivalent(e, ownedEquipment)).map((e: any) => e.dumbbell_equivalent_code as string)
+    )];
+    const { data: counterpartRows } = counterpartCodes.length
+      ? await supabase.from('exercises').select('*').in('exercise_code', counterpartCodes)
+      : { data: [] };
+    const counterpartByCode = new Map<string, any>((counterpartRows || []).map((e: any) => [e.exercise_code, e]));
     const blocksByWorkoutCode: Record<string, any[]> = {};
     allBlocks.forEach((b: any) => { (blocksByWorkoutCode[b.workout_id] = blocksByWorkoutCode[b.workout_id] || []).push(b); });
     const blockExsByBlock: Record<string, any[]> = {};
@@ -217,11 +241,13 @@ Deno.serve(async (req: Request) => {
           const sets = setsByBE[be.block_exercise_id] || [];
           const setCount = sets.length || 1;
           const reps = sets[0]?.target_reps?.toString() || be.prescription_value || '';
-          const details = exerciseMapByCode[be.exercise_id] || null;
+          const original = exerciseMapByCode[be.exercise_id] || null;
+          const counterpart = dumbbellEquivalentFor(original, counterpartByCode, ownedEquipment);
+          const details = counterpart || original;
           rows.push({
             index: rows.length,
             workoutEntityId: t.workoutEntityId,
-            exercise_id: be.exercise_id,
+            exercise_id: counterpart ? counterpart.exercise_code : be.exercise_id,
             exercise_name: details?.name || be.exercise_title_raw || 'Exercise',
             movement_pattern: details?.movement_pattern || null,
             equipment: details?.equipment || null,
@@ -233,7 +259,8 @@ Deno.serve(async (req: Request) => {
             position_in_block: positionInBlock,
             sets: setCount,
             reps,
-            current_load: be.load_value ? parseFloat(be.load_value) : null,
+            // The prescribed load belongs to the original (kettlebell) exercise.
+            current_load: !counterpart && be.load_value ? parseFloat(be.load_value) : null,
           });
         });
       });

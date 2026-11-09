@@ -2,6 +2,7 @@
 // so this moved over unchanged.
 
 import { requiredEquipment, expandEquipmentEquivalents } from './warmupGenerator.ts';
+import { equipmentTokensFor } from './equipmentSubstitution.ts';
 
 const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -173,8 +174,17 @@ export async function computeEquipmentByWorkoutId(supabase: any, workoutBusiness
   const exerciseCodes = [...new Set((beList || []).map((be: any) => be.exercise_id).filter(Boolean))];
   if (!exerciseCodes.length) return result;
 
-  const { data: exercises } = await supabase.from('exercises').select('exercise_code, equipment_tags, dumbbell_substitutable').in('exercise_code', exerciseCodes);
+  const { data: exercises } = await supabase.from('exercises').select('exercise_code, equipment_tags, dumbbell_substitutable, dumbbell_equivalent_code').in('exercise_code', exerciseCodes);
   const exerciseByCode = new Map<string, any>((exercises || []).map((e: any) => [e.exercise_code, e]));
+
+  // Dumbbell counterparts of mapped kettlebell exercises (see
+  // equipmentSubstitution.ts): their own equipment needs decide whether the
+  // athlete can actually do the substitute.
+  const counterpartCodes = [...new Set((exercises || []).map((e: any) => e.dumbbell_equivalent_code).filter(Boolean))] as string[];
+  const { data: counterparts } = counterpartCodes.length
+    ? await supabase.from('exercises').select('exercise_code, equipment_tags').in('exercise_code', counterpartCodes)
+    : { data: [] };
+  const counterpartByCode = new Map<string, any>((counterparts || []).map((e: any) => [e.exercise_code, e]));
 
   // A workout's required-equipment list is aggregated across all its
   // exercises with no per-exercise linkage kept, so a dumbbell_substitutable
@@ -182,7 +192,9 @@ export async function computeEquipmentByWorkoutId(supabase: any, workoutBusiness
   // (an OR, resolved against owned equipment in filterCatalogForSelection)
   // rather than folded into a blanket Dumbbell<->Kettlebell equivalence that
   // would also wrongly cover this workout's non-substitutable KB exercises,
-  // if it has any. '/' is used (not '|') because buildWorkoutCatalog's rows
+  // if it has any. A mapped swing/clean/snatch (dumbbell_equivalent_code) gets
+  // the same token, plus whatever its dumbbell counterpart additionally needs.
+  // '/' is used (not '|') because buildWorkoutCatalog's rows
   // are themselves '|'-delimited for the LLM prompt.
   const sets = new Map<string, Set<string>>();
   for (const be of beList || []) {
@@ -190,10 +202,8 @@ export async function computeEquipmentByWorkoutId(supabase: any, workoutBusiness
     if (!workoutId) continue;
     if (!sets.has(workoutId)) sets.set(workoutId, new Set());
     const exercise = exerciseByCode.get(be.exercise_id);
-    for (const tag of requiredEquipment(exercise?.equipment_tags)) {
-      const resolved = tag === 'Kettlebell' && exercise?.dumbbell_substitutable ? 'Kettlebell/Dumbbells' : tag;
-      sets.get(workoutId)!.add(resolved);
-    }
+    const counterpart = exercise?.dumbbell_equivalent_code ? counterpartByCode.get(exercise.dumbbell_equivalent_code) : null;
+    for (const token of equipmentTokensFor(exercise, counterpart)) sets.get(workoutId)!.add(token);
   }
   for (const [workoutId, tagSet] of sets) result.set(workoutId, [...tagSet]);
   return result;

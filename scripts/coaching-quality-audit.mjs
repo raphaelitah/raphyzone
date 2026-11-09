@@ -61,15 +61,29 @@ function firstNumber(value) {
 // calculations), not gear an athlete needs to own — every athlete has their
 // own body regardless of equipment profile, so it never counts as missing.
 // Matching is case-insensitive and honors a dumbbell_substitutable Kettlebell
-// tag being met by Dumbbells, same as planContext.ts / warmupGenerator.ts.
-function missingEquipment(exercise, availableSet) {
+// tag being met by Dumbbells, same as planContext.ts / warmupGenerator.ts, and
+// a dumbbell_equivalent_code counterpart standing in for the kettlebell exercise.
+function missingEquipment(exercise, availableSet, exerciseByCode) {
   const tags = (exercise?.equipment_tags || []).filter((t) => t !== 'Bodyweight');
   if (!tags.length) return [];
-  return tags.filter((t) => {
+  const missing = tags.filter((t) => {
     const tag = t.toLowerCase().trim();
     if (availableSet.has(tag)) return false;
     return !(tag === 'kettlebell' && !!exercise.dumbbell_substitutable && availableSet.has('dumbbells'));
   });
+  // A mapped kettlebell swing/clean/snatch is shown to a Dumbbells-but-no-
+  // Kettlebell athlete as its dumbbell counterpart (equipmentSubstitution.ts),
+  // so it only counts as missing equipment if the counterpart itself is.
+  if (missing.length && exercise.dumbbell_equivalent_code && !exercise.dumbbell_substitutable
+      && !availableSet.has('kettlebell') && availableSet.has('dumbbells')) {
+    const counterpart = exerciseByCode?.get(exercise.dumbbell_equivalent_code);
+    if (counterpart) {
+      const counterpartMissing = (counterpart.equipment_tags || [])
+        .filter((t) => t !== 'Bodyweight' && !availableSet.has(t.toLowerCase().trim()));
+      if (!counterpartMissing.length) return [];
+    }
+  }
+  return missing;
 }
 
 // Supabase caps a single request at 1000 rows by default. Several tables here
@@ -107,7 +121,7 @@ async function main() {
     fetchAll('workouts', 'id, workout_id, name, status, est_duration_min, duration_minutes, created_date', (q) => q.eq('status', 'approved')),
     fetchAll('workout_blocks', 'block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, time_cap_sec'),
     fetchAll('block_exercises', 'block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value'),
-    fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags, dumbbell_substitutable'),
+    fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags, dumbbell_substitutable, dumbbell_equivalent_code'),
     fetchAll('athlete_profiles', 'user_id, available_equipment, custom_equipment, equipment_profile'),
     fetchAll('weekly_plans', 'user_id, week_start_date, status, workouts, setup_equipment', (q) => q.order('week_start_date', { ascending: false }).limit(200)),
   ]);
@@ -399,7 +413,7 @@ async function main() {
         for (const be of exercisesByBlock.get(b.block_id) || []) {
           const ex = be.exercise_id ? exerciseByCode.get(be.exercise_id) : null;
           if (!ex) continue;
-          const missing = missingEquipment(ex, available);
+          const missing = missingEquipment(ex, available, exerciseByCode);
           if (missing.length) {
             flag('equipment', `Plan for athlete ${plan.user_id} (week ${plan.week_start_date}): "${workout.name}" includes "${ex.name}" which needs [${missing.join(', ')}] — not in the athlete's equipment (profile: ${profile.equipment_profile})`);
           }

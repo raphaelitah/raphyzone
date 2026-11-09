@@ -23,6 +23,7 @@ import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
 import QuickCalibrationSheet from '@/components/QuickCalibrationSheet';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
+import { ownedEquipmentSet, counterpartCodesNeeded, withDumbbellEquivalent } from '@/lib/equipmentSubstitution';
 import useIntervalTimer from '@/hooks/useIntervalTimer';
 import { cn } from '@/lib/utils';
 import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
@@ -212,6 +213,9 @@ export default function WorkoutExecution() {
   }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps]);
 
   const pendingLoadRef = useRef(null);
+  // The viewed week's equipment override, if any (weekly_plans.setup_equipment); sent along with
+  // on-demand weight requests so the server substitutes dumbbell counterparts the same way.
+  const weekSetupEquipmentRef = useRef(null);
 
   // A unique index on workout_sessions(user_id) where status='in_progress' is the
   // real guard against two in-progress sessions (the app-level checks above can
@@ -286,12 +290,29 @@ export default function WorkoutExecution() {
     const exerciseBlockExs = blockExs.filter((be) => be.step_type === 'exercise');
     const beIds = exerciseBlockExs.map((be) => be.block_exercise_id);
     const exerciseCodes = [...new Set(exerciseBlockExs.map((be) => be.exercise_id).filter(Boolean))];
-    const [{ data: setsData }, { data: referencedExsData }] = await Promise.all([
+    const [{ data: setsData }, { data: referencedExsData }, { data: equipmentProfile }] = await Promise.all([
       beIds.length ? supabase.from('prescribed_sets').select('*').in('block_exercise_id', beIds) : Promise.resolve({ data: [] }),
       exerciseCodes.length ? supabase.from('exercises').select('*').in('exercise_code', exerciseCodes) : Promise.resolve({ data: [] }),
+      supabase.from('athlete_profiles').select('equipment_profile, available_equipment, custom_equipment').eq('user_id', sess.user_id).maybeSingle(),
     ]);
     const sets = setsData || [];
     const referencedExs = referencedExsData || [];
+    if (!active()) return;
+
+    // An athlete with Dumbbells and no Kettlebell is given the dumbbell
+    // counterpart of a kettlebell swing/clean/snatch instead (the server's plan
+    // filter and weight assignment apply the same rule; see equipmentSubstitution.js).
+    // The week's equipment override (travelling etc.) replaces the profile, as in plan generation.
+    const weekSetupEquipment = Array.isArray(currentPlan?.setup_equipment) && currentPlan.setup_equipment.length ? currentPlan.setup_equipment : null;
+    weekSetupEquipmentRef.current = weekSetupEquipment;
+    const ownedEquipment = ownedEquipmentSet(
+      weekSetupEquipment ? { equipment_profile: 'custom', available_equipment: weekSetupEquipment, custom_equipment: [] } : equipmentProfile
+    );
+    const counterpartCodes = counterpartCodesNeeded(referencedExs, ownedEquipment);
+    const { data: counterpartData } = counterpartCodes.length
+      ? await supabase.from('exercises').select('*').in('exercise_code', counterpartCodes)
+      : { data: [] };
+    const counterpartByCode = new Map((counterpartData || []).map((c) => [c.exercise_code, c]));
     if (!active()) return;
     const blocksByWorkout = buildBlocksByWorkout(blocks);
     const blockExercisesByBlock = buildBlockExercisesByBlock(blockExs);
@@ -303,7 +324,11 @@ export default function WorkoutExecution() {
     const savedSwaps = (sessionExisted && sess.progress?.swaps && typeof sess.progress.swaps === 'object') ? sess.progress.swaps : {};
     const finalExercises = merged.map((e, i) => {
       const sw = savedSwaps[e.key];
-      const swapped = sw ? { ...e, swapOrigin: e.key, exercise_id: sw.exercise_code || sw.id, exercise_name: sw.name, details: sw, key: (sw.exercise_code || sw.id) + '-sub-' + i } : e;
+      // A manual swap from a previous visit wins; otherwise apply the
+      // equipment-based dumbbell counterpart (deterministic, so no need to persist it).
+      const swapped = sw
+        ? { ...e, swapOrigin: e.key, exercise_id: sw.exercise_code || sw.id, exercise_name: sw.name, details: sw, key: (sw.exercise_code || sw.id) + '-sub-' + i }
+        : withDumbbellEquivalent(e, ownedEquipment, counterpartByCode, i);
       return {
         ...swapped,
         target_weight: (swapped.exercise_id && exerciseWeights[swapped.exercise_id] != null) ? exerciseWeights[swapped.exercise_id] : null,
@@ -323,7 +348,7 @@ export default function WorkoutExecution() {
     if (!Object.keys(exerciseWeights).length) {
       const needsWeights = finalExercises.some((e) => e.exercise_id && e.details?.requires_load !== false && !isRunningExercise(e.details));
       if (needsWeights) {
-        supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId } }).then((res) => {
+        supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, setup_equipment: weekSetupEquipmentRef.current } }).then((res) => {
           if (!active()) return;
           const ew = res.data?.exercise_weights || {};
           if (Object.keys(ew).length) {
@@ -1088,7 +1113,7 @@ export default function WorkoutExecution() {
     setWeightLoadingKey(exercise.key);
     try {
       const extraCodes = exercise.exercise_id ? [exercise.exercise_id] : [];
-      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: extraCodes } });
+      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, setup_equipment: weekSetupEquipmentRef.current, extra_exercise_codes: extraCodes } });
       const ew = res.data?.exercise_weights || {};
       if (ew[exercise.exercise_id] != null) {
         setExercises((prev) => prev.map((e) => e.key === exercise.key ? { ...e, target_weight: ew[exercise.exercise_id] } : e));
@@ -1148,14 +1173,14 @@ export default function WorkoutExecution() {
     const newId = alt.exercise.exercise_code || alt.exercise.id;
     const next = [...exercises];
     const swapOrigin = next[targetIdx].swapOrigin ?? next[targetIdx].key;
-    next[targetIdx] = { ...next[targetIdx], swapOrigin, exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + targetIdx, target_weight: null };
+    next[targetIdx] = { ...next[targetIdx], swapOrigin, substitutedFrom: undefined, exercise_id: newId, exercise_name: alt.exercise.name, details: alt.exercise, key: newId + '-sub-' + targetIdx, target_weight: null };
     setExercises(next);
     setSwaps((s) => ({ ...s, [swapOrigin]: alt.exercise }));
     setLogs((l) => { const c = { ...l }; delete c[targetKey]; return c; });
     setSubSheet(false);
     setSubTarget(null);
     try {
-      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, extra_exercise_codes: [alt.exercise.exercise_code].filter(Boolean) } });
+      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, setup_equipment: weekSetupEquipmentRef.current, extra_exercise_codes: [alt.exercise.exercise_code].filter(Boolean) } });
       const ew = res.data?.exercise_weights || {};
       if (ew[newId] != null) {
         setExercises((prev) => prev.map((e, i) => i === targetIdx ? { ...e, target_weight: ew[newId] } : e));
