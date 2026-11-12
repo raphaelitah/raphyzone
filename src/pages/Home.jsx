@@ -875,7 +875,7 @@ export default function Home() {
         open={!!selectedWorkout}
         onOpenChange={(o) => { if (!o) { setSelectedWorkout(null); setSelectedSlot(null); setSelectMode(false); setDetailAlt(null); } }}
         contextLine={selectedSlot ? `${selectedSlot.day} · ${fmtDate(parseDate(selectedSlot.date), 'd MMM')}` : null}
-        reason={selectedSlot?.reason}
+        reason={detailAlt ? detailAlt.reason : selectedSlot?.reason}
         selectMode={selectMode}
         onSelect={selectFromDetail}
         warmup={selectedSlot?.warmup}

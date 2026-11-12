@@ -56,7 +56,8 @@ Deno.serve(async (req: Request) => {
           workout_id: new_workout_id,
           workout_name: newWorkout?.name || new_workout_id,
           modality: newWorkout?.modality || w.modality,
-          reason: reason || w.reason,
+          // Never carry over the old workout's reason: it describes the workout being replaced.
+          reason: reason || 'Your pick',
           locked: false,
           warmup,
           slot_type: 'train',
