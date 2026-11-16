@@ -246,7 +246,7 @@ export default function Home() {
         body: {
           weekly_plan_id: plan.id,
           day: slot.day,
-          old_workout_id: slot.workout_id,
+          old_workout_id: slot.workout_id || null,
           new_workout_id: alt.workout_id,
           reason: alt.reason,
         },
@@ -269,7 +269,10 @@ export default function Home() {
           setBlockExercisesByBlock((prev) => ({ ...prev, ...buildBlockExercisesByBlock(blockExs) }));
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('applySwap failed', err);
+      window.alert('Could not apply that swap. Please try again.');
+    }
     setSwapLoading(false);
     setSwapFor(null); setSwapAlternatives([]);
   };

@@ -17,14 +17,15 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     const { weekly_plan_id, day, old_workout_id, new_workout_id, reason } = body;
-    if (!weekly_plan_id || !day || !old_workout_id || !new_workout_id) {
+    // old_workout_id may be null: an empty slot (e.g. a train day with no workout yet) can be filled by a swap.
+    if (!weekly_plan_id || !day || !new_workout_id) {
       return Response.json({ error: 'missing fields' }, { status: 400, headers: corsHeaders });
     }
 
     const supabase = getServiceClient();
     const [{ data: plan }, { data: oldWorkout }, { data: newWorkout }, { data: profiles }, { data: exerciseCatalog }] = await Promise.all([
       supabase.from('weekly_plans').select('*').eq('id', weekly_plan_id).maybeSingle(),
-      supabase.from('workouts').select('*').eq('id', old_workout_id).maybeSingle(),
+      old_workout_id ? supabase.from('workouts').select('*').eq('id', old_workout_id).maybeSingle() : Promise.resolve({ data: null as any }),
       supabase.from('workouts').select('*').eq('id', new_workout_id).maybeSingle(),
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       loadExerciseCatalog(supabase),
@@ -50,7 +51,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const updatedWorkouts = (plan.workouts || []).map((w: any) => {
-      if (w.day === day && w.workout_id === old_workout_id) {
+      if (w.day === day && (old_workout_id ? w.workout_id === old_workout_id : !w.workout_id)) {
         return {
           ...w,
           workout_id: new_workout_id,
@@ -78,7 +79,7 @@ Deno.serve(async (req: Request) => {
     const newPatterns = (newWorkout?.exercises || []).map((e: any) => e.exercise_name).filter(Boolean);
 
     await supabase.from('workout_feedback').insert([
-      {
+      ...(old_workout_id ? [{
         user_id: user.id,
         workout_id: old_workout_id,
         workout_name: oldWorkout?.name || '',
@@ -87,7 +88,7 @@ Deno.serve(async (req: Request) => {
         day,
         reason: reason || 'swapped by user',
         exercise_patterns: oldPatterns,
-      },
+      }] : []),
       {
         user_id: user.id,
         workout_id: new_workout_id,
