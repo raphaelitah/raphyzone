@@ -203,6 +203,27 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
   });
 
   const workoutMap = new Map((workouts || []).map((w: any) => [w.id, w]));
+  // The model sometimes mistypes a UUID by a character or two. Repair a near-miss
+  // against the catalog; if it can't be resolved, drop the pick so the code-level
+  // fallback below fills the day instead of saving an ID that matches no workout.
+  const resolveCatalogId = (id: any): string | null => {
+    if (typeof id !== 'string' || !id) return null;
+    if (workoutMap.has(id)) return id;
+    const near = [...workoutMap.keys()].filter((k: any) => {
+      if (typeof k !== 'string' || k.length !== id.length) return false;
+      let diff = 0;
+      for (let i = 0; i < k.length && diff < 3; i++) if (k[i] !== id[i]) diff++;
+      return diff <= 2;
+    });
+    return near.length === 1 ? (near[0] as string) : null;
+  };
+  for (const day of Object.keys(planByDay)) {
+    const sel = planByDay[day];
+    if (!sel?.workout_id) continue;
+    const resolved = resolveCatalogId(sel.workout_id);
+    if (resolved) sel.workout_id = resolved;
+    else delete planByDay[day];
+  }
   const selByDay: Record<string, any> = planByDay;
   const sugByDay: Record<string, string[]> = {};
   (planRes.suggestions || []).forEach((s: any) => { sugByDay[s.day] = s.workout_ids || []; });
