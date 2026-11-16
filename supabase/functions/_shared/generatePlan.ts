@@ -204,12 +204,15 @@ Return JSON with a "days" array, each item { day, slot_type, modality (for train
 
   const workoutMap = new Map((workouts || []).map((w: any) => [w.id, w]));
   // The model sometimes mistypes a UUID by a character or two. Repair a near-miss
-  // against the catalog; if it can't be resolved, drop the pick so the code-level
-  // fallback below fills the day instead of saving an ID that matches no workout.
+  // against the catalog it was actually shown (equipment-filtered — matching the
+  // full catalog could "repair" into a workout the athlete lacks gear for); if it
+  // can't be resolved, drop the pick so the code-level fallback below fills the
+  // day instead of saving an ID that matches no workout.
+  const allowedIds = new Set(filteredWorkouts.map((w: any) => w.id));
   const resolveCatalogId = (id: any): string | null => {
     if (typeof id !== 'string' || !id) return null;
-    if (workoutMap.has(id)) return id;
-    const near = [...workoutMap.keys()].filter((k: any) => {
+    if (allowedIds.has(id)) return id;
+    const near = [...allowedIds].filter((k: any) => {
       if (typeof k !== 'string' || k.length !== id.length) return false;
       let diff = 0;
       for (let i = 0; i < k.length && diff < 3; i++) if (k[i] !== id[i]) diff++;

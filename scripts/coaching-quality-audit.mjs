@@ -272,6 +272,11 @@ async function main() {
     '6a8b5ff82f65fc56923ecc84', // Push (Chest + Triceps)
     '6a8b5ff82f65fc56923ecca8', // Sixshooter
     '6a8b5ff82f65fc56923ecc9b', // Tug of War
+    // Straight-set strength days added 2026-11 (same archetype as the Push/Pull
+    // splits above — sets of one exercise at a time is the intended structure).
+    'W-PULLHEAVY-1794398400000', // Pull Heavy
+    'W-PULLHEAVYNM-1794402000000', // Pull Heavy (No Machine)
+    'W-PUSH-CHEST-TRI-LONG-1794830400000', // Push (Chest + Triceps) - Long
   ]);
   for (const [workoutId, wBlocks] of blocksByWorkout) {
     if (ACKNOWLEDGED_STRUCTURE_FALSE_POSITIVES.has(workoutId)) continue;
@@ -358,7 +363,11 @@ async function main() {
   //     working off numbers roughly half of the real volume.
   // If the estimator later grows a per-movement-difficulty or loading-time
   // model, these are exactly the candidates to remove from this list first.
-  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a', '233e162cdf5a69165e57f961', 'b0517c45ebdb71c2926334ad', 'd366ce942f9ce77f44aebfa3']);
+  const ACKNOWLEDGED_DURATION_GAPS = new Set(['W-STR-PULL', 'W-STR-LEGS', '8d9c0100e19acd1914b45e3e', 'bd54a876163d91ead63abb83', 'acc140157df21209ccb8a007', '9ff3071a751a33e4464eec62', 'efde7411145e8bfff210842a', '233e162cdf5a69165e57f961', 'b0517c45ebdb71c2926334ad', 'd366ce942f9ce77f44aebfa3',
+    // Straight-set strength days added 2026-11: like Pull/Leg Strength A, real
+    // rest between sets and station setup that a flat reps-based estimate can't
+    // include (declared 45-90 min vs ~29-60 estimated).
+    'W-PULLHEAVY-1794398400000', 'W-PULLHEAVYNM-1794402000000', 'W-PULLVOLUME-1794405600000', 'W-PUSH-CHEST-TRI-LONG-1794830400000']);
   for (const w of workouts) {
     const declaredMin = w.est_duration_min ?? w.duration_minutes;
     if (declaredMin == null) continue;
