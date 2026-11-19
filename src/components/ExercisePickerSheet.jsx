@@ -26,7 +26,9 @@ const QUICK_ADD_EXERCISES = [
   { label: 'Wall Ball', name: 'Wall Ball' },
 ];
 
-export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
+// `allowRest` lets a caller that can't represent a timed rest step (e.g. adding an
+// exercise mid-workout) hide that option; `confirmLabel` renames the final button.
+export default function ExercisePickerSheet({ open, onOpenChange, onPick, allowRest = true, confirmLabel = 'Add to block' }) {
   const [results, setResults] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -201,9 +203,11 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
                   </button>
                 )}
               </div>
-              <button onClick={() => setRestMode(true)} className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground hover:border-foreground/20 hover:text-foreground flex items-center justify-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" /> Add rest
-              </button>
+              {allowRest && (
+                <button onClick={() => setRestMode(true)} className="w-full rounded-xl border border-dashed border-border py-2.5 text-sm text-muted-foreground hover:border-foreground/20 hover:text-foreground flex items-center justify-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" /> Add rest
+                </button>
+              )}
               {patternOptions.length > 0 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-5 px-5">
                   {activePattern && (
@@ -280,7 +284,7 @@ export default function ExercisePickerSheet({ open, onOpenChange, onPick }) {
                   Back
                 </Button>
                 <Button onClick={handleConfirm} disabled={saving} className="flex-1 rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-                  {saving ? 'Adding…' : 'Add to block'}
+                  {saving ? 'Adding…' : confirmLabel}
                 </Button>
               </div>
             </>

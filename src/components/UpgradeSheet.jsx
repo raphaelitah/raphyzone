@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/use-toast';
 const PERKS = [
   'The full workout library',
   'Unlimited AI weekly plans, swaps and substitutes',
+  'Customize any workout, in your plan or mid-session',
   'Everything we add next',
 ];
 
@@ -23,7 +24,7 @@ export function LockBadge({ className = '' }) {
   );
 }
 
-// `reason` picks the headline: 'workout' (locked workout), 'ai' (used-up AI quota) or 'general'.
+// `reason` picks the headline: 'workout' (locked workout), 'ai' (used-up AI quota), 'customize' or 'general'.
 export default function UpgradeSheet({ open, onOpenChange, reason = 'workout' }) {
   const { entitlement } = useEntitlement();
   const limit = entitlement?.ai_limit;
@@ -40,10 +41,11 @@ export default function UpgradeSheet({ open, onOpenChange, reason = 'workout' })
     }
   };
 
-  const title = { ai: 'AI limit reached', workout: 'This workout is premium' }[reason] || 'Go Premium';
+  const title = { ai: 'AI limit reached', workout: 'This workout is premium', customize: 'Customizing is premium' }[reason] || 'Go Premium';
   const description = {
     ai: `Free accounts get ${limit ?? 'a few'} AI action${limit === 1 ? '' : 's'} per month. You can still build your week by hand from the library.`,
     workout: 'Free accounts include a selection of workouts. Premium unlocks the whole library.',
+    customize: 'Make any workout your own: change exercises, sets, reps and rest in your plan, or on the fly mid-workout, and keep the changes for next time.',
   }[reason] || 'Keep full access after your trial: the whole library plus unlimited AI planning.';
 
   return (

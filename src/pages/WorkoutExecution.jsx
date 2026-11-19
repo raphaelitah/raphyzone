@@ -17,7 +17,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle, Plus, SlidersHorizontal } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, resolveCalibrationPatternKey } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
@@ -29,6 +29,11 @@ import { cn } from '@/lib/utils';
 import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
 import { handleAiQuotaError } from '@/lib/entitlements';
 import UpgradeSheet from '@/components/UpgradeSheet';
+import ExercisePickerSheet from '@/components/ExercisePickerSheet';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { customizeWorkout, applyOverridesToClone, isPremiumRequiredError } from '@/lib/customizeWorkout';
+import { applyEditToExercise, applyAddedExercises, insertAddedExercise, hasSessionOverrides, stableKey } from '@/lib/sessionOverrides';
+import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -117,6 +122,16 @@ export default function WorkoutExecution() {
   // and back — otherwise the panel remounts and restarts the current set.
   const [panelProgress, setPanelProgress] = useState({});
   const [swaps, setSwaps] = useState({}); // original block_exercise_id -> substituted exercise row; session-only, persisted in progress so a reload keeps it
+  // Premium on-the-spot customization, persisted in progress like swaps. `edits`: block_exercise_id ->
+  // { sets, reps }; `added`: exercises added mid-workout ({ key, afterKey, exercise, sets, reps, target_weight }).
+  // After the workout the athlete can keep all of it (swaps included) as their own copy of the workout.
+  const { isPremium } = useEntitlement();
+  const [edits, setEdits] = useState({});
+  const [added, setAdded] = useState([]);
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState(null); // { sets: string, reps: string } while the edit sheet is open
+  const [customizeUpgradeOpen, setCustomizeUpgradeOpen] = useState(false);
+  const [keepState, setKeepState] = useState('idle'); // idle | saving | saved | error | dismissed
   // Set the instant the athlete finishes the last block/exercise's feedback
   // screen (or skips past it) — from then on the exercise UI is replaced by a
   // dedicated saving/done/error screen. This must be set synchronously in the
@@ -207,10 +222,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added]);
 
   const pendingLoadRef = useRef(null);
   // The viewed week's equipment override, if any (weekly_plans.setup_equipment); sent along with
@@ -322,19 +337,27 @@ export default function WorkoutExecution() {
     // Re-apply on-the-spot swaps from a previous visit to this session: the
     // rows above come from the saved workout, which a swap never changes.
     const savedSwaps = (sessionExisted && sess.progress?.swaps && typeof sess.progress.swaps === 'object') ? sess.progress.swaps : {};
-    const finalExercises = merged.map((e, i) => {
+    const savedEdits = (sessionExisted && sess.progress?.edits && typeof sess.progress.edits === 'object') ? sess.progress.edits : {};
+    const savedAdded = (sessionExisted && Array.isArray(sess.progress?.added)) ? sess.progress.added : [];
+    const editedExercises = merged.map((e, i) => {
       const sw = savedSwaps[e.key];
       // A manual swap from a previous visit wins; otherwise apply the
       // equipment-based dumbbell counterpart (deterministic, so no need to persist it).
       const swapped = sw
         ? { ...e, swapOrigin: e.key, exercise_id: sw.exercise_code || sw.id, exercise_name: sw.name, details: sw, key: (sw.exercise_code || sw.id) + '-sub-' + i }
         : withDumbbellEquivalent(e, ownedEquipment, counterpartByCode, i);
-      return {
+      return applyEditToExercise({
         ...swapped,
         target_weight: (swapped.exercise_id && exerciseWeights[swapped.exercise_id] != null) ? exerciseWeights[swapped.exercise_id] : null,
-      };
+      }, savedEdits[e.key]);
     });
+    const finalExercises = applyAddedExercises(
+      editedExercises,
+      savedAdded.map((a) => ({ ...a, target_weight: (a.exercise?.exercise_code && exerciseWeights[a.exercise.exercise_code] != null) ? exerciseWeights[a.exercise.exercise_code] : null }))
+    );
     if (Object.keys(savedSwaps).length) setSwaps(savedSwaps);
+    if (Object.keys(savedEdits).length) setEdits(savedEdits);
+    if (savedAdded.length) setAdded(savedAdded);
     setExercises(finalExercises);
 
     // A workout reached through a weekly plan already has every exercise's
@@ -1189,6 +1212,89 @@ export default function WorkoutExecution() {
     } catch { /* silent */ }
   };
 
+  // Adds an exercise right after the current block. Premium: free accounts get
+  // the upgrade prompt instead. The picked exercise is fetched in full (the
+  // picker only returns a few columns) so the runner has the same details
+  // (video, load requirement, implement count) as any catalog exercise.
+  const addExercise = async ({ exercise: picked, prescription_value, sets }) => {
+    setAddPickerOpen(false);
+    if (!picked) return;
+    const { data: full } = await supabase.from('exercises').select('*').eq('id', picked.id).maybeSingle();
+    const exercise = full || picked;
+    const item = {
+      key: `added-${crypto.randomUUID().slice(0, 8)}`,
+      afterKey: current ? stableKey(current) : null,
+      exercise,
+      sets: sets || 1,
+      reps: prescription_value || '10',
+    };
+    setAdded((prev) => [...prev, item]);
+    setExercises((prev) => insertAddedExercise(prev, item));
+    const code = exercise.exercise_code;
+    const needsWeight = code && !isRunningExercise(exercise) && exercise.requires_load !== false;
+    if (!needsWeight) return;
+    try {
+      // The usual AI weight suggestion, same as for a swapped-in exercise.
+      const res = await supabase.functions.invoke('assignWorkoutWeights', { body: { workout_id: workoutId, setup_equipment: weekSetupEquipmentRef.current, extra_exercise_codes: [code] } });
+      const ew = res.data?.exercise_weights || {};
+      if (ew[code] != null) {
+        setExercises((prev) => prev.map((e) => (e.key === item.key ? { ...e, target_weight: ew[code] } : e)));
+        persistWeight(code, ew[code]);
+      }
+    } catch { /* the weight refresh on the exercise falls back to the usual calibration prompt */ }
+  };
+
+  const openEdit = () => {
+    if (!isPremium) { setCustomizeUpgradeOpen(true); return; }
+    setEditDraft({ sets: String(Math.max(1, (current.rounds > 1 ? current.effective_sets : current.sets) || 1)), reps: String(current.reps ?? '') });
+  };
+
+  const saveEdit = () => {
+    if (!editDraft || !current) return;
+    const sets = Math.max(1, parseInt(editDraft.sets, 10) || 1);
+    const reps = editDraft.reps.trim() || String(current.reps ?? '');
+    if (current.addedKey) {
+      setAdded((prev) => prev.map((a) => (a.key === current.addedKey ? { ...a, sets, reps } : a)));
+    } else {
+      setEdits((prev) => ({ ...prev, [stableKey(current)]: { sets, reps } }));
+    }
+    setExercises((prev) => prev.map((e) => (e.key === current.key ? applyEditToExercise(e, { sets, reps }) : e)));
+    setEditDraft(null);
+  };
+
+  // Writes this session's swaps, edits and additions into the athlete's own copy
+  // of the workout (cloning it first if it's still a shared catalog workout), and
+  // points this week's plan day at the copy so next time starts from it. A
+  // workout started from the library just gets saved to "My workouts".
+  const keepChanges = async () => {
+    setKeepState('saving');
+    try {
+      const source = workoutRef.current;
+      const clone = await customizeWorkout(workoutId);
+      await applyOverridesToClone({
+        source,
+        clone,
+        swaps,
+        edits,
+        added: added.map((a) => ({ exercise: a.exercise, sets: a.sets, reps: a.reps })),
+      });
+      await recomputeAndSaveFormatLabel(clone);
+      const slot = plan?.workouts?.find((x) => x.workout_id === workoutId);
+      if (plan && slot) {
+        if (clone.id !== workoutId) {
+          const updated = plan.workouts.map((x) => (x.workout_id === workoutId ? { ...x, workout_id: clone.id, workout_name: clone.name, locked: true } : x));
+          const { error: saveError } = await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
+          if (saveError) throw saveError;
+        }
+        // Fresh AI weight suggestions for the changed exercises.
+        try { await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: plan.id } }); } catch { /* recomputed on next start */ }
+      }
+      setKeepState('saved');
+    } catch (err) {
+      if (isPremiumRequiredError(err)) { setCustomizeUpgradeOpen(true); setKeepState('dismissed'); } else setKeepState('error');
+    }
+  };
+
   // Shared card for both AI-suggested and manually-searched substitute candidates,
   // so the two lists in the swap sheet read as one consistent UI.
   const renderSubstituteCard = (exercise, { key, confidence = null, reason = null, onUse }) => (
@@ -1261,11 +1367,15 @@ export default function WorkoutExecution() {
 
   // Give the athlete a beat to see the "Workout Completed" screen, then move
   // on to Progress — the same destination the old code navigated to directly.
+  // Premium athletes who changed something get a chance to keep it first, so the
+  // screen waits for their answer instead of moving on by itself.
+  const offerKeep = isPremium && hasSessionOverrides({ swaps, edits, added });
   useEffect(() => {
     if (completion !== 'done') return;
-    const id = setTimeout(() => navigate('/progress'), 1400);
+    if (offerKeep && (keepState === 'idle' || keepState === 'saving' || keepState === 'error')) return;
+    const id = setTimeout(() => navigate('/progress'), keepState === 'saved' ? 1200 : 1400);
     return () => clearTimeout(id);
-  }, [completion]);
+  }, [completion, offerKeep, keepState]);
 
   if (conflictSession) {
     return (
@@ -1374,7 +1484,24 @@ export default function WorkoutExecution() {
           <>
             <CheckCircle2 className="h-14 w-14 text-emerald-500" />
             <h1 className="text-xl font-semibold">Workout Completed!</h1>
-            <p className="text-sm text-muted-foreground">Nice work. Taking you to your progress…</p>
+            {offerKeep && (keepState === 'idle' || keepState === 'saving' || keepState === 'error') ? (
+              <div className="w-full max-w-sm space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  You changed this workout today. Keep your changes so next time starts from your version?
+                </p>
+                {keepState === 'error' && <p className="text-sm text-destructive">Couldn&apos;t save your changes. Try again.</p>}
+                <Button onClick={keepChanges} disabled={keepState === 'saving'} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
+                  {keepState === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Keep my changes'}
+                </Button>
+                <Button variant="ghost" onClick={() => setKeepState('dismissed')} disabled={keepState === 'saving'} className="w-full rounded-xl h-11 text-muted-foreground">
+                  Not now
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {keepState === 'saved' ? 'Saved to My workouts and your plan. Taking you to your progress…' : 'Nice work. Taking you to your progress…'}
+              </p>
+            )}
           </>
         )}
         {completion === 'error' && (
@@ -1469,6 +1596,7 @@ export default function WorkoutExecution() {
               {workoutPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
             </button>
           )}
+          <button onClick={() => (isPremium ? setAddPickerOpen(true) : setCustomizeUpgradeOpen(true))} aria-label="Add exercise" className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><Plus className="h-4 w-4" /></button>
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
           <button onClick={() => setStopOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><XCircle className="h-4 w-4" /></button>
         </div>
@@ -1667,7 +1795,12 @@ export default function WorkoutExecution() {
         <div className="sticky bottom-0 px-5 py-4 bg-background border-t border-border">
           <div className="flex items-center gap-2">
             <button onClick={() => setConfirmSkipOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SkipForward className="h-4 w-4" /> Skip</button>
-            <button onClick={() => setConfirmSwapOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
+            {!current.addedKey && (
+              <button onClick={() => setConfirmSwapOpen(true)} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><RefreshCw className="h-4 w-4" /> Swap</button>
+            )}
+            {currentBlockExercises.length === 1 && !isRunningExercise(current.details) && !current.reps_label && !current.ladder && (
+              <button onClick={openEdit} className="flex-1 flex items-center justify-center gap-1.5 h-14 rounded-xl border border-border text-muted-foreground"><SlidersHorizontal className="h-4 w-4" /> Edit</button>
+            )}
           </div>
         </div>
       )}
@@ -1708,6 +1841,38 @@ export default function WorkoutExecution() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ExercisePickerSheet
+        open={addPickerOpen}
+        onOpenChange={setAddPickerOpen}
+        onPick={addExercise}
+        allowRest={false}
+        confirmLabel="Add to workout"
+      />
+
+      <Sheet open={!!editDraft} onOpenChange={(o) => !o && setEditDraft(null)}>
+        <SheetContent side="bottom" className="rounded-t-3xl">
+          <SheetHeader className="px-5 pt-5"><SheetTitle className="text-left">Edit {current?.exercise_name}</SheetTitle></SheetHeader>
+          {editDraft && (
+            <div className="px-5 pb-8 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="edit-sets" className="text-xs font-medium text-muted-foreground">Sets</label>
+                  <Input id="edit-sets" type="number" inputMode="numeric" min={1} value={editDraft.sets} onChange={(e) => setEditDraft({ ...editDraft, sets: e.target.value })} className="mt-1" />
+                </div>
+                <div>
+                  <label htmlFor="edit-reps" className="text-xs font-medium text-muted-foreground">Reps</label>
+                  <Input id="edit-reps" value={editDraft.reps} onChange={(e) => setEditDraft({ ...editDraft, reps: e.target.value })} placeholder="e.g. 10, 30s" className="mt-1" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">You can keep this change for next time when you finish.</p>
+              <Button onClick={saveEdit} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">Save</Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <UpgradeSheet open={customizeUpgradeOpen} onOpenChange={setCustomizeUpgradeOpen} reason="customize" />
 
       <QuickCalibrationSheet
         key={calibrationPrompt}
