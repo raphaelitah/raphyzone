@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Dumbbell, Clock, Play, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus, X, Lock } from 'lucide-react';
+import { Dumbbell, Clock, Play, ChevronDown, Loader2, Footprints, Search, Plus, CalendarPlus, X, Lock, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -34,6 +34,8 @@ import { useEntitlement } from '@/hooks/useEntitlement';
 import UpgradeSheet, { LockBadge } from '@/components/UpgradeSheet';
 import { Switch } from '@/components/ui/switch';
 import { formatStepPrescription } from '@/lib/prescriptionLabel';
+import WorkoutCustomizeSheet from '@/components/WorkoutCustomizeSheet';
+import { isCustomWorkout } from '@/lib/customizeWorkout';
 
 const BATCH_SIZE = 20;
 const SEARCH_STORAGE_KEY = 'raphyzone:workouts-search-query';
@@ -75,6 +77,11 @@ export default function Workouts() {
   const [loadedSetsFor, setLoadedSetsFor] = useState(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [view, setView] = useState('library'); // 'library' | 'mine' (the athlete's own customized copies)
+  const [mine, setMine] = useState([]);
+  const [mineLoading, setMineLoading] = useState(false);
+  const [editingCustom, setEditingCustom] = useState(null);
+  const [deletingCustom, setDeletingCustom] = useState(null);
   const [searchResults, setSearchResults] = useState(null); // null = not searching; array = server-matched results
   const [searchLoading, setSearchLoading] = useState(false);
   const sentinelRef = useRef(null);
@@ -141,8 +148,50 @@ export default function Workouts() {
     setBlockExercisesByBlock((prev) => ({ ...prev, ...buildBlockExercisesByBlock(blockExs) }));
   };
 
+  const loadMine = async () => {
+    if (!user?.id) return;
+    setMineLoading(true);
+    try {
+      const { data } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('owner_id', user.id)
+        .eq('status', 'private')
+        .order('updated_date', { ascending: false })
+        .limit(200);
+      const rows = data || [];
+      setMine(rows);
+      await loadStructureData(rows);
+    } finally {
+      setMineLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'mine') loadMine();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, user?.id]);
+
+  const handleDeleteCustom = async () => {
+    const target = deletingCustom;
+    if (!target) return;
+    const blockCodes = (blocksByWorkout[target.workout_id] || []).map((b) => b.block_id);
+    const beRows = blockCodes.length
+      ? (await supabase.from('block_exercises').select('block_exercise_id').in('block_id', blockCodes)).data || []
+      : [];
+    if (beRows.length) await supabase.from('prescribed_sets').delete().in('block_exercise_id', beRows.map((b) => b.block_exercise_id));
+    if (blockCodes.length) {
+      await supabase.from('block_exercises').delete().in('block_id', blockCodes);
+      await supabase.from('workout_blocks').delete().eq('workout_id', target.workout_id);
+    }
+    await supabase.from('workouts').delete().eq('id', target.id);
+    setMine((prev) => prev.filter((w) => w.id !== target.id));
+    setSelected(null);
+    setDeletingCustom(null);
+  };
+
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || loading || searchResults !== null) return;
+    if (view === 'mine' || loadingMore || !hasMore || loading || searchResults !== null) return;
     setLoadingMore(true);
     try {
       // In free-first mode the free workouts are all loaded up front, so paging
@@ -169,7 +218,7 @@ export default function Workouts() {
     } finally {
       setLoadingMore(false);
     }
-  }, [workouts, loadingMore, hasMore, loading, searchResults, freeFirst]);
+  }, [view, workouts, loadingMore, hasMore, loading, searchResults, freeFirst]);
 
   const loadWorkoutSets = async (workout) => {
     if (!workout || loadedSetsFor.has(workout.workout_id)) return;
@@ -254,7 +303,7 @@ export default function Workouts() {
       // sessionStorage unavailable (private mode, etc.) — search just won't persist
     }
     const trimmed = query.trim();
-    if (!trimmed) {
+    if (!trimmed || view === 'mine') {
       setSearchResults(null);
       return;
     }
@@ -276,7 +325,7 @@ export default function Workouts() {
       if (!cancelled) setSearchLoading(false);
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [query]);
+  }, [query, view]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -298,10 +347,14 @@ export default function Workouts() {
   }, [selected, structureLoading, loadedSetsFor, blocksByWorkout]);
 
   const ordered = useMemo(() => {
+    if (view === 'mine') {
+      const q = query.trim().toLowerCase();
+      return q ? mine.filter((w) => w.name?.toLowerCase().includes(q)) : mine;
+    }
     const base = searchResults ?? workouts;
     // Stable sort: keeps the name order within the free and locked groups.
     return freeFirst ? [...base].sort((a, b) => Number(!!b.is_free) - Number(!!a.is_free)) : base;
-  }, [searchResults, workouts, freeFirst]);
+  }, [view, mine, query, searchResults, workouts, freeFirst]);
 
   const filtered = useMemo(() => ordered.filter((w) => {
     const matchesRegion = running ? isRunningWorkout(w) : (region === 'All' || w.workout_category === region);
@@ -484,6 +537,20 @@ export default function Workouts() {
           </Button>
         </header>
 
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1 mb-3" role="tablist" aria-label="Workout source">
+          {[['library', 'Library'], ['mine', 'My workouts']].map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={cn('h-8 rounded-lg text-sm font-medium transition-colors', view === key ? 'bg-background shadow-sm' : 'text-muted-foreground')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workouts…" className="pl-9 pr-9 rounded-xl h-11" />
@@ -514,7 +581,7 @@ export default function Workouts() {
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-3 pb-4" onScroll={handleListScroll}>
-      {loading || (searchLoading && searchResults === null) ? (
+      {(view === 'mine' ? mineLoading : (loading || (searchLoading && searchResults === null))) ? (
         <div className="flex justify-center py-20">
           <div className="w-7 h-7 border-4 border-muted border-t-brand rounded-full animate-spin" />
         </div>
@@ -572,14 +639,18 @@ export default function Workouts() {
             );
           })}
           {filtered.length === 0 && !loadingMore && !searchLoading && (
-            <p className="text-center text-sm text-muted-foreground py-16">No workouts found.</p>
+            <p className="text-center text-sm text-muted-foreground py-16">
+              {view === 'mine'
+                ? 'Nothing here yet. Customize a workout from your plan, or keep your changes after a session, and it will show up here.'
+                : 'No workouts found.'}
+            </p>
           )}
           <div ref={sentinelRef} className="h-10 flex items-center justify-center">
             {searchResults !== null ? (
               searchLoading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : null
             ) : loadingMore ? (
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : !hasMore && filtered.length > 0 ? (
+            ) : view === 'library' && !hasMore && filtered.length > 0 ? (
               <p className="text-xs text-muted-foreground">No more workouts</p>
             ) : null}
           </div>
@@ -782,6 +853,16 @@ export default function Workouts() {
                   )}
                 </div>
 
+                {isCustomWorkout(selected) && (
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setEditingCustom(selected)} className="flex-1 rounded-xl h-12">
+                      <SlidersHorizontal className="h-4 w-4 mr-2" /> Edit
+                    </Button>
+                    <Button variant="outline" onClick={() => setDeletingCustom(selected)} className="rounded-xl h-12 px-4 text-destructive" aria-label="Delete this workout">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setAddingToPlan(selected)}
@@ -839,6 +920,21 @@ export default function Workouts() {
       />
 
       <ExercisePickerSheet open={!!pickerBlock} onOpenChange={(o) => !o && setPickerBlock(null)} onPick={handleAddExercise} />
+
+      <WorkoutCustomizeSheet
+        workout={editingCustom}
+        open={!!editingCustom}
+        onOpenChange={(o) => { if (!o) setEditingCustom(null); }}
+        onClose={(dirty) => { if (dirty) { loadMine(); setLoadedSetsFor(new Set()); } }}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!deletingCustom}
+        onOpenChange={(o) => !o && setDeletingCustom(null)}
+        title="Delete your workout?"
+        description={`Delete "${deletingCustom?.name}"? Plan days using it will need another workout. This cannot be undone.`}
+        onConfirm={handleDeleteCustom}
+      />
 
       <CreateWorkoutSheet
         open={creatingWorkout}

@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useAthleteProfile } from '@/hooks/useAthleteProfile';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus, CheckCircle2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Lock, Unlock, Check, ArrowLeftRight, Loader2, Wand2, Route, Moon, Plus, CheckCircle2, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { mondayOf, fmtISO, fmtDate, parseDate, ALL_EQUIPMENT } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import SwapShortlistSheet from '@/components/SwapShortlistSheet';
@@ -13,6 +13,10 @@ import WorkoutDetailSheet from '@/components/WorkoutDetailSheet';
 import WorkoutSearchSheet from '@/components/WorkoutSearchSheet';
 import RestToWorkoutChoiceSheet from '@/components/RestToWorkoutChoiceSheet';
 import { handleAiQuotaError } from '@/lib/entitlements';
+import WorkoutCustomizeSheet from '@/components/WorkoutCustomizeSheet';
+import UpgradeSheet from '@/components/UpgradeSheet';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { customizeWorkout, isCustomWorkout, isPremiumRequiredError } from '@/lib/customizeWorkout';
 
 const CONTEXT_OPTIONS = [
   { value: 'normal', label: 'Normal week', desc: 'Nothing unusual' },
@@ -109,6 +113,10 @@ export default function PlanBuilder() {
   const [detailAlt, setDetailAlt] = useState(null);
   const [restChoiceFor, setRestChoiceFor] = useState(null);
   const [searchFor, setSearchFor] = useState(null);
+  const { isPremium } = useEntitlement();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [customizeBusy, setCustomizeBusy] = useState(null); // slot index being cloned/reset
+  const [customizing, setCustomizing] = useState(null); // { idx, workout } open in the editor
   const [queueJobId, setQueueJobId] = useState(null);
   const [queuePosition, setQueuePosition] = useState(null);
   const [queueWaitedLong, setQueueWaitedLong] = useState(false);
@@ -433,6 +441,81 @@ export default function PlanBuilder() {
     setPlan({ ...plan, workouts: next });
   };
 
+  const persistSlots = async (updated) => {
+    setPlan((prev) => ({ ...prev, workouts: updated }));
+    const { error: saveError } = await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', planId);
+    if (saveError) setError('Could not save that change.');
+  };
+
+  // Re-runs the AI weight suggestions over the whole week after a day's
+  // exercises changed, so new or swapped exercises get a suggested load too
+  // (the day's other exercises are recomputed from the athlete's calibration as usual).
+  const refreshWeights = async () => {
+    try {
+      const wres = await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: planId } });
+      if (wres.data?.plan?.workouts) setPlan((prev) => ({ ...prev, workouts: wres.data.plan.workouts }));
+    } catch { /* weights are re-fetched when the workout starts anyway */ }
+  };
+
+  // Customizing a day clones its workout into a private copy (premium), points
+  // the day at the copy and locks it so regenerating the plan keeps it, then
+  // opens the editor. Reopening an already customized day edits the same copy.
+  const customizeDay = async (idx) => {
+    if (!isPremium) { setUpgradeOpen(true); return; }
+    const slot = plan.workouts[idx];
+    if (!slot?.workout_id) return;
+    setCustomizeBusy(idx);
+    try {
+      const clone = await customizeWorkout(slot.workout_id);
+      if (clone.id !== slot.workout_id) {
+        const updated = plan.workouts.map((w, i) => (i === idx ? { ...w, workout_id: clone.id, workout_name: clone.name, locked: true } : w));
+        await persistSlots(updated);
+      }
+      setWorkouts((prev) => ({ ...prev, [clone.id]: clone }));
+      setCustomizing({ idx, workout: clone });
+    } catch (err) {
+      if (isPremiumRequiredError(err)) setUpgradeOpen(true);
+      else setError('Could not customize that workout.');
+    }
+    setCustomizeBusy(null);
+  };
+
+  const finishCustomizing = async (dirty) => {
+    const idx = customizing?.idx;
+    setCustomizing(null);
+    if (!dirty) return;
+    // The editor may have renamed the copy or changed its exercises.
+    const id = plan.workouts[idx]?.workout_id;
+    if (id) {
+      const { data: fresh } = await supabase.from('workouts').select('*').eq('id', id).maybeSingle();
+      if (fresh) {
+        setWorkouts((prev) => ({ ...prev, [fresh.id]: fresh }));
+        const updated = plan.workouts.map((w, i) => (i === idx ? { ...w, workout_name: fresh.name } : w));
+        await persistSlots(updated);
+      }
+    }
+    await refreshWeights();
+  };
+
+  // Points the day back at the catalog workout the copy came from. The copy
+  // stays in the athlete's library.
+  const resetDay = async (idx) => {
+    const slot = plan.workouts[idx];
+    const current = workouts[slot?.workout_id];
+    if (!current?.source_workout_id) return;
+    setCustomizeBusy(idx);
+    try {
+      const { data: original } = await supabase.from('workouts').select('*').eq('workout_id', current.source_workout_id).eq('status', 'approved').maybeSingle();
+      if (!original) { setError('The original workout is no longer available.'); return; }
+      const updated = plan.workouts.map((w, i) => (i === idx ? { ...w, workout_id: original.id, workout_name: original.name, exercise_weights: undefined } : w));
+      setWorkouts((prev) => ({ ...prev, [original.id]: original }));
+      await persistSlots(updated);
+      await refreshWeights();
+    } finally {
+      setCustomizeBusy(null);
+    }
+  };
+
   const doSwap = (idx) => {
     if (plan.workouts[idx].slot_type !== 'train') return;
     setSwapFor(null);
@@ -631,6 +714,9 @@ export default function PlanBuilder() {
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 capitalize shrink-0"><Route className="h-3 w-3" />{w.activity}</span>
                         )}
                         <p className="font-semibold truncate">{wo?.name || w.workout_name}</p>
+                        {isCustomWorkout(wo) && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand bg-brand/10 rounded px-1.5 py-0.5 shrink-0">Custom</span>
+                        )}
                       </div>
                       {w.modality && !isActivity && <p className="text-xs text-muted-foreground mt-0.5">{w.modality}{w.focus ? ' · ' + w.focus : ''}</p>}
                     </div>
@@ -647,6 +733,19 @@ export default function PlanBuilder() {
                       <RefreshCw className="h-3.5 w-3.5" /> Find alternative
                     </button>
                   </div>
+                  {w.workout_id && !isActivity && (
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={() => customizeDay(i)} disabled={customizeBusy === i} className="flex-1 flex items-center justify-center gap-1 text-xs font-medium py-2 rounded-lg border border-border text-brand disabled:opacity-50">
+                        {customizeBusy === i ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isPremium ? <SlidersHorizontal className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                        {isCustomWorkout(wo) ? 'Edit your version' : 'Customize'}
+                      </button>
+                      {isCustomWorkout(wo) && wo.source_workout_id && (
+                        <button onClick={() => resetDay(i)} disabled={customizeBusy === i} className="flex items-center justify-center gap-1 text-xs font-medium py-2 px-3 rounded-lg border border-border text-muted-foreground disabled:opacity-50">
+                          <Undo2 className="h-3.5 w-3.5" /> Reset
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </Card>
               );
             })}
@@ -703,6 +802,15 @@ export default function PlanBuilder() {
         onAiSuggest={() => { const idx = restChoiceFor; setRestChoiceFor(null); findAlternative(idx); }}
         onChooseSelf={() => { const idx = restChoiceFor; setRestChoiceFor(null); setSearchFor(idx); }}
       />
+
+      <WorkoutCustomizeSheet
+        workout={customizing?.workout}
+        open={!!customizing}
+        onOpenChange={(o) => { if (!o) setCustomizing(null); }}
+        onClose={finishCustomizing}
+      />
+
+      <UpgradeSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} reason="customize" />
 
       <WorkoutSearchSheet
         open={searchFor !== null}
