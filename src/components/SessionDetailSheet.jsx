@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DurationInput from '@/components/DurationInput';
 import { supabase } from '@/lib/supabaseClient';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -11,6 +11,12 @@ import { DIFFICULTY_META, isRunningExercise } from '@/lib/fitness';
 import { cn } from '@/lib/utils';
 import { buildBlocksByWorkout, buildBlockExercisesByBlock } from '@/lib/workoutStructure';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/lib/AuthContext';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import SaveCustomWorkoutForm from '@/components/SaveCustomWorkoutForm';
+import UpgradeSheet from '@/components/UpgradeSheet';
+import { saveAsCustomWorkout, fetchOwnCustomNames } from '@/lib/customizeWorkout';
+import { sessionOverridesFromProgress } from '@/lib/sessionOverrides';
 
 const CHART_COLORS = ['hsl(var(--brand))', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 
@@ -36,6 +42,13 @@ function modeDifficulty(arr) {
 
 export default function SessionDetailSheet({ session, open, onOpenChange, editable = false, onSaved = null }) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { isPremium } = useEntitlement();
+  const [sourceWorkout, setSourceWorkout] = useState(null);
+  const [savingCustom, setSavingCustom] = useState(false); // the name form is open
+  const [savedCustomName, setSavedCustomName] = useState('');
+  const [ownCustomNames, setOwnCustomNames] = useState([]);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exerciseSessions, setExerciseSessions] = useState([]);
   const [history, setHistory] = useState([]);
@@ -51,7 +64,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
-    if (!open) { setEditing(false); setDrafts({}); }
+    if (!open) { setEditing(false); setDrafts({}); setSavingCustom(false); setSavedCustomName(''); }
   }, [open]);
 
   useEffect(() => {
@@ -70,7 +83,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
       try {
         const [{ data: thisEsData }, { data: workoutRow }] = await Promise.all([
           supabase.from('exercise_sessions').select('*').eq('workout_session_id', session.id),
-          supabase.from('workouts').select('workout_id').eq('id', session.workout_id).maybeSingle(),
+          supabase.from('workouts').select('id, workout_id, name').eq('id', session.workout_id).maybeSingle(),
         ]);
         const thisEs = (thisEsData || []).slice().sort((a, b) => {
           if (a.order_index == null && b.order_index == null) return 0;
@@ -89,6 +102,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
           setUnilateralExerciseIds(new Set((exRows || []).filter((r) => r.laterality === 'Unilateral').map((r) => r.exercise_code)));
         }
 
+        setSourceWorkout(workoutRow || null);
         const textWorkoutId = workoutRow?.workout_id || null;
         if (textWorkoutId) {
           const { data: blocksData } = await supabase.from('workout_blocks').select('*').eq('workout_id', textWorkoutId);
@@ -223,9 +237,51 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     return [Math.max(0, min - padding), max + padding];
   })();
 
+  // What the athlete changed during this session (exercises added, swapped, edited,
+  // reordered), rebuilt from the progress saved with it, so a good session can
+  // still be saved as a custom workout afterwards.
+  const overrides = useMemo(() => {
+    if (!session?.progress || !blocks.length) return null;
+    let order = 0;
+    const baseList = blocks.flatMap((b) => (blockExercisesByBlock[b.block_id] || [])
+      .filter((be) => be.step_type === 'exercise')
+      .map((be) => ({ key: be.block_exercise_id, block_id: b.block_id, order: order++ })));
+    const result = sessionOverridesFromProgress(session.progress, baseList);
+    return result.has ? result : null;
+  }, [session, blocks, blockExercisesByBlock]);
+
+  const changeSummary = overrides
+    ? [
+        overrides.added.length ? `added ${overrides.added.map((a) => a.exercise?.name).filter(Boolean).join(', ')}` : null,
+        Object.keys(overrides.swaps).length ? `swapped ${Object.keys(overrides.swaps).length} exercise${Object.keys(overrides.swaps).length > 1 ? 's' : ''}` : null,
+        Object.keys(overrides.edits).length ? `changed sets/reps on ${Object.keys(overrides.edits).length}` : null,
+      ].filter(Boolean).join('; ')
+    : '';
+  const canSaveCustom = !!overrides && !!sourceWorkout && session?.user_id === user?.id;
+
+  const openSaveCustom = () => {
+    if (!isPremium) { setUpgradeOpen(true); return; }
+    fetchOwnCustomNames(user.id).then(setOwnCustomNames).catch(() => {});
+    setSavingCustom(true);
+  };
+
+  const saveCustom = async (name) => {
+    const copy = await saveAsCustomWorkout({
+      source: sourceWorkout,
+      name,
+      swaps: overrides.swaps,
+      edits: overrides.edits,
+      added: overrides.added.map((a) => ({ key: a.key, exercise: a.exercise, sets: a.sets, reps: a.reps })),
+      sequence: overrides.sequence,
+    });
+    setSavedCustomName(copy.name);
+    setSavingCustom(false);
+  };
+
   if (!session) return null;
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl max-h-[85dvh] overflow-y-auto">
         <SheetHeader className="px-5 pt-5 pr-12">
@@ -259,6 +315,29 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
               </span>
             )}
           </div>
+
+          {canSaveCustom && (
+            <Card className="rounded-2xl border-brand/30 bg-brand/5 p-4">
+              {savedCustomName ? (
+                <p className="text-sm">Saved as <span className="font-semibold">&ldquo;{savedCustomName}&rdquo;</span> in My workouts. You can add it to your plan from there.</p>
+              ) : savingCustom ? (
+                <SaveCustomWorkoutForm
+                  sourceName={sourceWorkout.name}
+                  takenNames={ownCustomNames}
+                  onSave={saveCustom}
+                  onCancel={() => setSavingCustom(false)}
+                  cancelLabel="Cancel"
+                  onPremiumRequired={() => { setSavingCustom(false); setUpgradeOpen(true); }}
+                />
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">You changed this workout</p>
+                  <p className="text-xs text-muted-foreground">In this session you {changeSummary || 'reordered the exercises'}. Save your version to use it again.</p>
+                  <Button size="sm" onClick={openSaveCustom} className="rounded-lg bg-brand text-brand-foreground hover:bg-brand/90">Save as custom workout</Button>
+                </div>
+              )}
+            </Card>
+          )}
 
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Exercises</p>
@@ -322,6 +401,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
         </div>
       </SheetContent>
     </Sheet>
+    <UpgradeSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} reason="customize" />
+    </>
   );
 }
 

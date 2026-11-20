@@ -20,6 +20,7 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
   const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [mine, setMine] = useState([]); // the athlete's own custom workouts, shown first
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -48,17 +49,26 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
         .eq('status', 'approved')
         .eq('ownership_type', 'official');
       if (q) query = query.ilike('name', `%${q}%`);
-      const { data } = await query.order('name').limit(BATCH_SIZE);
+      let mineQuery = user?.id
+        ? supabase.from('workouts').select('*').eq('owner_id', user.id).eq('status', 'private')
+        : null;
+      if (mineQuery && q) mineQuery = mineQuery.ilike('name', `%${q}%`);
+      const [{ data }, mineRes] = await Promise.all([
+        query.order('name').limit(BATCH_SIZE),
+        mineQuery ? mineQuery.order('updated_date', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
+      ]);
+      setMine(mineRes.data || []);
       const batch = data || [];
       setResults(batch);
       setHasMore(!q && batch.length === BATCH_SIZE);
     } catch {
       setResults([]);
+      setMine([]);
       setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (open) {
@@ -115,14 +125,14 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
     return () => observer.disconnect();
   }, [loadMore]);
 
-  const filtered = useMemo(() => results.filter((w) => {
+  const filtered = useMemo(() => [...mine, ...results].filter((w) => {
     const matchesRegion = running ? isRunningWorkout(w) : (region === 'All' || w.workout_category === region);
     const matchesDifficulty = difficulty === 'All' || w.difficulty === difficulty.toLowerCase();
     const matchesType = workoutType === 'All' || WORKOUT_FORMATS
       .filter((f) => f.label === workoutType)
       .some((f) => workoutFormatMatches(w.workout_format, f.value));
     return matchesRegion && matchesDifficulty && matchesType;
-  }), [results, region, running, difficulty, workoutType]);
+  }), [mine, results, region, running, difficulty, workoutType]);
 
   const pickAndClose = (w) => {
     setDetailWorkout(null);
@@ -174,7 +184,10 @@ export default function WorkoutSearchSheet({ open, onOpenChange, onPick, dayLabe
                   <button onClick={() => setDetailWorkout(w)} className="w-full text-left">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{w.name}</p>
+                        <p className="font-semibold truncate flex items-center gap-1.5">
+                          <span className="truncate">{w.name}</span>
+                          {w.status === 'private' && <span className="text-[10px] font-medium text-brand bg-brand/10 rounded px-1.5 py-0.5 shrink-0">My workout</span>}
+                        </p>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{w.format_label || w.workout_format || 'Workout'}</p>
                       </div>
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize shrink-0">{w.workout_category}</span>

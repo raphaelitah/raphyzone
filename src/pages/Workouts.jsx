@@ -35,7 +35,7 @@ import UpgradeSheet, { LockBadge } from '@/components/UpgradeSheet';
 import { Switch } from '@/components/ui/switch';
 import { formatStepPrescription } from '@/lib/prescriptionLabel';
 import WorkoutCustomizeSheet from '@/components/WorkoutCustomizeSheet';
-import { isCustomWorkout } from '@/lib/customizeWorkout';
+import { isCustomWorkout, deleteCustomWorkout } from '@/lib/customizeWorkout';
 
 const BATCH_SIZE = 20;
 const SEARCH_STORAGE_KEY = 'raphyzone:workouts-search-query';
@@ -175,16 +175,7 @@ export default function Workouts() {
   const handleDeleteCustom = async () => {
     const target = deletingCustom;
     if (!target) return;
-    const blockCodes = (blocksByWorkout[target.workout_id] || []).map((b) => b.block_id);
-    const beRows = blockCodes.length
-      ? (await supabase.from('block_exercises').select('block_exercise_id').in('block_id', blockCodes)).data || []
-      : [];
-    if (beRows.length) await supabase.from('prescribed_sets').delete().in('block_exercise_id', beRows.map((b) => b.block_exercise_id));
-    if (blockCodes.length) {
-      await supabase.from('block_exercises').delete().in('block_id', blockCodes);
-      await supabase.from('workout_blocks').delete().eq('workout_id', target.workout_id);
-    }
-    await supabase.from('workouts').delete().eq('id', target.id);
+    await deleteCustomWorkout(target);
     setMine((prev) => prev.filter((w) => w.id !== target.id));
     setSelected(null);
     setDeletingCustom(null);

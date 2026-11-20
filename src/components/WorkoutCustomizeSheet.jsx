@@ -11,6 +11,10 @@ import ExercisePickerSheet from '@/components/ExercisePickerSheet';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import { useBlockExerciseCrud, reorderBlocks, persistBlockOrder } from '@/hooks/useBlockExerciseCrud';
 import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
+import { recomputeAndSaveDuration, fetchOwnCustomNames } from '@/lib/customizeWorkout';
+import { validateWorkoutName } from '@/lib/workoutNames';
+import { roundToFive } from '@/lib/workoutStructure';
+import { useAuth } from '@/lib/AuthContext';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -28,7 +32,11 @@ const newCode = (prefix) => `${prefix}-${crypto.randomUUID().replace(/-/g, '').s
  * so the caller can refresh weights and the plan.
  */
 export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onClose }) {
+  const { user } = useAuth();
   const [name, setName] = useState('');
+  const [nameError, setNameError] = useState(null);
+  const [takenNames, setTakenNames] = useState([]); // the original's name + the athlete's other custom workouts
+  const [minutes, setMinutes] = useState(null);
   const [blocks, setBlocks] = useState([]);
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
   const [setsByBlockExercise, setSetsByBlockExercise] = useState({});
@@ -39,9 +47,13 @@ export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onC
   const workoutRef = useRef(workout);
   workoutRef.current = workout;
 
+  // Every structural change re-labels the workout and re-estimates how long it takes
+  // (the original's duration plus the difference the changes make).
   const markDirty = async () => {
     dirtyRef.current = true;
     await recomputeAndSaveFormatLabel(workoutRef.current);
+    const m = await recomputeAndSaveDuration(workoutRef.current);
+    if (m != null) setMinutes(m);
   };
 
   const {
@@ -57,7 +69,7 @@ export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onC
 
   // Reorders / saves from the shared hook don't go through onChanged for every
   // path (drag, save), so wrap them to flag the change.
-  const onDragEnd = async (result) => { await handleDragEnd(result); dirtyRef.current = true; };
+  const onDragEnd = async (result) => { await handleDragEnd(result); await markDirty(); };
   const onSaveBe = async (form) => { await handleSaveBe(form); await markDirty(); };
 
   useEffect(() => {
@@ -65,8 +77,18 @@ export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onC
     let cancelled = false;
     dirtyRef.current = false;
     setName(workout.name || '');
+    setNameError(null);
+    setMinutes(workout.est_duration_min ?? null);
     setLoading(true);
     (async () => {
+      // A name can't repeat the catalog workout this was copied from, or another of the athlete's own.
+      const [{ data: root }, others] = await Promise.all([
+        workout.source_workout_id
+          ? supabase.from('workouts').select('name').eq('workout_id', workout.source_workout_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        fetchOwnCustomNames(user?.id, workout.id),
+      ]);
+      if (!cancelled) setTakenNames([root?.name, ...others].filter(Boolean));
       const { data: blockRows } = await supabase.from('workout_blocks').select('*').eq('workout_id', workout.workout_id);
       const blockIds = (blockRows || []).map((b) => b.block_id);
       const beRows = blockIds.length
@@ -97,10 +119,14 @@ export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onC
   };
 
   const saveName = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === workout.name) return;
-    const { error } = await supabase.from('workouts').update({ name: trimmed }).eq('id', workout.id);
-    if (!error) dirtyRef.current = true;
+    if (name.trim() === workout.name) { setNameError(null); return; }
+    const result = validateWorkoutName(name, takenNames);
+    if (result.error) { setNameError(result.error); return; }
+    setNameError(null);
+    const { error } = await supabase.from('workouts').update({ name: result.name }).eq('id', workout.id);
+    if (error) { setNameError("Couldn't rename. Please try again."); return; }
+    setName(result.name);
+    dirtyRef.current = true;
   };
 
   const relabelBlocks = async (list) => {
@@ -208,14 +234,19 @@ export default function WorkoutCustomizeSheet({ workout, open, onOpenChange, onC
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             <div>
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="custom-workout-name">Name</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="custom-workout-name">Name</label>
+                {minutes != null && <span className="text-xs text-muted-foreground">About {roundToFive(minutes) || minutes} min</span>}
+              </div>
               <Input
                 id="custom-workout-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); setNameError(null); }}
                 onBlur={saveName}
+                aria-invalid={!!nameError}
                 className="mt-1"
               />
+              {nameError && <p role="alert" className="text-xs text-destructive mt-1.5">{nameError}</p>}
             </div>
             {loading ? (
               <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 text-brand animate-spin" /></div>
