@@ -9,8 +9,10 @@ on:
 
 # E2E signs in against the real Supabase project's single seeded athlete account
 # (one in-progress workout session, one profile row) — two runs hitting it at
-# once race each other and cause spurious failures, so only let one run per ref
-# proceed at a time.
+# once race each other and cause spurious failures. This workflow-level group only
+# stops overlapping runs on the same ref; the e2e jobs below also share a
+# repo-wide group, because runs on different branches/PRs (or a PR and the main
+# push after its merge) hit the same account too.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -61,6 +63,13 @@ jobs:
   e2e:
     name: E2E (mobile-chrome)
     runs-on: ubuntu-latest
+    # One E2E job at a time across all refs: they all share one seeded athlete account.
+    # Queued, not cancelled, so a run in progress is never cut short. (GitHub keeps only
+    # one waiting job per group, so if several pile up the older waiting ones are
+    # cancelled; re-run those.)
+    concurrency:
+      group: e2e-shared-supabase-account
+      cancel-in-progress: false
     # Real Supabase sign-ins trip the password-auth rate limit under concurrency, so this
     # only needs to run for pushes to main and same-repo PRs (forks won't have the secrets).
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -105,6 +114,9 @@ jobs:
   e2e-llm:
     name: E2E (LLM-dependent, manual only)
     runs-on: ubuntu-latest
+    concurrency:
+      group: e2e-shared-supabase-account
+      cancel-in-progress: false
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
