@@ -69,5 +69,58 @@ export function applyAddedExercises(list, added = []) {
   return added.reduce((acc, item) => insertAddedExercise(acc, item), list);
 }
 
-export const hasSessionOverrides = ({ swaps = {}, edits = {}, added = [] }) =>
-  Object.keys(swaps).length > 0 || Object.keys(edits).length > 0 || added.length > 0;
+export const hasSessionOverrides = ({ swaps = {}, edits = {}, added = [], reordered = false }) =>
+  Object.keys(swaps).length > 0 || Object.keys(edits).length > 0 || added.length > 0 || reordered;
+
+// ---- Order ---------------------------------------------------------------
+// The runner treats consecutive exercises sharing a block_id as one unit (a
+// superset/circuit's members must stay together), so reordering moves whole
+// groups. A group's id is its block_id (`added:<key>` for an added exercise).
+
+/** Splits the flat list into its contiguous block groups, in order. */
+export function groupExercises(list) {
+  const groups = [];
+  list.forEach((e) => {
+    const id = e.block_id ?? e.key;
+    const last = groups[groups.length - 1];
+    if (last && last.id === id) last.exercises.push(e);
+    else groups.push({ id, exercises: [e] });
+  });
+  return groups;
+}
+
+export const sequenceOf = (list) => groupExercises(list).map((g) => g.id);
+
+/**
+ * Moves one upcoming group up or down among the upcoming groups. Groups that
+ * are done or in progress (the current exercise's group and everything before
+ * it) never move, so the athlete's position and logs stay valid.
+ * Returns the same array when the move isn't possible.
+ */
+export function moveUpcomingGroup(list, currentIndex, groupId, direction) {
+  const groups = groupExercises(list);
+  const currentGroup = groups.findIndex((g) => g.exercises.includes(list[currentIndex]));
+  const from = groups.findIndex((g) => g.id === groupId);
+  const to = from + (direction === 'up' ? -1 : 1);
+  if (from <= currentGroup || to <= currentGroup || to >= groups.length) return list;
+  const next = [...groups];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next.flatMap((g) => g.exercises);
+}
+
+/** Re-applies a saved group order. Groups missing from it keep their relative order at the end. */
+export function applySequence(list, sequence) {
+  if (!Array.isArray(sequence) || sequence.length === 0) return list;
+  const groups = groupExercises(list);
+  const rank = new Map(sequence.map((id, i) => [id, i]));
+  const known = groups.filter((g) => rank.has(g.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  const unknown = groups.filter((g) => !rank.has(g.id));
+  return [...known, ...unknown].flatMap((g) => g.exercises);
+}
+
+/** True when the groups that were in the original workout are no longer in their original relative order. */
+export function isReordered(baseSequence, currentSequence) {
+  const base = new Set(baseSequence);
+  const kept = currentSequence.filter((id) => base.has(id));
+  return kept.length !== baseSequence.length || kept.some((id, i) => id !== baseSequence[i]);
+}

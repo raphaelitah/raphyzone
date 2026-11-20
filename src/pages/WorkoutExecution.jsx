@@ -17,7 +17,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle, Plus, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SkipForward, RefreshCw, Loader2, RotateCcw, Clock, Play, Pause, XCircle, Search, Dumbbell, Footprints, CheckCircle2, AlertTriangle, Plus, SlidersHorizontal, ListOrdered } from 'lucide-react';
 import { DIFFICULTY_META, mondayOf, fmtISO, parseDate, isRunningExercise, resolveCalibrationPatternKey } from '@/lib/fitness';
 import WorkoutTimerPanel from '@/components/WorkoutTimerPanel';
 import SupersetPanel from '@/components/SupersetPanel';
@@ -32,7 +32,11 @@ import UpgradeSheet from '@/components/UpgradeSheet';
 import ExercisePickerSheet from '@/components/ExercisePickerSheet';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { customizeWorkout, applyOverridesToClone, isPremiumRequiredError } from '@/lib/customizeWorkout';
-import { applyEditToExercise, applyAddedExercises, insertAddedExercise, hasSessionOverrides, stableKey } from '@/lib/sessionOverrides';
+import {
+  applyEditToExercise, applyAddedExercises, insertAddedExercise, hasSessionOverrides, stableKey,
+  groupExercises, sequenceOf, moveUpcomingGroup, applySequence, isReordered,
+} from '@/lib/sessionOverrides';
+import ReorderArrows from '@/components/ReorderArrows';
 import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 import {
   buildBlocksByWorkout,
@@ -132,6 +136,9 @@ export default function WorkoutExecution() {
   const [editDraft, setEditDraft] = useState(null); // { sets: string, reps: string } while the edit sheet is open
   const [customizeUpgradeOpen, setCustomizeUpgradeOpen] = useState(false);
   const [keepState, setKeepState] = useState('idle'); // idle | saving | saved | error | dismissed
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [justAddedId, setJustAddedId] = useState(null); // group id highlighted in the order sheet right after adding
+  const baseSequenceRef = useRef([]); // block order as the saved workout has it, to tell whether the athlete reordered
   // Set the instant the athlete finishes the last block/exercise's feedback
   // screen (or skips past it) — from then on the exercise UI is replaced by a
   // dedicated saving/done/error screen. This must be set synchronously in the
@@ -216,16 +223,20 @@ export default function WorkoutExecution() {
     }
   });
 
+  // The order the athlete is running the workout in (block ids; reordering and added
+  // exercises change it). Saved with progress so a reload keeps it.
+  const sequenceKey = sequenceOf(exercises).join('|');
+
   // Persist exactly where the athlete currently is (including which blocks
   // they've skipped past, which never gets an exercise_sessions row of its
   // own) so leaving and resuming lands them back here instead of exercise 1.
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added, sequence: sequenceKey ? sequenceKey.split('|') : [] } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added, sequenceKey]);
 
   const pendingLoadRef = useRef(null);
   // The viewed week's equipment override, if any (weekly_plans.setup_equipment); sent along with
@@ -351,10 +362,12 @@ export default function WorkoutExecution() {
         target_weight: (swapped.exercise_id && exerciseWeights[swapped.exercise_id] != null) ? exerciseWeights[swapped.exercise_id] : null,
       }, savedEdits[e.key]);
     });
-    const finalExercises = applyAddedExercises(
+    baseSequenceRef.current = sequenceOf(merged);
+    const savedSequence = (sessionExisted && Array.isArray(sess.progress?.sequence)) ? sess.progress.sequence : null;
+    const finalExercises = applySequence(applyAddedExercises(
       editedExercises,
       savedAdded.map((a) => ({ ...a, target_weight: (a.exercise?.exercise_code && exerciseWeights[a.exercise.exercise_code] != null) ? exerciseWeights[a.exercise.exercise_code] : null }))
-    );
+    ), savedSequence);
     if (Object.keys(savedSwaps).length) setSwaps(savedSwaps);
     if (Object.keys(savedEdits).length) setEdits(savedEdits);
     if (savedAdded.length) setAdded(savedAdded);
@@ -1230,6 +1243,9 @@ export default function WorkoutExecution() {
     };
     setAdded((prev) => [...prev, item]);
     setExercises((prev) => insertAddedExercise(prev, item));
+    // It lands after the current block; open the order sheet so it can be placed where it belongs.
+    setJustAddedId(`added:${item.key}`);
+    setOrderOpen(true);
     const code = exercise.exercise_code;
     const needsWeight = code && !isRunningExercise(exercise) && exercise.requires_load !== false;
     if (!needsWeight) return;
@@ -1276,7 +1292,9 @@ export default function WorkoutExecution() {
         clone,
         swaps,
         edits,
-        added: added.map((a) => ({ exercise: a.exercise, sets: a.sets, reps: a.reps })),
+        added: added.map((a) => ({ key: a.key, exercise: a.exercise, sets: a.sets, reps: a.reps })),
+        // Only when the order changed, so an untouched workout keeps its block labels as they were.
+        sequence: (added.length || reordered) ? sequenceOf(exercises) : undefined,
       });
       await recomputeAndSaveFormatLabel(clone);
       const slot = plan?.workouts?.find((x) => x.workout_id === workoutId);
@@ -1369,7 +1387,8 @@ export default function WorkoutExecution() {
   // on to Progress — the same destination the old code navigated to directly.
   // Premium athletes who changed something get a chance to keep it first, so the
   // screen waits for their answer instead of moving on by itself.
-  const offerKeep = isPremium && hasSessionOverrides({ swaps, edits, added });
+  const reordered = isReordered(baseSequenceRef.current, sequenceOf(exercises));
+  const offerKeep = isPremium && hasSessionOverrides({ swaps, edits, added, reordered });
   useEffect(() => {
     if (completion !== 'done') return;
     if (offerKeep && (keepState === 'idle' || keepState === 'saving' || keepState === 'error')) return;
@@ -1596,6 +1615,7 @@ export default function WorkoutExecution() {
               {workoutPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
             </button>
           )}
+          <button onClick={() => (isPremium ? setOrderOpen(true) : setCustomizeUpgradeOpen(true))} aria-label="Reorder exercises" className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><ListOrdered className="h-4 w-4" /></button>
           <button onClick={() => (isPremium ? setAddPickerOpen(true) : setCustomizeUpgradeOpen(true))} aria-label="Add exercise" className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><Plus className="h-4 w-4" /></button>
           <button onClick={() => setRestartOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
           <button onClick={() => setStopOpen(true)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><XCircle className="h-4 w-4" /></button>
@@ -1869,6 +1889,45 @@ export default function WorkoutExecution() {
               <Button onClick={saveEdit} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">Save</Button>
             </div>
           )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={orderOpen} onOpenChange={(o) => { setOrderOpen(o); if (!o) setJustAddedId(null); }}>
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="px-5 pt-5">
+            <SheetTitle className="text-left">Workout order</SheetTitle>
+          </SheetHeader>
+          <div className="px-5 pb-8 space-y-2">
+            <p className="text-xs text-muted-foreground mb-2">Move what&apos;s coming up. Exercises you&apos;ve started or finished stay put, and a superset or circuit moves as one.</p>
+            {(() => {
+              const groups = groupExercises(exercises);
+              const currentGroup = groups.findIndex((g) => g.exercises.includes(current));
+              const upcoming = groups.slice(currentGroup + 1);
+              return groups.map((g, gi) => {
+                const fixed = gi <= currentGroup;
+                const upIdx = gi - currentGroup - 1;
+                return (
+                  <div key={g.id} className={cn('flex items-center gap-2 rounded-xl border p-3', fixed ? 'border-border bg-muted/40 text-muted-foreground' : 'border-border', g.id === justAddedId && 'border-brand ring-2 ring-brand/20')}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{g.exercises.map((e) => e.exercise_name).join(' + ')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {gi === currentGroup ? 'Current' : fixed ? 'Done or in progress' : g.id === justAddedId ? 'Just added' : (g.exercises.length > 1 ? `${g.exercises.length} exercises together` : `${g.exercises[0].sets} × ${g.exercises[0].reps}`)}
+                      </p>
+                    </div>
+                    {!fixed && (
+                      <ReorderArrows
+                        index={upIdx}
+                        length={upcoming.length}
+                        onUp={() => setExercises((prev) => moveUpcomingGroup(prev, index, g.id, 'up'))}
+                        onDown={() => setExercises((prev) => moveUpcomingGroup(prev, index, g.id, 'down'))}
+                      />
+                    )}
+                  </div>
+                );
+              });
+            })()}
+            <Button onClick={() => setOrderOpen(false)} className="w-full rounded-xl h-12 mt-3 bg-brand text-brand-foreground hover:bg-brand/90">Done</Button>
+          </div>
         </SheetContent>
       </Sheet>
 
