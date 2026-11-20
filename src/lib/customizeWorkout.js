@@ -42,6 +42,32 @@ export function mapBlockExercises(srcBlocks, srcBlockExercises, dstBlocks, dstBl
   return map;
 }
 
+/** Maps each source block to its clone counterpart by position (blocks keep their order in a clone). */
+export function mapBlocks(srcBlocks, dstBlocks) {
+  const src = [...srcBlocks].sort(byNumber('order_index'));
+  const dst = [...dstBlocks].sort(byNumber('order_index'));
+  const map = new Map();
+  src.forEach((b, i) => { if (dst[i]) map.set(b.block_id, dst[i].block_id); });
+  return map;
+}
+
+/**
+ * Final block order for a clone: the blocks named in `listed` (clone block codes,
+ * in the order the athlete ran them), with any block not named (e.g. a rest-only
+ * block, which never shows up as an exercise) kept right after the block that
+ * preceded it originally.
+ */
+export function orderBlocks(cloneBlocks, listed) {
+  const original = [...cloneBlocks].sort(byNumber('order_index')).map((b) => b.block_id);
+  const result = listed.filter((id, i) => original.includes(id) && listed.indexOf(id) === i);
+  original.forEach((id, i) => {
+    if (result.includes(id)) return;
+    const prev = original.slice(0, i).reverse().find((p) => result.includes(p));
+    result.splice(prev ? result.indexOf(prev) + 1 : 0, 0, id);
+  });
+  return result;
+}
+
 const newCode = (prefix) => `${prefix}-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
 async function fetchStructure(workoutCode) {
@@ -86,16 +112,20 @@ export async function setPrescribedSets(blockExerciseCode, count, reps) {
  * @param {object} args.clone    the private copy (same row as `source` when it already was one)
  * @param {Record<string, object>} args.swaps  original block_exercise_id -> exercises row swapped in
  * @param {Record<string, {sets:number, reps:string|number}>} args.edits  block_exercise_id -> new sets/reps
- * @param {Array<{exercise:object, sets:number, reps:string|number}>} args.added  exercises added mid-workout, in order
+ * @param {Array<{key?:string, exercise:object, sets:number, reps:string|number}>} args.added  exercises added mid-workout, in order
+ * @param {string[]} [args.sequence]  the order the athlete ran the workout in, as block ids of `source` (`added:<key>` for an added exercise)
  */
-export async function applyOverridesToClone({ source, clone, swaps = {}, edits = {}, added = [] }) {
+export async function applyOverridesToClone({ source, clone, swaps = {}, edits = {}, added = [], sequence }) {
   const cloneStructure = await fetchStructure(clone.workout_id);
   let toClone;
+  let blockToClone;
   if (clone.id === source.id) {
     toClone = new Map(cloneStructure.blockExercises.map((be) => [be.block_exercise_id, be.block_exercise_id]));
+    blockToClone = new Map(cloneStructure.blocks.map((b) => [b.block_id, b.block_id]));
   } else {
     const srcStructure = await fetchStructure(source.workout_id);
     toClone = mapBlockExercises(srcStructure.blocks, srcStructure.blockExercises, cloneStructure.blocks, cloneStructure.blockExercises);
+    blockToClone = mapBlocks(srcStructure.blocks, cloneStructure.blocks);
   }
 
   for (const [origCode, exercise] of Object.entries(swaps)) {
@@ -125,8 +155,10 @@ export async function applyOverridesToClone({ source, clone, swaps = {}, edits =
   }
 
   let nextIndex = cloneStructure.blocks.length;
+  const addedBlockByKey = new Map();
   for (const item of added) {
     const blockCode = newCode('BLK');
+    if (item.key) addedBlockByKey.set(item.key, blockCode);
     const beCode = newCode('BE');
     const { error: blockError } = await supabase.from('workout_blocks').insert({
       workout_id: clone.workout_id,
@@ -149,5 +181,16 @@ export async function applyOverridesToClone({ source, clone, swaps = {}, edits =
     });
     if (beError) throw beError;
     await setPrescribedSets(beCode, item.sets, item.reps);
+  }
+
+  if (Array.isArray(sequence) && sequence.length) {
+    const listed = sequence
+      .map((id) => (id.startsWith('added:') ? addedBlockByKey.get(id.slice('added:'.length)) : blockToClone.get(id)))
+      .filter(Boolean);
+    const allBlocks = [...cloneStructure.blocks, ...[...addedBlockByKey.values()].map((block_id, i) => ({ block_id, order_index: cloneStructure.blocks.length + i }))];
+    const finalOrder = orderBlocks(allBlocks, listed);
+    for (let i = 0; i < finalOrder.length; i += 1) {
+      await supabase.from('workout_blocks').update({ order_index: i, block_label: String.fromCharCode(65 + i) }).eq('block_id', finalOrder[i]);
+    }
   }
 }

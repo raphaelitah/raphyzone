@@ -28,7 +28,7 @@ function builder(table) {
 }
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { from: (t) => builder(t), rpc: vi.fn() } }));
 
-const { mapBlockExercises, applyOverridesToClone, isPremiumRequiredError, isCustomWorkout } = await import('./customizeWorkout');
+const { mapBlockExercises, mapBlocks, orderBlocks, applyOverridesToClone, isPremiumRequiredError, isCustomWorkout } = await import('./customizeWorkout');
 
 const block = (block_id, order_index) => ({ block_id, order_index });
 const be = (block_exercise_id, block_id, order_in_block) => ({ block_exercise_id, block_id, order_in_block });
@@ -47,6 +47,24 @@ describe('mapBlockExercises', () => {
   it('skips exercises with no counterpart instead of throwing', () => {
     const map = mapBlockExercises([block('B1', 0)], [be('E1', 'B1', 0), be('E2', 'B1', 1)], [block('C1', 0)], [be('F1', 'C1', 0)]);
     expect(Object.fromEntries(map)).toEqual({ E1: 'F1' });
+  });
+});
+
+describe('mapBlocks / orderBlocks', () => {
+  it('maps blocks by position regardless of codes', () => {
+    const map = mapBlocks([block('B2', 1), block('B1', 0)], [block('C1', 0), block('C2', 1)]);
+    expect(Object.fromEntries(map)).toEqual({ B1: 'C1', B2: 'C2' });
+  });
+
+  it('orders by the listed blocks and keeps unlisted ones after their original predecessor', () => {
+    const blocks = [block('C1', 0), block('C2', 1), block('C3', 2), block('C4', 3)];
+    // C2 is rest-only (never listed); it stays right after C1, which moves.
+    expect(orderBlocks(blocks, ['C4', 'C1', 'C3'])).toEqual(['C4', 'C1', 'C2', 'C3']);
+  });
+
+  it('puts an unlisted first block at the start and ignores unknown or duplicate ids', () => {
+    const blocks = [block('C1', 0), block('C2', 1)];
+    expect(orderBlocks(blocks, ['C2', 'C2', 'nope'])).toEqual(['C1', 'C2']);
   });
 });
 
@@ -149,5 +167,34 @@ describe('applyOverridesToClone', () => {
       swaps: { F1: { exercise_code: 'EX7', name: 'Row' } },
     });
     expect(writes('block_exercises', 'update')[0].filters).toEqual([['eq', 'block_exercise_id', 'F1']]);
+  });
+
+  it('writes the order the athlete ran it in, placing an added exercise where it was done', async () => {
+    tables.workout_blocks = [
+      { block_id: 'B1', workout_id: 'W1', order_index: 0, rounds: 1 },
+      { block_id: 'B2', workout_id: 'W1', order_index: 1, rounds: 1 },
+      { block_id: 'C1', workout_id: 'WC', order_index: 0, rounds: 1 },
+      { block_id: 'C2', workout_id: 'WC', order_index: 1, rounds: 1 },
+    ];
+    await applyOverridesToClone({
+      source: { id: 'u-src', workout_id: 'W1' },
+      clone: { id: 'u-clone', workout_id: 'WC' },
+      added: [{ key: 'a', exercise: { exercise_code: 'EXA', name: 'Plank' }, sets: 3, reps: 30 }],
+      sequence: ['B2', 'added:a', 'B1'],
+    });
+    const addedBlock = writes('workout_blocks', 'insert')[0].payload.block_id;
+    const orderWrites = writes('workout_blocks', 'update')
+      .filter((c) => c.payload.order_index !== undefined)
+      .map((c) => [c.filters[0][2], c.payload.order_index, c.payload.block_label]);
+    expect(orderWrites).toEqual([['C2', 0, 'A'], [addedBlock, 1, 'B'], ['C1', 2, 'C']]);
+  });
+
+  it('leaves block order and labels alone when no sequence is given', async () => {
+    await applyOverridesToClone({
+      source: { id: 'u-src', workout_id: 'W1' },
+      clone: { id: 'u-clone', workout_id: 'WC' },
+      swaps: { E1: { exercise_code: 'EX9', name: 'Row' } },
+    });
+    expect(writes('workout_blocks', 'update')).toHaveLength(0);
   });
 });
