@@ -61,6 +61,9 @@ const DUAL_DUMBBELL_CALIBRATION_EXERCISES = new Set([
   'Dumbbell Bench Press',
 ]);
 
+// Flat dumbbell press per hand ≈ 0.4 × flat barbell press total (0.5 split × ~0.8 stability).
+const BARBELL_TOTAL_TO_DUMBBELL_PER_HAND = 0.4;
+
 function perImplementBaseline(calibrationExercise: string | undefined, weightKg: number): number {
   return DUAL_DUMBBELL_CALIBRATION_EXERCISES.has(calibrationExercise || '') ? weightKg / 2 : weightKg;
 }
@@ -255,6 +258,7 @@ Deno.serve(async (req: Request) => {
             dumbbell_substitutable: !!details?.dumbbell_substitutable,
             benchmark_pattern: details?.benchmark_pattern || null,
             benchmark_ratio: details?.benchmark_ratio || null,
+            implement_count: details?.implement_count || 1,
             block_type: block.block_type || null,
             position_in_block: positionInBlock,
             sets: setCount,
@@ -388,7 +392,20 @@ Deno.serve(async (req: Request) => {
         } else if (r.benchmark_pattern) {
           // Exercise-level override: derive from a specific calibration pattern
           // at its own per-implement ratio, rather than trusting its movement_pattern label.
-          const perImplement = perImplementForCalPattern(r.benchmark_pattern);
+          let perImplement = perImplementForCalPattern(r.benchmark_pattern);
+          // Horizontal Push ratios are defined relative to the flat press with the
+          // *same* implement. A dumbbell target calibrated against a barbell/machine
+          // total (not a dual-dumbbell exercise) must first be converted to a
+          // per-hand flat-dumbbell load: split across two hands, then discounted
+          // for dumbbell stabilization (~0.4 of the barbell total).
+          if (
+            perImplement != null
+            && r.benchmark_pattern === 'horizontal_push'
+            && (r.implement_count ?? 1) === 2
+            && !DUAL_DUMBBELL_CALIBRATION_EXERCISES.has(calibrationByCalPattern['horizontal_push']?.exercise || '')
+          ) {
+            perImplement = perImplement * BARBELL_TOTAL_TO_DUMBBELL_PER_HAND;
+          }
           baseline = perImplement != null ? perImplement * (r.benchmark_ratio ?? 1) : null;
         } else {
           const calPattern = movementPatternToCalPattern[r.movement_pattern || ''];
