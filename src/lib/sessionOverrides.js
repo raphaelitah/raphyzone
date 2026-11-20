@@ -124,3 +124,27 @@ export function isReordered(baseSequence, currentSequence) {
   const kept = currentSequence.filter((id) => base.has(id));
   return kept.length !== baseSequence.length || kept.some((id, i) => id !== baseSequence[i]);
 }
+
+/**
+ * Rebuilds what a finished session changed from its saved `progress`, so a past
+ * session can still be saved as a custom workout. `baseList` is the workout's
+ * exercises as saved (any objects with `key` = block_exercise_id, `block_id`, `order`).
+ * Sessions from before the order was recorded get it derived from where the
+ * added exercises were inserted.
+ * @returns {{ swaps: object, edits: object, added: object[], sequence: string[]|undefined, has: boolean }}
+ */
+export function sessionOverridesFromProgress(progress, baseList) {
+  const swaps = progress && typeof progress.swaps === 'object' && progress.swaps ? progress.swaps : {};
+  const edits = progress && typeof progress.edits === 'object' && progress.edits ? progress.edits : {};
+  const added = Array.isArray(progress?.added) ? progress.added : [];
+  const saved = Array.isArray(progress?.sequence) && progress.sequence.length ? progress.sequence : null;
+  const sequence = sequenceOf(applySequence(applyAddedExercises(baseList, added), saved));
+  const reordered = isReordered(sequenceOf(baseList), sequence);
+  return {
+    swaps,
+    edits,
+    added,
+    sequence: added.length || reordered ? sequence : undefined,
+    has: hasSessionOverrides({ swaps, edits, added, reordered }),
+  };
+}

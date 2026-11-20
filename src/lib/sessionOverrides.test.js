@@ -10,6 +10,7 @@ import {
   moveUpcomingGroup,
   applySequence,
   isReordered,
+  sessionOverridesFromProgress,
 } from './sessionOverrides';
 
 const ex = (key, block_id, order, extra = {}) => ({ key, block_id, order, exercise_name: key, ...extra });
@@ -124,5 +125,38 @@ describe('order helpers', () => {
 
   it('counts a reorder as an override', () => {
     expect(hasSessionOverrides({ reordered: true })).toBe(true);
+  });
+});
+
+describe('sessionOverridesFromProgress', () => {
+  const base = [ex('E1', 'B1', 0), ex('E2', 'B2', 1), ex('E3', 'B3', 2)];
+
+  it('reports nothing for a session with no changes', () => {
+    const out = sessionOverridesFromProgress({ index: 2, swaps: {}, edits: {}, added: [] }, base);
+    expect(out.has).toBe(false);
+    expect(out.sequence).toBeUndefined();
+  });
+
+  it('works for an old session that recorded additions but no order: derives it from where they were inserted', () => {
+    // How the real session looked: items added after E2, then after that addition, then after E3.
+    const added = [
+      { key: 'a', afterKey: 'E2', exercise: { exercise_code: 'X1', name: 'Bench' }, sets: 4, reps: '10' },
+      { key: 'b', afterKey: 'a', exercise: { exercise_code: 'X2', name: 'Incline' }, sets: 4, reps: '10' },
+      { key: 'c', afterKey: 'E3', exercise: { exercise_code: 'X3', name: 'Plank' }, sets: 3, reps: '60s' },
+    ];
+    const out = sessionOverridesFromProgress({ added, edits: {}, swaps: {} }, base);
+    expect(out.has).toBe(true);
+    expect(out.added).toBe(added);
+    expect(out.sequence).toEqual(['B1', 'B2', 'added:a', 'added:b', 'B3', 'added:c']);
+  });
+
+  it('prefers a recorded order and flags a pure reorder', () => {
+    const out = sessionOverridesFromProgress({ sequence: ['B1', 'B3', 'B2'] }, base);
+    expect(out.has).toBe(true);
+    expect(out.sequence).toEqual(['B1', 'B3', 'B2']);
+  });
+
+  it('tolerates missing progress', () => {
+    expect(sessionOverridesFromProgress(null, base).has).toBe(false);
   });
 });

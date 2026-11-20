@@ -31,13 +31,13 @@ import { handleAiQuotaError } from '@/lib/entitlements';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import ExercisePickerSheet from '@/components/ExercisePickerSheet';
 import { useEntitlement } from '@/hooks/useEntitlement';
-import { customizeWorkout, applyOverridesToClone, isPremiumRequiredError } from '@/lib/customizeWorkout';
+import { saveAsCustomWorkout, fetchOwnCustomNames } from '@/lib/customizeWorkout';
+import SaveCustomWorkoutForm from '@/components/SaveCustomWorkoutForm';
 import {
   applyEditToExercise, applyAddedExercises, insertAddedExercise, hasSessionOverrides, stableKey,
   groupExercises, sequenceOf, moveUpcomingGroup, applySequence, isReordered,
 } from '@/lib/sessionOverrides';
 import ReorderArrows from '@/components/ReorderArrows';
-import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -135,7 +135,9 @@ export default function WorkoutExecution() {
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [editDraft, setEditDraft] = useState(null); // { sets: string, reps: string } while the edit sheet is open
   const [customizeUpgradeOpen, setCustomizeUpgradeOpen] = useState(false);
-  const [keepState, setKeepState] = useState('idle'); // idle | saving | saved | error | dismissed
+  const [keepState, setKeepState] = useState('idle'); // idle | saved | dismissed
+  const [savedName, setSavedName] = useState('');
+  const [ownCustomNames, setOwnCustomNames] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
   const [justAddedId, setJustAddedId] = useState(null); // group id highlighted in the order sheet right after adding
   const baseSequenceRef = useRef([]); // block order as the saved workout has it, to tell whether the athlete reordered
@@ -1278,39 +1280,22 @@ export default function WorkoutExecution() {
     setEditDraft(null);
   };
 
-  // Writes this session's swaps, edits and additions into the athlete's own copy
-  // of the workout (cloning it first if it's still a shared catalog workout), and
-  // points this week's plan day at the copy so next time starts from it. A
-  // workout started from the library just gets saved to "My workouts".
-  const keepChanges = async () => {
-    setKeepState('saving');
-    try {
-      const source = workoutRef.current;
-      const clone = await customizeWorkout(workoutId);
-      await applyOverridesToClone({
-        source,
-        clone,
-        swaps,
-        edits,
-        added: added.map((a) => ({ key: a.key, exercise: a.exercise, sets: a.sets, reps: a.reps })),
-        // Only when the order changed, so an untouched workout keeps its block labels as they were.
-        sequence: (added.length || reordered) ? sequenceOf(exercises) : undefined,
-      });
-      await recomputeAndSaveFormatLabel(clone);
-      const slot = plan?.workouts?.find((x) => x.workout_id === workoutId);
-      if (plan && slot) {
-        if (clone.id !== workoutId) {
-          const updated = plan.workouts.map((x) => (x.workout_id === workoutId ? { ...x, workout_id: clone.id, workout_name: clone.name, locked: true } : x));
-          const { error: saveError } = await supabase.from('weekly_plans').update({ workouts: updated }).eq('id', plan.id);
-          if (saveError) throw saveError;
-        }
-        // Fresh AI weight suggestions for the changed exercises.
-        try { await supabase.functions.invoke('assignWorkoutWeights', { body: { weekly_plan_id: plan.id } }); } catch { /* recomputed on next start */ }
-      }
-      setKeepState('saved');
-    } catch (err) {
-      if (isPremiumRequiredError(err)) { setCustomizeUpgradeOpen(true); setKeepState('dismissed'); } else setKeepState('error');
-    }
+  // Saves this session's swaps, edits, additions and order as a NEW custom workout
+  // under a name the athlete picks (never over the workout they just ran, and never
+  // under its name), so it can be put on a plan later from My workouts. This
+  // session's plan day is left as it was.
+  const saveAsCustom = async (name) => {
+    const copy = await saveAsCustomWorkout({
+      source: workoutRef.current,
+      name,
+      swaps,
+      edits,
+      added: added.map((a) => ({ key: a.key, exercise: a.exercise, sets: a.sets, reps: a.reps })),
+      // Only when the order changed, so an untouched workout keeps its block labels as they were.
+      sequence: (added.length || reordered) ? sequenceOf(exercises) : undefined,
+    });
+    setSavedName(copy.name);
+    setKeepState('saved');
   };
 
   // Shared card for both AI-suggested and manually-searched substitute candidates,
@@ -1391,10 +1376,16 @@ export default function WorkoutExecution() {
   const offerKeep = isPremium && hasSessionOverrides({ swaps, edits, added, reordered });
   useEffect(() => {
     if (completion !== 'done') return;
-    if (offerKeep && (keepState === 'idle' || keepState === 'saving' || keepState === 'error')) return;
-    const id = setTimeout(() => navigate('/progress'), keepState === 'saved' ? 1200 : 1400);
+    if (offerKeep && keepState === 'idle') return;
+    const id = setTimeout(() => navigate('/progress'), keepState === 'saved' ? 2200 : 1400);
     return () => clearTimeout(id);
   }, [completion, offerKeep, keepState]);
+
+  // Names the save form must avoid, loaded as soon as there is something worth saving.
+  useEffect(() => {
+    if (!offerKeep || !user?.id) return;
+    fetchOwnCustomNames(user.id).then(setOwnCustomNames).catch(() => {});
+  }, [offerKeep, user?.id]);
 
   if (conflictSession) {
     return (
@@ -1503,22 +1494,22 @@ export default function WorkoutExecution() {
           <>
             <CheckCircle2 className="h-14 w-14 text-emerald-500" />
             <h1 className="text-xl font-semibold">Workout Completed!</h1>
-            {offerKeep && (keepState === 'idle' || keepState === 'saving' || keepState === 'error') ? (
+            {offerKeep && keepState === 'idle' ? (
               <div className="w-full max-w-sm space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  You changed this workout today. Keep your changes so next time starts from your version?
+                  You changed this workout today. Save your version as a custom workout so you can use it again?
                 </p>
-                {keepState === 'error' && <p className="text-sm text-destructive">Couldn&apos;t save your changes. Try again.</p>}
-                <Button onClick={keepChanges} disabled={keepState === 'saving'} className="w-full rounded-xl h-12 bg-brand text-brand-foreground hover:bg-brand/90">
-                  {keepState === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Keep my changes'}
-                </Button>
-                <Button variant="ghost" onClick={() => setKeepState('dismissed')} disabled={keepState === 'saving'} className="w-full rounded-xl h-11 text-muted-foreground">
-                  Not now
-                </Button>
+                <SaveCustomWorkoutForm
+                  sourceName={workout.name}
+                  takenNames={ownCustomNames}
+                  onSave={saveAsCustom}
+                  onCancel={() => setKeepState('dismissed')}
+                  onPremiumRequired={() => { setCustomizeUpgradeOpen(true); setKeepState('dismissed'); }}
+                />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {keepState === 'saved' ? 'Saved to My workouts and your plan. Taking you to your progress…' : 'Nice work. Taking you to your progress…'}
+                {keepState === 'saved' ? `Saved as \u201c${savedName}\u201d in My workouts. You can add it to your plan from there. Taking you to your progress…` : 'Nice work. Taking you to your progress…'}
               </p>
             )}
           </>

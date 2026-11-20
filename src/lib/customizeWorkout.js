@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabaseClient';
+import { recomputeAndSaveFormatLabel } from '@/lib/formatLabel';
+import { estimateStructureSeconds, adjustedDurationMinutes } from '@/lib/customDuration';
 
 // Customizing never edits a shared catalog workout. The first change clones it
 // into a private personal workout (public.customize_workout, premium only) and
@@ -14,6 +16,23 @@ export async function customizeWorkout(workoutUuid) {
 /** True when a customize/clone call failed because the caller isn't premium. */
 export function isPremiumRequiredError(error) {
   return error?.code === '42501' || /premium_required/.test(error?.message || '');
+}
+
+/** Saves a copy of a workout under a name the athlete chose (always a new workout, premium only). */
+export async function saveWorkoutCopy(workoutUuid, name) {
+  const { data, error } = await supabase.rpc('save_workout_copy', { p_workout_id: workoutUuid, p_name: name });
+  if (error) throw error;
+  return data;
+}
+
+export const isNameTakenError = (error) => error?.code === '23505' || /name_taken/.test(error?.message || '');
+export const isInvalidNameError = (error) => error?.code === '22023' || /invalid_name/.test(error?.message || '');
+
+/** Names of the athlete's own custom workouts (optionally leaving one out, e.g. the one being renamed). */
+export async function fetchOwnCustomNames(userId, excludeId = null) {
+  if (!userId) return [];
+  const { data } = await supabase.from('workouts').select('id, name').eq('owner_id', userId).eq('status', 'private');
+  return (data || []).filter((w) => w.id !== excludeId).map((w) => w.name);
 }
 
 export const isCustomWorkout = (workout) => !!workout && workout.status === 'private' && !!workout.owner_id;
@@ -193,4 +212,67 @@ export async function applyOverridesToClone({ source, clone, swaps = {}, edits =
       await supabase.from('workout_blocks').update({ order_index: i, block_label: String.fromCharCode(65 + i) }).eq('block_id', finalOrder[i]);
     }
   }
+}
+
+async function fetchStructureWithSets(workoutCode) {
+  const structure = await fetchStructure(workoutCode);
+  const beCodes = structure.blockExercises.map((be) => be.block_exercise_id);
+  const { data: sets } = beCodes.length
+    ? await supabase.from('prescribed_sets').select('*').in('block_exercise_id', beCodes)
+    : { data: [] };
+  return { ...structure, sets: sets || [] };
+}
+
+/**
+ * Re-estimates a custom workout's duration from its current structure: the
+ * catalog workout's authored duration, plus however much longer or shorter the
+ * copy is (see customDuration.js). Idempotent: always measured against the
+ * original, never against a previous estimate. Returns the minutes, or null if
+ * the workout isn't a copy of anything.
+ */
+export async function recomputeAndSaveDuration(workout) {
+  if (!workout?.source_workout_id) return null;
+  const [{ data: root }, source, copy] = await Promise.all([
+    supabase.from('workouts').select('est_duration_min').eq('workout_id', workout.source_workout_id).maybeSingle(),
+    fetchStructureWithSets(workout.source_workout_id),
+    fetchStructureWithSets(workout.workout_id),
+  ]);
+  const minutes = adjustedDurationMinutes(
+    root?.est_duration_min,
+    estimateStructureSeconds(source.blocks, source.blockExercises, source.sets),
+    estimateStructureSeconds(copy.blocks, copy.blockExercises, copy.sets)
+  );
+  await supabase.from('workouts').update({ est_duration_min: minutes }).eq('id', workout.id);
+  return minutes;
+}
+
+/** Deletes one of the athlete's own custom workouts and everything under it. */
+export async function deleteCustomWorkout(workout) {
+  const { blocks, blockExercises } = await fetchStructure(workout.workout_id);
+  const beCodes = blockExercises.map((be) => be.block_exercise_id);
+  if (beCodes.length) await supabase.from('prescribed_sets').delete().in('block_exercise_id', beCodes);
+  if (blocks.length) {
+    await supabase.from('block_exercises').delete().in('block_id', blocks.map((b) => b.block_id));
+    await supabase.from('workout_blocks').delete().eq('workout_id', workout.workout_id);
+  }
+  await supabase.from('workouts').delete().eq('id', workout.id);
+}
+
+/**
+ * Saves a workout, with the changes the athlete made to it, as a NEW custom
+ * workout under the name they picked. The original (catalog workout or earlier
+ * copy) is never touched. If writing the changes fails part-way the half-built
+ * copy is removed, so the name isn't left taken by a broken workout.
+ */
+export async function saveAsCustomWorkout({ source, name, swaps, edits, added, sequence }) {
+  const copy = await saveWorkoutCopy(source.id, name);
+  try {
+    await applyOverridesToClone({ source, clone: copy, swaps, edits, added, sequence });
+    await recomputeAndSaveFormatLabel(copy);
+    await recomputeAndSaveDuration(copy);
+  } catch (err) {
+    try { await deleteCustomWorkout(copy); } catch { /* best effort */ }
+    throw err;
+  }
+  return copy;
 }
