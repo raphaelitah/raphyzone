@@ -4,7 +4,7 @@
 -- Ratios are relative to the flat press with the same implement; dumbbell variants
 -- are additionally converted to per-hand in assignWorkoutWeights.
 
-update public.exercises set benchmark_pattern = 'horizontal_push', benchmark_ratio = 0.78
+update public.exercises set benchmark_pattern = 'horizontal_push', benchmark_ratio = 0.8
 where benchmark_pattern is null
   and name in ('Incline Barbell Bench Press', 'Pause Incline Bench Press', 'Multi Grip Incline Bench Press');
 
