@@ -22,8 +22,8 @@ const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout
 
 // What Raphyzone is, in one place. The model may use these facts but must never recite them as a list.
 const BRAND = `THE PITCH (use these exact words, once, in the turn): "Raphyzone removes the mental load."
-That sentence is the whole pitch. Do not add other claims about the app (no scheduling, no tracking, no "hundreds of workouts", no personalised plans, no equipment matching): the workout shown is the proof. The only exception is the feature-spotlight carousel, whose topic is one app feature; there use only the FACTS given, including what is free vs Premium.
-You can try it for free (never mention a number of days or the word trial).`;
+That sentence is the whole pitch. Do not add other claims about the app (no scheduling, no tracking, no "hundreds of workouts", no personalised plans, no equipment matching): the workout shown is the proof. The only exception is the feature-spotlight carousel, whose topic is one app feature; there use only the FACTS given, and nothing about plans or pricing.
+The closing invitation to try it for free is the only place free/paid may come up (never a number of days or the word trial; never Premium, plans, tiers or prices).`;
 
 // The arc every post follows. Reels map it onto scenes, carousels onto slides.
 const STORY = `STORY RULES (this is the most important part of the brief):
@@ -102,6 +102,7 @@ function validatePost(kind, out, ctx = {}) {
   const spoken = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
   if (/\b(I|I'm|I've|I'll|I'd|me|my|mine)\b/.test(spoken.replace(/[’]/g, "'"))) throw new Error('first person used; write to "you"');
   const everyText = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
+  if (/\bpremium\b|\bpaid\b|\bpaywall\b|\bupgrade\b|\bsubscri|free (?:plan|tier|version|account)|\b(?:€|\$|£)\s?\d/i.test(everyText)) throw new Error('mentions plans/pricing; showcase the feature only');
   if (/\b30[- ]?days?\b|free trial/i.test(everyText)) throw new Error('mentions a number of days / free trial; just say try it for free');
   if (!Array.isArray(out.hashtags) || out.hashtags.length < 5) throw new Error('too few hashtags');
   if (isReel) {
@@ -192,7 +193,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, feature }) {
     return {
       workoutIds: [],
       script: { feature_id: feature.id },
-      user: `Write a feature-spotlight carousel about ONE thing Raphyzone does. Start with a moment the viewer recognises (${feature.moment}). Then show how Raphyzone handles it so they do not have to, and end by inviting them to try it for free. Slides read as one short story, not a lecture. If the FACTS say what is free and what is Premium, say it plainly and honestly in one slide (no hard sell, no prices, no number of days). ${feature.avoid} Use ONLY the FACTS below about the app; do not mention any other feature.\nFACTS:\n${featureFacts(feature)}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a feature-spotlight carousel about ONE thing Raphyzone does. Start with a moment the viewer recognises (${feature.moment}). Then show how Raphyzone handles it so they do not have to, and end by inviting them to try it for free. Slides read as one short story, not a lecture. Do not mention plans, tiers, Premium, paid or free versions, limits or prices anywhere: only showcase what the feature does. ${feature.avoid} Use ONLY the FACTS below about the app; do not mention any other feature.\nFACTS:\n${featureFacts(feature)}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
