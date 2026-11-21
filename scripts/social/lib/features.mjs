@@ -1,5 +1,7 @@
 // Feature registry: the single source of truth for what Raphyzone can do. The Friday writer picks one entry per "feature spotlight" post
-// and passes it to the model as FACTS, so posts never invent app capabilities.
+// and passes it to the model as an idea seed plus FACTS, so posts draw interest from real
+// features and never invent app capabilities. The storytelling format, voice and hook rules
+// stay exactly as defined in write-week.mjs (STORY / VOICE); this file never changes them.
 //
 // KEEP THIS IN SYNC WITH THE APP. When you ship, change or re-tier a feature, edit it
 // here (the real tier lives in src/lib/entitlements.js and src/components/UpgradeSheet.jsx). Add entries freely: the picker rotates

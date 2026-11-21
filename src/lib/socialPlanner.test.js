@@ -6,11 +6,9 @@ const seq = (xs) => { let i = 0; return () => xs[i++ % xs.length]; };
 const ids = (plans) => plans.map((p) => p.slot);
 
 describe('planWeek', () => {
-  it('plans 7 slots with distinct angles and styles', () => {
+  it('plans 7 slots with distinct angles', () => {
     const { plans } = planWeek({});
     expect(ids(plans)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    const styles = plans.map((p) => p.styleId);
-    expect(new Set(styles).size).toBe(styles.length);
     const angles = plans.map((p) => p.angleId).filter(Boolean);
     expect(new Set(angles).size).toBe(angles.length);
   });
@@ -36,19 +34,17 @@ describe('planWeek', () => {
     expect(spot[0].featureId).toBe(FEATURES[FEATURES.length - 1].id);
   });
 
-  it('leaves fixed (published/approved) posts alone and avoids their angle, style and feature', () => {
-    const fixed = [{ slot: 1, kind: 'reel_workout', script: { angle_id: 'no_idea', style_id: 'two_voices' } }];
+  it('leaves fixed (published/approved) posts alone and avoids their angle and feature', () => {
+    const fixed = [{ slot: 1, kind: 'reel_workout', script: { angle_id: 'no_idea' } }];
     const { plans } = planWeek({ fixed, rng: seq([0, 0.5, 0.9]) });
     expect(ids(plans)).not.toContain(1);
     expect(plans.some((p) => p.angleId === 'no_idea')).toBe(false);
-    expect(plans.some((p) => p.styleId === 'two_voices')).toBe(false);
   });
 
-  it('does not reuse a recent angle or style while fresh ones exist', () => {
-    const history = [{ script: { angle_id: 'no_idea', style_id: 'inner_monologue' } }];
+  it('does not reuse a recent angle while fresh ones exist', () => {
+    const history = [{ script: { angle_id: 'no_idea' } }];
     const { plans } = planWeek({ history });
     expect(plans.some((p) => p.angleId === 'no_idea')).toBe(false);
-    expect(plans.some((p) => p.styleId === 'inner_monologue')).toBe(false);
   });
 });
 

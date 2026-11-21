@@ -14,7 +14,7 @@ import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { ANGLES_BY_ID } from './lib/angles.mjs';
 import { FEATURES, featureFacts } from './lib/features.mjs';
-import { STYLES, tooSimilar } from './lib/variety.mjs';
+import { tooSimilar } from './lib/variety.mjs';
 import { planWeek, TEMPLATE } from './lib/planner.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
@@ -193,7 +193,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, feature }) {
     return {
       workoutIds: [],
       script: { feature_id: feature.id },
-      user: `Write a feature-spotlight carousel about ONE thing Raphyzone does. Start with a moment the viewer recognises (${feature.moment}). Then show how Raphyzone handles it so they do not have to, and end by inviting them to try it for free. Slides read as one short story, not a lecture. Do not mention plans, tiers, Premium, paid or free versions, limits or prices anywhere: only showcase what the feature does. ${feature.avoid} Use ONLY the FACTS below about the app; do not mention any other feature.\nFACTS:\n${featureFacts(feature)}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a carousel in the same story format as always, using one Raphyzone feature as the idea behind it. The FEATURE FACTS are only the seed: build a hook from the recognisable moment (${feature.moment}), stay in the feeling, then the turn with the exact pitch line, then show what the feature does so they do not have to figure it out themselves, and end by inviting them to try it for free. Follow the STORY RULES exactly; the feature is the topic, not a feature list or a product tour. Slides read as one short story, not a lecture. ${feature.avoid} Do not mention plans, tiers, Premium, paid or free versions, limits or prices; only what the feature does. Use ONLY the FACTS below about the app; do not mention any other feature.\nFEATURE FACTS:\n${featureFacts(feature)}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
@@ -232,8 +232,8 @@ async function main() {
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
   const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
 
-  // The planner decides the week: kind, feature, angle and style per slot, from history, performance and feature coverage.
-  // posts being redone count as the freshest history, so their angle/style/feature is not picked again
+  // The planner decides the week: kind, feature and angle per slot, from history, performance and feature coverage.
+  // posts being redone count as the freshest history, so their angle/feature is not picked again
   const todoNums = new Set(todoSlots.map((t) => t.slot));
   const fixed = (existing || []).filter((p) => !todoNums.has(p.slot));
   const { plans: allPlans, notes, coverage } = planWeek({ history: [...(existing || []).filter((p) => todoNums.has(p.slot)), ...(recent || [])], fixed, perfRows });
@@ -253,12 +253,11 @@ async function main() {
     try {
     const cur = bySlot.get(plan.slot);
     const angle = plan.angleId ? ANGLES_BY_ID[plan.angleId] : null;
-    const style = STYLES.find((x) => x.id === plan.styleId);
     const feature = plan.featureId ? FEATURES.find((x) => x.id === plan.featureId) : null;
     const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, feature });
     built.workoutIds.forEach((id) => used.add(id));
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
-    built.user += hookNote + `\nTELL IT IN THIS STYLE (how it is told, not what it claims; it must still follow the story rules and FACTS): ${style.text}`;
+    built.user += hookNote;
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
     const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes, otherHooks }), log: logCall });
     const { caption, hashtags } = finalize(out);
@@ -273,7 +272,7 @@ async function main() {
       caption,
       hashtags,
       slides: isReel ? [] : out.slides,
-      script: { ...(built.script ?? {}), ...(isReel ? { scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : {}), angle_id: angle?.id, style_id: style.id, ...(feature ? { feature_id: feature.id } : {}) },
+      script: { ...(built.script ?? {}), ...(isReel ? { scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : {}), angle_id: angle?.id, ...(feature ? { feature_id: feature.id } : {}) },
       source_workout_ids: built.workoutIds,
       asset_urls: [],
       render_status: 'pending',
