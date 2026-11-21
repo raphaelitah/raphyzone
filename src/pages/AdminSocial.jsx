@@ -11,7 +11,7 @@ const KIND_LABEL = {
   reel_workout: 'Reel · Workout decided',
   reel_travel: 'Reel · Travel training',
   carousel_humour: 'Carousel · Decision fatigue',
-  carousel_smarter: 'Carousel · Train smarter',
+  carousel_smarter: 'Carousel · Feature spotlight',
   single_split: 'Image · Split to save',
 };
 

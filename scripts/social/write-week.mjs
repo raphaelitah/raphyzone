@@ -13,6 +13,7 @@
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
+import { pickFeature, featureFacts } from './lib/features.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
 // slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
@@ -30,7 +31,7 @@ const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout
 
 // What Raphyzone is, in one place. The model may use these facts but must never recite them as a list.
 const BRAND = `THE PITCH (use these exact words, once, in the turn): "Raphyzone removes the mental load."
-That sentence is the whole pitch. Do not add other claims about the app (no scheduling, no tracking, no "hundreds of workouts", no personalised plans, no equipment matching): the workout shown is the proof. The only exception is the progression carousel, whose topic is how the app logs sets and suggests weights; there use only the FACTS.
+That sentence is the whole pitch. Do not add other claims about the app (no scheduling, no tracking, no "hundreds of workouts", no personalised plans, no equipment matching): the workout shown is the proof. The only exception is the feature-spotlight carousel, whose topic is one app feature; there use only the FACTS given, including what is free vs Premium.
 You can try it for free (never mention a number of days or the word trial).`;
 
 // The arc every post follows. Reels map it onto scenes, carousels onto slides.
@@ -84,17 +85,6 @@ async function performanceContext(supabase) {
   const score = (r) => ((r.saves ?? 0) * 2 + (r.shares ?? 0) * 3) / Math.max(r.reach ?? 1, 1);
   const sorted = [...rows].sort((a, b) => score(b) - score(a));
   return `Best recent posts (saves+shares per reach):\n${recentLines(sorted.slice(0, 3))}\nWeakest:\n${recentLines(sorted.slice(-2))}\nRepeat what worked in style, not in wording.`;
-}
-
-async function progressionFacts(supabase) {
-  const since = new Date(Date.now() - 30 * 86400000).toISOString();
-  const { count: sessions } = await supabase.from('workout_sessions').select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('created_date', since);
-  return [
-    'Raphyzone logs every set: the weight you used and how it felt (easy / normal / hard / failed).',
-    'Progression rule in the app: after 2 or more recent sessions rated "easy" at the same weight, it proposes a bump: +2.5 kg for upper-body lifts, +5 kg for lower-body lifts. After 2+ "hard" or "failed" it proposes going down. You approve or ignore each suggestion.',
-    'Starting weights come from a quick strength calibration, scaled by the program difficulty you pick, not a guess.',
-    `Across all users, ${sessions ?? 0} workouts were completed in the last 30 days (use only if it makes a point; do not inflate).`,
-  ].join('\n');
 }
 
 const NUM_WORDS = { five: 5, ten: 10, fifteen: 15, twenty: 20, 'twenty-five': 25, thirty: 30, 'thirty-five': 35, forty: 40, 'forty-five': 45, fifty: 50, sixty: 60, ninety: 90 };
@@ -153,7 +143,7 @@ function finalize(out) {
   return { caption: `${body}\n\n${CTA}`, hashtags: [...new Set(tags)] };
 }
 
-async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }) {
+async function buildPrompt({ plan, catalog, recentIds, used, perf, feature }) {
   const { kind, variant } = plan;
   if (kind === 'reel_workout') {
     const scenarios = [...GYM_SCENARIOS].sort(() => Math.random() - 0.5);
@@ -199,9 +189,11 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
     };
   }
   if (kind === 'carousel_smarter') {
+    // Feature spotlight (kind name kept so no DB migration is needed): one entry from lib/features.mjs.
     return {
       workoutIds: [],
-      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, a notes app full of half-remembered, crossed-out weights; do not write any specific weights, reps or exercises into those notes). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. The only numbers allowed are the +2.5 kg / +5 kg bumps and the 2-session rule from the FACTS; describe everything else without numbers. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      script: { feature_id: feature.id },
+      user: `Write a feature-spotlight carousel about ONE thing Raphyzone does. Start with a moment the viewer recognises (${feature.moment}). Then show how Raphyzone handles it so they do not have to, and end by inviting them to try it for free. Slides read as one short story, not a lecture. If the FACTS say what is free and what is Premium, say it plainly and honestly in one slide (no hard sell, no prices, no number of days). ${feature.avoid} Use ONLY the FACTS below about the app; do not mention any other feature.\nFACTS:\n${featureFacts(feature)}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
@@ -235,11 +227,12 @@ async function main() {
   });
   if (!todo.length) { console.log(`Week ${weekStart}: nothing to write.`); return; }
 
-  const [catalog, perf, progression] = await Promise.all([loadCatalog(supabase), performanceContext(supabase), progressionFacts(supabase)]);
+  const [catalog, perf] = await Promise.all([loadCatalog(supabase), performanceContext(supabase)]);
   const { data: recent } = await supabase.from('social_posts').select('source_workout_ids, hook, script, week_start, slot').gte('week_start', addDays(weekStart, -56)).neq('week_start', weekStart).order('week_start', { ascending: false }).order('slot', { ascending: false });
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
   // most recent first; the angle of a post being redone counts as the freshest so it is not picked again
   const recentAngles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id), ...(recent || []).map((r) => r.script?.angle_id)].filter(Boolean);
+  const recentFeatures = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.feature_id), ...(recent || []).map((r) => r.script?.feature_id)].filter(Boolean);
   const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
   const takenAngles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id).filter(Boolean));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
@@ -251,7 +244,8 @@ async function main() {
     const cur = bySlot.get(plan.slot);
     const angle = pickAngle(plan, recentAngles, takenAngles);
     if (angle) takenAngles.add(angle.id);
-    const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, progression });
+    const feature = plan.kind === 'carousel_smarter' ? pickFeature(recentFeatures) : null;
+    const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, feature });
     built.workoutIds.forEach((id) => used.add(id));
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
     built.user += hookNote;
