@@ -38,6 +38,7 @@ import {
   groupExercises, sequenceOf, moveUpcomingGroup, applySequence, isReordered,
 } from '@/lib/sessionOverrides';
 import ReorderArrows from '@/components/ReorderArrows';
+import { pendingLogToSave, restorePendingLog } from '@/lib/pendingLog';
 import {
   buildBlocksByWorkout,
   buildBlockExercisesByBlock,
@@ -235,10 +236,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added, sequence: sequenceKey ? sequenceKey.split('|') : [] } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added, sequence: sequenceKey ? sequenceKey.split('|') : [], logPrompt: pendingLogToSave(logPrompt) } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added, sequenceKey]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added, sequenceKey, logPrompt]);
 
   const pendingLoadRef = useRef(null);
   // The viewed week's equipment override, if any (weekly_plans.setup_equipment); sent along with
@@ -458,6 +459,14 @@ export default function WorkoutExecution() {
       if (savedProgress?.warmupDismissed) setWarmupDismissed(true);
       if (savedProgress?.warmupOutcome) setWarmupOutcome(savedProgress.warmupOutcome);
       if (savedProgress?.panel && typeof savedProgress.panel === 'object') setPanelProgress(savedProgress.panel);
+      // An exercise whose last set was done but whose result prompt was still open when the
+      // screen was left or reloaded: reopen it, so the finished exercise isn't lost.
+      const pendingPrompt = restorePendingLog(savedProgress?.logPrompt, finalExercises, hydrated);
+      if (pendingPrompt) {
+        setBlockLogEntries(pendingPrompt.entries);
+        setLogPrompt({ keys: pendingPrompt.keys, blockId: pendingPrompt.blockId, review: false });
+        if (pendingPrompt.index !== -1) { setIndex(pendingPrompt.index); indexRef.current = pendingPrompt.index; }
+      }
     }
 
     progressHydratedRef.current = true;
@@ -782,6 +791,14 @@ export default function WorkoutExecution() {
   // making the athlete redo the sets — completed means completed.
   const goToExercise = (i) => {
     flushCurrentTime();
+    // Leaving an exercise whose result prompt is still open: save what's entered (the sets
+    // are done) rather than dropping it, which used to lose the whole exercise.
+    if (logPrompt && !logPrompt.review && !logPrompt.keys.includes(exercises[i]?.key)) {
+      applyLogEntries(logPrompt.keys);
+      if (logPrompt.blockId) setCompletedBlockTimers((prev) => new Set(prev).add(logPrompt.blockId));
+      setBlockLogEntries({});
+      setLogPrompt(null);
+    }
     setIndex(i);
     const target = exercises[i];
     if (!target) { setLogPrompt(null); return; }
@@ -830,9 +847,7 @@ export default function WorkoutExecution() {
     if (isLast) completeWorkout(); else goNext();
   };
 
-  const handleSaveLogPrompt = () => {
-    if (!logPrompt || saving) return;
-    const { keys, blockId, review } = logPrompt;
+  const applyLogEntries = (keys) => {
     keys.forEach((key) => {
       const entry = blockLogEntries[key] || {};
       // A time the athlete entered (or confirmed) replaces the tracked exercise time.
@@ -846,6 +861,12 @@ export default function WorkoutExecution() {
         duration_seconds: entry.duration_seconds ?? null,
       });
     });
+  };
+
+  const handleSaveLogPrompt = () => {
+    if (!logPrompt || saving) return;
+    const { keys, blockId, review } = logPrompt;
+    applyLogEntries(keys);
     // Editing something already completed: keep the same edit screen open
     // (with what was just saved) instead of clearing it — landing back here
     // is driven by completion state, not this one-shot prompt, so clearing
