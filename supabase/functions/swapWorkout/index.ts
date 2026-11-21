@@ -5,7 +5,7 @@ import { callLLM } from '../_shared/llm.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, computeEquipmentByWorkoutId, activityMatchesWorkout } from '../_shared/planContext.ts';
 import { verifyWorkoutReasons } from '../_shared/verifyWorkoutReasons.ts';
-import { consumeAiAction, refundAiAction, loadApprovedCatalog, type AiQuota } from '../_shared/entitlements.ts';
+import { consumeAiAction, refundAiAction, loadPlannerCatalog, type AiQuota } from '../_shared/entitlements.ts';
 
 // Ported from base44/functions/swapWorkout — unchanged behavior, Supabase data/LLM layer.
 Deno.serve(async (req: Request) => {
@@ -27,7 +27,7 @@ Deno.serve(async (req: Request) => {
     const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: weeklyPlans }] = await Promise.all([
       supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
       supabase.from('workout_feedback').select('*').eq('user_id', user.id),
-      loadApprovedCatalog(supabase, user.id),
+      loadPlannerCatalog(supabase, user.id),
       week_start_date
         ? supabase.from('weekly_plans').select('context_answer, context_notes, setup_equipment').eq('user_id', user.id).eq('week_start_date', week_start_date)
         : Promise.resolve({ data: null as any }),

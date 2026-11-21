@@ -3,7 +3,7 @@ import { buildProfileContext, buildWorkoutCatalog, filterCatalogForSelection, co
 import { verifyWorkoutReasons } from './verifyWorkoutReasons.ts';
 import { generateWarmup } from './warmupGenerator.ts';
 import { resolveWorkoutExercises } from './resolveWorkoutExercises.ts';
-import { loadApprovedCatalog } from './entitlements.ts';
+import { loadPlannerCatalog } from './entitlements.ts';
 import { loadExerciseCatalog } from './exerciseCatalog.ts';
 
 export interface GeneratePlanRequest {
@@ -31,7 +31,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
   const [{ data: profiles }, { data: feedback }, { data: workouts }, { data: exerciseCatalog }, { data: existing }] = await Promise.all([
     supabase.from('athlete_profiles').select('*').eq('user_id', user.id),
     supabase.from('workout_feedback').select('*').eq('user_id', user.id),
-    loadApprovedCatalog(supabase, user.id),
+    loadPlannerCatalog(supabase, user.id),
     loadExerciseCatalog(supabase),
     supabase.from('weekly_plans').select('*').eq('user_id', user.id).eq('week_start_date', weekStartDate),
   ]);
@@ -94,6 +94,7 @@ export async function runPlanGeneration(supabase: any, user: { id: string }, bod
   const equipmentByWorkoutId = await computeEquipmentByWorkoutId(supabase, (workouts || []).map((w: any) => w.workout_id));
   const filteredWorkouts = filterCatalogForSelection(workouts || [], effectiveProfile, [], true, equipmentByWorkoutId);
   const catalog = buildWorkoutCatalog(filteredWorkouts, equipmentByWorkoutId);
+  const hasOwnWorkouts = filteredWorkouts.some((w: any) => w.status === 'private');
 
   const openSlots = baseSlots.filter((s) => !lockedDays.has(s.day) && !pastRestDays.has(s.day));
 
@@ -116,7 +117,7 @@ YOUR TASK, for each day listed above:
    - For each TRAIN day assigned "Strength / Muscular Endurance" modality, also set a concise "focus" that balances movement patterns across the week and respects body_focus/performance_focus.
    - You MAY downgrade a train day to "rest" ONLY if the week's context clearly requires it (e.g. recovery issue, schedule change). Never upgrade a rest or activity day. Never change an activity day or its activity.
 2. SELECTION — Once a day's modality is decided, pick exactly one catalog workout for it:
-   - TRAIN days: pick exactly one workout_id matching that day's modality. No duplicate workout_ids across the entire week (train days AND guided activity days combined).
+   - TRAIN days: pick exactly one workout_id matching that day's modality. No duplicate workout_ids across the entire week (train days AND guided activity days combined).${hasOwnWorkouts ? '\n   - Rows whose name ends in "[my workout]" are the athlete\'s own saved versions of a workout. Treat them like any other candidate, but never pick a saved version and the workout it was based on in the same week.' : ''}
    - ACTIVITY days: check if the catalog contains a workout whose "modality" matches the user's activity (e.g. activity "Running" → "Cyclical / Monostructural"; "Yoga" → "Mobility / Flexibility"; "Cycling" → "Cyclical / Monostructural"). If a matching-modality workout exists, assign the best match as that day's workout_id with a reason. If NO matching-modality workout exists, leave workout_id unset for that day and instead add it to "suggestions" with 2-3 closest conditioning/cardio catalog workout ids as optional guidance.
    - Never assign a workout to a rest day.
    - Match each day's modality/focus/activity, the athlete's desired duration, and goal.
