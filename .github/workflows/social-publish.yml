@@ -33,3 +33,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          # Repo variable INSTAGRAM_STORIES: set to 'off' to stop posting the same-day story teaser.
+          INSTAGRAM_STORIES: ${{ vars.INSTAGRAM_STORIES }}
