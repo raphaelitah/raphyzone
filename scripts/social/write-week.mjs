@@ -120,14 +120,25 @@ function recentLines(rows) {
 async function performanceContext(supabase) {
   const { data } = await supabase
     .from('social_weekly_metrics')
-    .select('reach, saves, shares, social_posts(kind, hook)')
+    .select('post_id, week_start, reach, saves, shares, profile_visits, raw, social_posts(kind, hook)')
     .order('week_start', { ascending: false })
-    .limit(14);
-  const rows = (data || []).filter((r) => r.social_posts).map((r) => ({ ...r.social_posts, reach: r.reach, saves: r.saves, shares: r.shares }));
+    .limit(400);
+  // newest snapshot per post
+  const latest = new Map();
+  for (const r of data || []) if (r.social_posts && !latest.has(r.post_id)) latest.set(r.post_id, r);
+  const rows = [...latest.values()].map((r) => ({ ...r.social_posts, reach: r.reach, saves: r.saves, shares: r.shares, follows: r.raw?.follows ?? 0, visits: r.profile_visits ?? 0 }));
   if (!rows.length) return 'No performance data yet.';
-  const score = (r) => ((r.saves ?? 0) * 2 + (r.shares ?? 0) * 3) / Math.max(r.reach ?? 1, 1);
+  // follows count most (the goal), then shares and saves, then profile visits; per reach so big reels do not win by size alone
+  const score = (r) => ((r.follows ?? 0) * 6 + (r.saves ?? 0) * 2 + (r.shares ?? 0) * 3 + (r.visits ?? 0)) / Math.max(r.reach ?? 1, 1);
   const sorted = [...rows].sort((a, b) => score(b) - score(a));
-  return `Best recent posts (saves+shares per reach):\n${recentLines(sorted.slice(0, 3))}\nWeakest:\n${recentLines(sorted.slice(-2))}\nRepeat what worked in style, not in wording.`;
+  const byKind = {};
+  for (const r of rows) (byKind[r.kind] ||= []).push(r);
+  const kindLine = Object.entries(byKind)
+    .map(([k, list]) => ({ k, n: list.length, score: list.reduce((a, r) => a + score(r), 0) / list.length }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => `${x.k} (${x.n} posts)`)
+    .join(' > ');
+  return `Formats ranked by follows, shares and saves per reach: ${kindLine}.\nBest recent posts:\n${recentLines(sorted.slice(0, 3))}\nWeakest:\n${recentLines(sorted.slice(-2))}\nRepeat what worked in style, not in wording.`;
 }
 
 async function progressionFacts(supabase) {
