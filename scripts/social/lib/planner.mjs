@@ -1,10 +1,11 @@
 // Content planner for the weekly Instagram run. Looks at what was posted before, what
 // performed, and which app features have (not) been featured lately, then decides the
-// week's 7 posts: kind, feature, angle, and why. The writer
+// week's 7 posts: kind, feature, angle, storytelling style, and why. The writer
 // (write-week.mjs) only writes the copy around those decisions.
 //
 // Pure functions (no I/O) so the logic is unit-tested in planner.test.mjs.
 import { pickAngle } from './angles.mjs';
+import { pickStyle } from './variety.mjs';
 import { FEATURES, pickFeature } from './features.mjs';
 
 // Baseline week. slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
@@ -62,9 +63,11 @@ export function planWeek({ history = [], fixed = [], perfRows = [], rng = Math.r
     }
   }
 
-  // 2. Per slot: feature (spotlights only), angle. "Taken" starts from fixed posts so nothing repeats in the week.
+  // 2. Per slot: feature (spotlights only), angle, style. "Taken" starts from fixed posts so nothing repeats in the week.
   const takenAngles = new Set(fixed.map((p) => p.script?.angle_id).filter(Boolean));
+  const takenStyles = new Set(fixed.map((p) => p.script?.style_id).filter(Boolean));
   const takenFeatures = new Set(fixed.map((p) => p.script?.feature_id).filter(Boolean));
+  const recentStyles = history.map((r) => r.script?.style_id).filter(Boolean);
   const recentAngles = history.map((r) => r.script?.angle_id).filter(Boolean);
 
   const plans = [];
@@ -84,6 +87,8 @@ export function planWeek({ history = [], fixed = [], perfRows = [], rng = Math.r
     }
     const angle = pickAngle(plan, recentAngles, takenAngles, rng);
     if (angle) { plan.angleId = angle.id; takenAngles.add(angle.id); reasons.push(`angle ${angle.id}`); }
+    const style = pickStyle(recentStyles, takenStyles, rng);
+    plan.styleId = style.id; takenStyles.add(style.id); reasons.push(`style ${style.id}`);
     plan.rationale = reasons.join('; ');
     plans.push(plan);
   }
