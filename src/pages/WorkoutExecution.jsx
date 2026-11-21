@@ -138,6 +138,7 @@ export default function WorkoutExecution() {
   const [customizeUpgradeOpen, setCustomizeUpgradeOpen] = useState(false);
   const [keepState, setKeepState] = useState('idle'); // idle | saved | dismissed
   const [savedName, setSavedName] = useState('');
+  const [savedAsInfo, setSavedAsInfo] = useState(null); // { id, name } of the custom workout this session was saved as
   const [ownCustomNames, setOwnCustomNames] = useState([]);
   const [orderOpen, setOrderOpen] = useState(false);
   const [justAddedId, setJustAddedId] = useState(null); // group id highlighted in the order sheet right after adding
@@ -236,10 +237,10 @@ export default function WorkoutExecution() {
   useEffect(() => {
     if (!progressHydratedRef.current || !sessionIdRef.current) return;
     supabase.from('workout_sessions')
-      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added, sequence: sequenceKey ? sequenceKey.split('|') : [], logPrompt: pendingLogToSave(logPrompt) } })
+      .update({ progress: { index, completedBlockIds: [...completedBlockTimers], warmupDismissed, warmupOutcome, panel: panelProgress, swaps, edits, added, sequence: sequenceKey ? sequenceKey.split('|') : [], logPrompt: pendingLogToSave(logPrompt), savedAs: savedAsInfo } })
       .eq('id', sessionIdRef.current)
       .then(() => {});
-  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added, sequenceKey, logPrompt]);
+  }, [index, completedBlockTimers, warmupDismissed, warmupOutcome, panelProgress, swaps, edits, added, sequenceKey, logPrompt, savedAsInfo]);
 
   const pendingLoadRef = useRef(null);
   // The viewed week's equipment override, if any (weekly_plans.setup_equipment); sent along with
@@ -459,6 +460,7 @@ export default function WorkoutExecution() {
       if (savedProgress?.warmupDismissed) setWarmupDismissed(true);
       if (savedProgress?.warmupOutcome) setWarmupOutcome(savedProgress.warmupOutcome);
       if (savedProgress?.panel && typeof savedProgress.panel === 'object') setPanelProgress(savedProgress.panel);
+      if (savedProgress?.savedAs?.id) setSavedAsInfo(savedProgress.savedAs);
       // An exercise whose last set was done but whose result prompt was still open when the
       // screen was left or reloaded: reopen it, so the finished exercise isn't lost.
       const pendingPrompt = restorePendingLog(savedProgress?.logPrompt, finalExercises, hydrated);
@@ -1316,6 +1318,7 @@ export default function WorkoutExecution() {
       sequence: (added.length || reordered) ? sequenceOf(exercises) : undefined,
     });
     setSavedName(copy.name);
+    setSavedAsInfo({ id: copy.id, name: copy.name });
     setKeepState('saved');
   };
 
