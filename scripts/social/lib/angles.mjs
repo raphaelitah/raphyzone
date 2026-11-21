@@ -56,3 +56,5 @@ export function pickAngle(plan, recent, taken, rng = Math.random) {
   const ties = from.filter((a) => age(a) === best);
   return ties[Math.floor(rng() * ties.length)];
 }
+
+export const ANGLES_BY_ID = Object.fromEntries([...GYM, ...TRAVEL_ROOM, ...TRAVEL_JET, ...HUMOUR].map((a) => [a.id, a]));

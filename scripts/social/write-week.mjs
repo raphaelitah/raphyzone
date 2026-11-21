@@ -12,21 +12,11 @@
 // Posts with status 'redo' are rewritten using the reviewer's note.
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
-import { pickAngle } from './lib/angles.mjs';
-import { pickFeature, featureFacts } from './lib/features.mjs';
-import { pickStyle, tooSimilar } from './lib/variety.mjs';
+import { ANGLES_BY_ID } from './lib/angles.mjs';
+import { FEATURES, featureFacts } from './lib/features.mjs';
+import { STYLES, tooSimilar } from './lib/variety.mjs';
+import { planWeek, TEMPLATE } from './lib/planner.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
-
-// slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
-const PLAN = [
-  { slot: 1, day: 0, kind: 'reel_workout' },
-  { slot: 2, day: 1, kind: 'carousel_humour' },
-  { slot: 3, day: 2, kind: 'reel_travel', variant: 'hotel_room' },
-  { slot: 4, day: 3, kind: 'carousel_smarter' },
-  { slot: 5, day: 4, kind: 'reel_workout' },
-  { slot: 6, day: 5, kind: 'single_split' },
-  { slot: 7, day: 6, kind: 'reel_travel', variant: 'jet_lag' },
-];
 
 const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout app for people who travel, train without a coach and are tired of deciding what to do. Positioning: "Stop deciding. Start training." Tone: direct, dry-funny, warm, no hype, no emojis spam (max 2 per caption), no medical claims, no "shred/burn fat fast" language. Faceless brand: never write as if a person is on camera. Never invent workouts, exercises, numbers or app features: use only the FACTS you are given. Do not mention the call-to-action link; it is added automatically. Reply with a single JSON object only.`;
 
@@ -73,6 +63,12 @@ const formatFact = (f) => FORMAT_FACT[String(f || '').toUpperCase().replace(/_/g
 
 function recentLines(rows) {
   return rows.map((r) => `- [${r.kind}] "${r.hook}" → reach ${r.reach ?? '?'}, saves ${r.saves ?? 0}, shares ${r.shares ?? 0}`).join('\n');
+}
+
+// Rows for the planner's per-kind performance scores.
+async function plannerPerfRows(supabase) {
+  const { data } = await supabase.from('social_weekly_metrics').select('reach, saves, shares, social_posts(kind)').order('week_start', { ascending: false }).limit(60);
+  return (data || []).filter((r) => r.social_posts).map((r) => ({ kind: r.social_posts.kind, reach: r.reach, saves: r.saves, shares: r.shares }));
 }
 
 async function performanceContext(supabase) {
@@ -222,26 +218,32 @@ async function main() {
 
   const { data: existing } = await supabase.from('social_posts').select('*').eq('week_start', weekStart);
   const bySlot = new Map((existing || []).map((p) => [p.slot, p]));
-  const todo = PLAN.filter((p) => {
+  const todoSlots = TEMPLATE.filter((p) => {
     const cur = bySlot.get(p.slot);
     if (!cur) return true;
     if (cur.status === 'published') return false;
     return cur.status === 'redo' || !!process.env.FORCE;
   });
-  if (!todo.length) { console.log(`Week ${weekStart}: nothing to write.`); return; }
+  if (!todoSlots.length) { console.log(`Week ${weekStart}: nothing to write.`); return; }
 
-  const [catalog, perf] = await Promise.all([loadCatalog(supabase), performanceContext(supabase)]);
-  const { data: recent } = await supabase.from('social_posts').select('source_workout_ids, hook, script, week_start, slot').gte('week_start', addDays(weekStart, -56)).neq('week_start', weekStart).order('week_start', { ascending: false }).order('slot', { ascending: false });
+  const [catalog, perf, perfRows] = await Promise.all([loadCatalog(supabase), performanceContext(supabase), plannerPerfRows(supabase)]);
+  const { data: recent } = await supabase.from('social_posts').select('kind, source_workout_ids, hook, script, week_start, slot').gte('week_start', addDays(weekStart, -56)).neq('week_start', weekStart).order('week_start', { ascending: false }).order('slot', { ascending: false });
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
-  // most recent first; the angle of a post being redone counts as the freshest so it is not picked again
-  const recentAngles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id), ...(recent || []).map((r) => r.script?.angle_id)].filter(Boolean);
-  const recentFeatures = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.feature_id), ...(recent || []).map((r) => r.script?.feature_id)].filter(Boolean);
   const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
-  const recentStyles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.style_id), ...(recent || []).map((r) => r.script?.style_id)].filter(Boolean);
-  const takenStyles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.style_id).filter(Boolean));
+
+  // The planner decides the week: kind, feature, angle and style per slot, from history, performance and feature coverage.
+  // posts being redone count as the freshest history, so their angle/style/feature is not picked again
+  const todoNums = new Set(todoSlots.map((t) => t.slot));
+  const fixed = (existing || []).filter((p) => !todoNums.has(p.slot));
+  const { plans: allPlans, notes, coverage } = planWeek({ history: [...(existing || []).filter((p) => todoNums.has(p.slot)), ...(recent || [])], fixed, perfRows });
+  const todo = allPlans.filter((p) => todoNums.has(p.slot));
+  console.log(`Plan for week ${weekStart}${notes.length ? ` (${notes.join('; ')})` : ''}:`);
+  for (const p of todo) console.log(`  slot ${p.slot} ${p.kind}${p.variant ? `/${p.variant}` : ''}: ${p.rationale}`);
+  if (coverage.stale.length) console.log(`  features not shown in the last 8 weeks: ${coverage.stale.join(', ')}`);
+  if (process.env.PLAN_ONLY) return;
+
   // hooks to stay clear of: the last ~8 weeks plus this week's other posts (grown as the loop writes)
-  const otherHooks = [...(recent || []).map((r) => r.hook), ...(existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.hook)].filter(Boolean);
-  const takenAngles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id).filter(Boolean));
+  const otherHooks = [...(recent || []).map((r) => r.hook), ...fixed.map((p) => p.hook)].filter(Boolean);
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
 
   const logCall = (row) => { if (!dry) supabase.from('llm_call_logs').insert(row).then(({ error }) => error && console.error('llm_call_logs insert failed:', error.message)); };
@@ -249,11 +251,9 @@ async function main() {
   for (const plan of todo) {
     try {
     const cur = bySlot.get(plan.slot);
-    const angle = pickAngle(plan, recentAngles, takenAngles);
-    if (angle) takenAngles.add(angle.id);
-    const style = pickStyle(recentStyles, takenStyles);
-    takenStyles.add(style.id);
-    const feature = plan.kind === 'carousel_smarter' ? pickFeature(recentFeatures) : null;
+    const angle = plan.angleId ? ANGLES_BY_ID[plan.angleId] : null;
+    const style = STYLES.find((x) => x.id === plan.styleId);
+    const feature = plan.featureId ? FEATURES.find((x) => x.id === plan.featureId) : null;
     const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, feature });
     built.workoutIds.forEach((id) => used.add(id));
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
@@ -272,7 +272,7 @@ async function main() {
       caption,
       hashtags,
       slides: isReel ? [] : out.slides,
-      script: { ...(built.script ?? {}), ...(isReel ? { scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : {}), angle_id: angle?.id, style_id: style.id },
+      script: { ...(built.script ?? {}), ...(isReel ? { scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : {}), angle_id: angle?.id, style_id: style.id, ...(feature ? { feature_id: feature.id } : {}) },
       source_workout_ids: built.workoutIds,
       asset_urls: [],
       render_status: 'pending',
