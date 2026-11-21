@@ -7,11 +7,11 @@
 //   carousel_exercise one movement pattern, how it looks with different gear
 import { matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './workouts.mjs';
 
-const pick = (arr, rng = Math.random) => arr[Math.floor(rng() * arr.length)];
-const cardRows = (f) => f.blocks.reduce((n, b) => n + b.items.length + 1, 0);
-const fitsCard = (f) => f.blocks.length > 0 && cardRows(f) <= 13;
-const CAPTION_RULES = 'Caption: open with a recognisable moment, 3-5 short lines, use the exact line "Raphyzone removes the mental load." once, no other claims about the app, do not mention any number of minutes or list exercises (the images carry them).';
-const SHAPE = (common) => `{ ${common} }`;
+export const pick = (arr, rng = Math.random) => arr[Math.floor(rng() * arr.length)];
+export const cardRows = (f) => f.blocks.reduce((n, b) => n + b.items.length + 1, 0);
+export const fitsCard = (f) => f.blocks.length > 0 && cardRows(f) <= 13;
+export const CAPTION_RULES = 'Caption: open with a recognisable moment, 3-5 short lines, use the exact line "Raphyzone removes the mental load." once, no other claims about the app, do not mention any number of minutes or list exercises (the images carry them).';
+export const SHAPE = (common) => `{ ${common} }`;
 
 export const EXTRA_KINDS = new Set(['single_equipment', 'carousel_quiz', 'carousel_format', 'carousel_myth', 'carousel_exercise']);
 
@@ -40,6 +40,54 @@ const MYTHS = [
   { id: 'tabata_long', myth: 'Tabata is a long workout.', truth: 'Short bursts: 20 seconds of work, 10 seconds of rest, repeated.' },
 ];
 
+
+// Mood -> real workout. Shared by the quiz carousel and the pick / excuse reels.
+export function buildQuizOptions(catalog, used, recentIds, archetypes = QUIZ_ARCHETYPES) {
+  const base = matchWorkouts(catalog, { tokens: ['dumbbell', 'bench / box', 'bodyweight', 'treadmill', 'bike', 'kettlebell', 'pull-up bar'], minutes: 40, minMinutes: 8, requireGear: false });
+  const taken = new Set();
+  const options = [];
+  for (const a of archetypes) {
+    const w = pickWorkout(base.filter((x) => a.ok(x) && !taken.has(x.workout_id) && !used.has(x.workout_id) && fitsCard(summarizeWorkout(x))), recentIds);
+    if (!w) continue;
+    taken.add(w.workout_id);
+    options.push({ label: a.label, workout: summarizeWorkout(w) });
+  }
+  return { options, taken };
+}
+
+export const QUIZ_ARCHETYPES = [
+  { label: 'Short on time', ok: (w) => w.minutes <= 20 },
+  { label: 'Low energy', ok: (w) => isGentle(w) },
+  { label: 'Full send', ok: (w) => w.minutes >= 30 && !isGentle(w) },
+  { label: 'No gear today', ok: (w) => isTrulyEquipmentFree(w) },
+];
+
+// One movement pattern with exercises for several kinds of gear, avoiding recently used patterns.
+export function buildLadder(exercises, recentKeys, maxGear = 5) {
+  const NO_PATTERN = /cardio|locomotion|mobility|stretch/i;
+  const eqLabel = (e) => String(e || 'bodyweight').split(',')[0].trim().toLowerCase().replace(/s$/, '');
+  const byPattern = new Map();
+  for (const e of exercises) {
+    if (!e.movement_pattern || NO_PATTERN.test(e.movement_pattern) || !e.name) continue;
+    (byPattern.get(e.movement_pattern) || byPattern.set(e.movement_pattern, []).get(e.movement_pattern)).push(e);
+  }
+  const recent = new Set(recentKeys.patterns);
+  const patterns = [...byPattern.entries()].filter(([, list]) => new Set(list.map((e) => eqLabel(e.equipment))).size >= 3);
+  const choices = patterns.filter(([p]) => !recent.has(p));
+  const chosen = pick(choices.length ? choices : patterns);
+  if (!chosen) throw new Error('No movement pattern with 3+ kinds of gear');
+  const [pattern, list] = chosen;
+  const byGear = new Map();
+  for (const e of list) (byGear.get(eqLabel(e.equipment)) || byGear.set(eqLabel(e.equipment), []).get(eqLabel(e.equipment))).push(e.name);
+  const ladder = [...byGear.entries()].sort(() => Math.random() - 0.5).slice(0, maxGear).map(([equipment, names]) => ({ equipment, exercises: [...new Set(names)].sort(() => Math.random() - 0.5).slice(0, 4) }));
+  return { pattern, ladder };
+}
+
+export const FORMAT_KEYS_LIST = FORMAT_KEYS;
+export const fmtKeyOf = fmtKey;
+export const MYTH_POOL = MYTHS;
+export const EQUIPMENT_SCENARIOS = EQUIPMENT_ONLY;
+
 export async function buildExtraPost({ kind, catalog, exercises, recentIds, used, perf, recentKeys, plan }) {
   if (kind === 'single_equipment') {
     for (const sc of [...EQUIPMENT_ONLY].sort(() => Math.random() - 0.5)) {
@@ -59,21 +107,7 @@ export async function buildExtraPost({ kind, catalog, exercises, recentIds, used
   }
 
   if (kind === 'carousel_quiz') {
-    const base = matchWorkouts(catalog, { tokens: ['dumbbell', 'bench / box', 'bodyweight', 'treadmill', 'bike', 'kettlebell', 'pull-up bar'], minutes: 40, minMinutes: 8, requireGear: false });
-    const archetypes = [
-      { label: 'Short on time', ok: (w) => w.minutes <= 20 },
-      { label: 'Low energy', ok: (w) => isGentle(w) },
-      { label: 'Full send', ok: (w) => w.minutes >= 30 && !isGentle(w) },
-      { label: 'No gear today', ok: (w) => isTrulyEquipmentFree(w) },
-    ];
-    const taken = new Set();
-    const options = [];
-    for (const a of archetypes) {
-      const w = pickWorkout(base.filter((x) => a.ok(x) && !taken.has(x.workout_id) && !used.has(x.workout_id)), recentIds);
-      if (!w) continue;
-      taken.add(w.workout_id);
-      options.push({ label: a.label, workout: summarizeWorkout(w) });
-    }
+    const { options, taken } = buildQuizOptions(catalog, used, recentIds);
     if (options.length < 3) throw new Error('Not enough workouts for a quiz');
     return {
       workoutIds: [...taken],
@@ -114,22 +148,7 @@ export async function buildExtraPost({ kind, catalog, exercises, recentIds, used
   }
 
   // carousel_exercise: one movement pattern, different gear
-  const NO_PATTERN = /cardio|locomotion|mobility|stretch/i;
-  const eqLabel = (e) => String(e || 'bodyweight').split(',')[0].trim().toLowerCase().replace(/s$/, '');
-  const byPattern = new Map();
-  for (const e of exercises) {
-    if (!e.movement_pattern || NO_PATTERN.test(e.movement_pattern) || !e.name) continue;
-    (byPattern.get(e.movement_pattern) || byPattern.set(e.movement_pattern, []).get(e.movement_pattern)).push(e);
-  }
-  const recent = new Set(recentKeys.patterns);
-  const patterns = [...byPattern.entries()].filter(([, list]) => new Set(list.map((e) => eqLabel(e.equipment))).size >= 3);
-  const choices = patterns.filter(([p]) => !recent.has(p));
-  const chosen = pick(choices.length ? choices : patterns);
-  if (!chosen) throw new Error('No movement pattern with 3+ kinds of gear');
-  const [pattern, list] = chosen;
-  const byGear = new Map();
-  for (const e of list) (byGear.get(eqLabel(e.equipment)) || byGear.set(eqLabel(e.equipment), []).get(eqLabel(e.equipment))).push(e.name);
-  const ladder = [...byGear.entries()].sort(() => Math.random() - 0.5).slice(0, 5).map(([equipment, names]) => ({ equipment, exercises: [...new Set(names)].sort(() => Math.random() - 0.5).slice(0, 4) }));
+  const { pattern, ladder } = buildLadder(exercises, recentKeys);
   return {
     workoutIds: [],
     script: { pattern, ladder },

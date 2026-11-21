@@ -66,7 +66,7 @@ const WORKOUT_POST = [
 function poolFor(plan) {
   if (plan.kind === 'reel_workout') return GYM;
   if (plan.kind === 'reel_travel') return plan.variant === 'jet_lag' ? TRAVEL_JET : TRAVEL_ROOM;
-  if (plan.kind === 'carousel_humour') return HUMOUR;
+  if (plan.kind === 'carousel_humour' || plan.kind === 'reel_humour') return HUMOUR;
   if (plan.kind === 'carousel_smarter') return SMARTER;
   if (plan.kind === 'single_workout' || plan.kind === 'single_equipment' || plan.kind === 'carousel_workout') return WORKOUT_POST;
   return null;

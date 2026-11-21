@@ -14,18 +14,29 @@ import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
 import { buildExtraPost, EXTRA_KINDS } from './lib/content-posts.mjs';
+import { buildCodeReel, CODE_REELS } from './lib/content-reels.mjs';
 import { loadExercises, loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
-// Each week has 2 workout reels, 2 travel reels and 3 image posts. Which image formats run, and
+// Each week has 4 reels (1 workout reel + 3 rotating) and 3 image posts. Which image formats run, and
 // which weekday each post lands on, rotate from week to week (seeded by the week, so reruns and
 // redos of the same week are stable). Slot = position in the week (1 = Monday).
 const IMAGE_KINDS = ['carousel_humour', 'single_workout', 'carousel_myth', 'carousel_workout', 'carousel_quiz', 'carousel_smarter', 'single_equipment', 'carousel_format', 'single_split', 'carousel_exercise'];
-const REELS = [
-  { kind: 'reel_workout' },
-  { kind: 'reel_workout' },
+// One workout reel anchors every week; the other three reels rotate through this pool.
+const REEL_POOL = [
   { kind: 'reel_travel', variant: 'hotel_room' },
+  { kind: 'reel_humour' },
+  { kind: 'reel_levels' },
   { kind: 'reel_travel', variant: 'jet_lag' },
+  { kind: 'reel_pick' },
+  { kind: 'reel_format' },
+  { kind: 'reel_myth' },
+  { kind: 'reel_timer' },
+  { kind: 'reel_excuse' },
+  { kind: 'reel_week' },
+  { kind: 'reel_app' },
 ];
+// Reels whose scenes the model writes (story arc); all other reels are built in code.
+const STORY_REELS = new Set(['reel_workout', 'reel_travel', 'reel_humour']);
 
 function rng32(seed) {
   let a = seed >>> 0;
@@ -46,7 +57,8 @@ export function planWeek(weekStart) {
   const n = weekNumber(weekStart);
   const rand = rng32(n * 2654435761);
   const images = [0, 1, 2].map((i) => ({ kind: IMAGE_KINDS[(n * 3 + i) % IMAGE_KINDS.length] }));
-  const posts = [...REELS, ...images];
+  const reels = [{ kind: 'reel_workout' }, ...[0, 1, 2].map((i) => REEL_POOL[(n * 3 + i) % REEL_POOL.length])];
+  const posts = [...reels, ...images];
   // 7 posts: shuffle until no two neighbours share a kind and no run of 3 reels/images in a row
   const media = (p) => (p.kind.startsWith('reel') ? 'reel' : 'image');
   let order = posts.slice(0, 7);
@@ -164,10 +176,10 @@ function wrongDurations(text, minutes) {
 
 const WORKOUT_KINDS = new Set(['single_workout', 'carousel_workout']);
 // Image posts whose slides are built in code: the model supplies only hook, caption and hashtags.
-const isCodeSlides = (kind) => WORKOUT_KINDS.has(kind) || EXTRA_KINDS.has(kind);
+const isCodeSlides = (kind) => WORKOUT_KINDS.has(kind) || EXTRA_KINDS.has(kind) || CODE_REELS.has(kind);
 
 function validatePost(kind, out, ctx = {}) {
-  const isReel = kind.startsWith('reel');
+  const isReel = STORY_REELS.has(kind);
   if (!out.hook || !out.caption) throw new Error('missing hook/caption');
   const spoken = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
   if (/\b(I|I'm|I've|I'll|I'd|me|my|mine)\b/.test(spoken.replace(/[’]/g, "'"))) throw new Error('first person used; write to "you"');
@@ -180,6 +192,10 @@ function validatePost(kind, out, ctx = {}) {
     if (total > 70) throw new Error(`reel too long (${total}s)`);
     if (!out.app_scene?.headline) throw new Error('missing app_scene');
     if (out.scenes.some((s) => s.visual && !['logo', 'plain', 'workout', 'warmup', 'format'].includes(s.visual))) throw new Error('bad scene visual');
+    if (kind === 'reel_humour') {
+      if (out.scenes.some((s) => s.visual && s.visual !== 'plain')) throw new Error('humour reel scenes must all be plain');
+      if (/\d+\s*(?:-|\s)?(?:min|minutes?|sets?|reps?|kg)\b|circuit|\bAMRAP\b|\bEMOM\b/i.test([out.caption, ...out.scenes.map((x) => x.on_screen_text)].join(' '))) throw new Error('humour reel must not describe a specific workout');
+    }
     // The emotional story comes first: no brand logo or workout card until the viewer has been pulled in.
     if (out.scenes[0].visual !== 'plain') throw new Error('first scene must be a plain story scene (no logo or card)');
     const firstCard = out.scenes.findIndex((s) => s.visual && s.visual !== 'plain');
@@ -255,6 +271,13 @@ async function buildPrompt({ plan, catalog, exercises, recentKeys, recentIds, us
       workoutIds: [w.workout_id],
       script: { scenario: variant, workout: facts },
       user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief, using the exact pitch line. The workout below is already chosen: write the story to fit it, and ${facts.minutes} minutes is the only duration you may mention anywhere. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief, with the exact line "Raphyzone removes the mental load."\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
+    };
+  }
+  if (CODE_REELS.has(kind)) return buildCodeReel({ kind, catalog, exercises, recentIds, used, perf, recentKeys, plan });
+  if (kind === 'reel_humour') {
+    return {
+      workoutIds: [],
+      user: `Write a short humorous story reel (5-6 scenes, every scene visual "plain") about this angle, and do not drift from it: ${plan.angle} Scene 1 is a moment the viewer recognises as themselves (set the context in one clause), the next two or three escalate it with dry humour, one beat each, each following from the last. The turn is the relief of having it decided, with the exact line "Raphyzone removes the mental load." and no other claims about the app. The last scene invites them to try it for free, in a human line. There are no workout FACTS: do not describe any workout, exercise, duration, gear or app screen.\nBeats: "feel", "deepen", "deepen", "turn", then "show" (visual "plain", the invite). The app screen is not shown; app_scene.headline is still required (a human line that lands the story).\n${perf}\nJSON shape: ${SHAPES.reel}`,
     };
   }
   if (EXTRA_KINDS.has(kind)) return buildExtraPost({ kind, catalog, exercises, recentIds, used, perf, recentKeys, plan });
@@ -353,7 +376,7 @@ async function main() {
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
     const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes }), log: logCall });
     const { caption, hashtags } = finalize(out);
-    const isReel = plan.kind.startsWith('reel');
+    const isReel = STORY_REELS.has(plan.kind);
     const row = {
       week_start: weekStart,
       slot: plan.slot,
