@@ -17,6 +17,7 @@ import SaveCustomWorkoutForm from '@/components/SaveCustomWorkoutForm';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import { saveAsCustomWorkout, fetchOwnCustomNames } from '@/lib/customizeWorkout';
 import { sessionOverridesFromProgress } from '@/lib/sessionOverrides';
+import { groupSessionsByBlock, wasWorkedOn } from '@/lib/sessionGrouping';
 
 const CHART_COLORS = ['hsl(var(--brand))', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444'];
 
@@ -250,6 +251,18 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     return result.has ? result : null;
   }, [session, blocks, blockExercisesByBlock]);
 
+  // The order the session was run in and the exercises added to it, for the exercise list
+  // (also available when the athlete changed nothing: then it is just the saved order).
+  const runOrder = useMemo(() => {
+    if (!session?.progress || !blocks.length) return { added: [], sequence: null };
+    let order = 0;
+    const baseList = blocks.flatMap((b) => (blockExercisesByBlock[b.block_id] || [])
+      .filter((be) => be.step_type === 'exercise')
+      .map((be) => ({ key: be.block_exercise_id, block_id: b.block_id, order: order++ })));
+    const result = sessionOverridesFromProgress(session.progress, baseList);
+    return { added: result.added, sequence: result.sequence ?? null };
+  }, [session, blocks, blockExercisesByBlock]);
+
   const changeSummary = overrides
     ? [
         overrides.added.length ? `added ${overrides.added.map((a) => a.exercise?.name).filter(Boolean).join(', ')}` : null,
@@ -352,7 +365,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
                 </div>
               ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>
             ) : exerciseSessions.length ? (
-              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} totalSeconds={session.elapsed_seconds} unilateralExerciseIds={unilateralExerciseIds} />
+              <BlockGroupedExercises blocks={blocks} blockExercisesByBlock={blockExercisesByBlock} exerciseSessions={exerciseSessions} totalSeconds={session.elapsed_seconds} unilateralExerciseIds={unilateralExerciseIds} added={runOrder.added} sequence={runOrder.sequence} panel={session.progress?.panel || null} />
             ) : <p className="text-sm text-muted-foreground text-center py-4">No exercise data logged.</p>}
           </div>
 
@@ -406,28 +419,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   );
 }
 
-// Pairs every block_exercise slot up with its logged exercise_session (matched
-// by exercise_id, consumed in block/order_in_block sequence) so history can be
-// grouped exactly like the library view — including slots that were skipped
-// (no matching log). Anything logged that doesn't match any slot (e.g. a
-// substituted exercise) is returned separately and rendered without a block.
-function groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions) {
-  const remaining = exerciseSessions.slice();
-  const groups = [];
-  blocks.forEach((block) => {
-    const blockExs = (blockExercisesByBlock[block.block_id] || []).filter((be) => be.step_type === 'exercise');
-    if (!blockExs.length) return;
-    const items = blockExs.map((be) => {
-      const idx = remaining.findIndex((es) => es.exercise_id === be.exercise_id);
-      if (idx === -1) return { be, es: null };
-      const es = remaining[idx];
-      remaining.splice(idx, 1);
-      return { be, es };
-    });
-    groups.push({ block, items });
-  });
-  return { groups, leftover: remaining };
-}
+
 
 function blockTotalSeconds(items) {
   const total = items.reduce((sum, { es }) => sum + (es ? (es.duration_seconds ?? es.elapsed_seconds ?? 0) : 0), 0);
@@ -446,8 +438,8 @@ function TransitionTime({ totalSeconds, exerciseSessions }) {
   );
 }
 
-function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions, totalSeconds, unilateralExerciseIds }) {
-  const { groups, leftover } = groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions);
+function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions, totalSeconds, unilateralExerciseIds, added = [], sequence = null, panel = null }) {
+  const { groups, leftover } = groupSessionsByBlock(blocks, blockExercisesByBlock, exerciseSessions, added, sequence);
 
   if (!groups.length) {
     return (
@@ -461,6 +453,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
     <div className="space-y-4">
       {groups.map(({ block, items }) => {
         const allSkipped = items.every(({ es }) => !es);
+        const allWorkedOn = allSkipped && items.every(({ be }) => wasWorkedOn(panel, block, be));
         const totalSec = blockTotalSeconds(items);
         return (
           <div key={block.block_id}>
@@ -469,7 +462,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
                 {block.block_label}
               </span>
               <span className="text-xs font-medium text-muted-foreground capitalize">
-                {block.block_type?.replace(/_/g, ' ')}
+                {block.block_type === 'added' ? 'Added' : block.block_type?.replace(/_/g, ' ')}
               </span>
               {block.rounds > 1 && <span className="text-xs text-muted-foreground">· {block.rounds} rounds</span>}
               {totalSec != null && (
@@ -478,7 +471,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
                 </span>
               )}
               {allSkipped && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Skipped</span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{allWorkedOn ? 'Not logged' : 'Skipped'}</span>
               )}
             </div>
             <div className="relative ml-8">
@@ -495,7 +488,7 @@ function BlockGroupedExercises({ blocks, blockExercisesByBlock, exerciseSessions
                     ) : (
                       <div className="flex-1 min-w-0 flex items-center justify-between gap-2 rounded-xl border border-dashed border-border p-3">
                         <p className="text-sm font-medium text-muted-foreground truncate">{be.exercise_title_raw}</p>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">Skipped</span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{wasWorkedOn(panel, block, be) ? 'Not logged' : 'Skipped'}</span>
                       </div>
                     )}
                   </div>
