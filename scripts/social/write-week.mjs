@@ -15,16 +15,47 @@ import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
-// slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
-const PLAN = [
-  { slot: 1, day: 0, kind: 'reel_workout' },
-  { slot: 2, day: 1, kind: 'carousel_humour' },
-  { slot: 3, day: 2, kind: 'reel_travel', variant: 'hotel_room' },
-  { slot: 4, day: 3, kind: 'carousel_smarter' },
-  { slot: 5, day: 4, kind: 'reel_workout' },
-  { slot: 6, day: 5, kind: 'single_split' },
-  { slot: 7, day: 6, kind: 'reel_travel', variant: 'jet_lag' },
+// Each week has 2 workout reels, 2 travel reels and 3 image posts. Which image formats run, and
+// which weekday each post lands on, rotate from week to week (seeded by the week, so reruns and
+// redos of the same week are stable). Slot = position in the week (1 = Monday).
+const IMAGE_KINDS = ['carousel_humour', 'single_workout', 'carousel_smarter', 'carousel_workout', 'single_split'];
+const REELS = [
+  { kind: 'reel_workout' },
+  { kind: 'reel_workout' },
+  { kind: 'reel_travel', variant: 'hotel_room' },
+  { kind: 'reel_travel', variant: 'jet_lag' },
 ];
+
+function rng32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const weekNumber = (weekStart) => Math.floor(Date.parse(`${weekStart}T00:00:00Z`) / (7 * 86400000));
+
+// 3 of the 5 image formats, advancing 3 per week so every format returns every ~2 weeks and each
+// week contains at least one workout-detail format.
+export function planWeek(weekStart) {
+  const n = weekNumber(weekStart);
+  const rand = rng32(n * 2654435761);
+  const images = [0, 1, 2].map((i) => ({ kind: IMAGE_KINDS[(n * 3 + i) % IMAGE_KINDS.length] }));
+  const posts = [...REELS, ...images];
+  // 7 posts: shuffle until no two neighbours share a kind and no run of 3 reels/images in a row
+  const media = (p) => (p.kind.startsWith('reel') ? 'reel' : 'image');
+  let order = posts.slice(0, 7);
+  for (let tries = 0; tries < 400; tries++) {
+    const t = [...posts].sort(() => rand() - 0.5);
+    const ok = t.every((p, i) => (i === 0 || p.kind !== t[i - 1].kind) && !(i > 1 && media(p) === media(t[i - 1]) && media(p) === media(t[i - 2])));
+    if (ok) { order = t; break; }
+  }
+  return order.map((p, i) => ({ ...p, slot: i + 1, day: i }));
+}
 
 const VOICE = `You write Instagram content for Raphyzone (@raphyzone), a workout app for people who travel, train without a coach and are tired of deciding what to do. Positioning: "Stop deciding. Start training." Tone: direct, dry-funny, warm, no hype, no emojis spam (max 2 per caption), no medical claims, no "shred/burn fat fast" language. Faceless brand: never write as if a person is on camera. Never invent workouts, exercises, numbers or app features: use only the FACTS you are given. Do not mention the call-to-action link; it is added automatically. Reply with a single JSON object only.`;
 
@@ -57,6 +88,7 @@ const COMMON_SHAPE = `"hook": string (max 60 chars, the first line / slide-1 tex
 const SHAPES = {
   reel: `{ ${COMMON_SHAPE}, "scenes": [ { "seconds": number (3-6), "beat": "feel"|"deepen"|"turn"|"show", "on_screen_text": string (max 10 words, the only narration: there is no voiceover, so it must carry the beat on its own), "visual": "logo"|"plain"|"workout"|"warmup"|"format" (what sits behind the text, see the story order in the brief), "footage_query": string (2-4 words for stock-video search of a real-life moment that matches the line, e.g. "tired man couch phone", "hotel gym empty"; only used when visual is "plain") } ] (5-7 scenes, total seconds 25-45), "app_scene": { "headline": string (max 7 words, a human line that lands the story and invites them in, e.g. "Your week, already planned.") }, "music_mood": "calm"|"driving"|"upbeat" }`,
   carousel: `{ ${COMMON_SHAPE}, "slides": [ { "title": string (max 8 words), "body": string (max 25 words, may be empty) } ] (6-9 slides; slide 1 is the cover and repeats the hook; the last slide is a soft nudge to try Raphyzone) }`,
+  workout: `{ ${COMMON_SHAPE} }`,
   single: `{ ${COMMON_SHAPE}, "slides": [ { "title": string (max 6 words), "body": string (the split: one line per day, "Day — focus", max 7 lines) } ] (exactly 1 slide) }`,
 };
 
@@ -68,6 +100,17 @@ const FORMAT_FACT = {
   'FOR TIME': 'For time: finish the listed work as fast as you can with good form.',
 };
 const formatFact = (f) => FORMAT_FACT[String(f || '').toUpperCase().replace(/_/g, ' ')] || null;
+
+// Rows an exercise list needs on screen: one per exercise plus one header per block.
+const cardRows = (f) => f.blocks.reduce((n, b) => n + b.items.length + 1, 0);
+const fitsWorkoutPost = (f, single) => f.blocks.length > 0 && (single ? cardRows(f) <= 13 : f.blocks.length <= 5 && f.blocks.every((b) => b.items.length <= 12));
+
+// Slide copy shown in the approval page; the images themselves are drawn from script.workout.
+function workoutSlides(f, fmt, single) {
+  const lines = (b) => `${b.label}${b.rounds ? ` · ${b.rounds} rounds` : ''}: ${b.items.join(', ')}`;
+  if (single) return [{ title: f.name, body: [`${f.minutes} min · ${f.format || ''} · ${f.equipment.join(', ')}`, ...f.blocks.map(lines)].join('\n') }];
+  return [{ title: f.name, body: `${f.minutes} min · ${f.equipment.join(', ')}` }, ...f.blocks.map((b) => ({ title: b.label, body: lines(b) })), ...(fmt ? [{ title: f.format, body: fmt }] : [])];
+}
 
 function recentLines(rows) {
   return rows.map((r) => `- [${r.kind}] "${r.hook}" → reach ${r.reach ?? '?'}, saves ${r.saves ?? 0}, shares ${r.shares ?? 0}`).join('\n');
@@ -107,6 +150,8 @@ function wrongDurations(text, minutes) {
   return found.filter((n) => n !== Math.round(Number(minutes)));
 }
 
+const WORKOUT_KINDS = new Set(['single_workout', 'carousel_workout']);
+
 function validatePost(kind, out, ctx = {}) {
   const isReel = kind.startsWith('reel');
   if (!out.hook || !out.caption) throw new Error('missing hook/caption');
@@ -136,6 +181,11 @@ function validatePost(kind, out, ctx = {}) {
     if (/raphyzone/i.test(texts[0])) throw new Error('opening scene must not name the brand');
     if (kind === 'reel_travel' && !/business trip|work trip/i.test(texts.slice(0, 2).join(' '))) throw new Error('travel reel must say "business trip" in the first two scenes');
   } else {
+    if (WORKOUT_KINDS.has(kind)) {
+      if (/raphyzone removes the mental load/i.test(out.caption) === false) throw new Error('caption must use the pitch line "Raphyzone removes the mental load."');
+      if (ctx.minutes) { const bad = wrongDurations([out.hook, out.caption].join(' . '), ctx.minutes); if (bad.length) throw new Error(`mentions ${bad.join(', ')} minutes but the workout is ${ctx.minutes}`); }
+      return out;
+    }
     if (!Array.isArray(out.slides) || !out.slides.length) throw new Error('missing slides');
     if (out.slides.length > 10) throw new Error('more than 10 slides');
     if (kind === 'carousel_humour' && /\d+\s*(?:-|\s)?(?:min|minutes?|sets?|reps?|kg)\b|circuit|\bAMRAP\b|\bEMOM\b/i.test([out.caption, ...out.slides.flatMap((x) => [x.title, x.body])].join(' '))) throw new Error('humour carousel must not describe a specific workout');
@@ -192,6 +242,24 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief, using the exact pitch line. The workout below is already chosen: write the story to fit it, and ${facts.minutes} minutes is the only duration you may mention anywhere. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief, with the exact line "Raphyzone removes the mental load."\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
     };
   }
+  if (kind === 'single_workout' || kind === 'carousel_workout') {
+    const single = kind === 'single_workout';
+    const scenarios = [...GYM_SCENARIOS].sort(() => Math.random() - 0.5);
+    for (const sc of scenarios) {
+      const pool = matchWorkouts(catalog, sc).filter((x) => !used.has(x.workout_id) && fitsWorkoutPost(summarizeWorkout(x), single));
+      const w = pickWorkout(pool, recentIds);
+      if (!w) continue;
+      const facts = summarizeWorkout(w);
+      const fmt = formatFact(facts.format);
+      return {
+        workoutIds: [w.workout_id],
+        script: { scenario: sc.label, workout: facts },
+        slides: workoutSlides(facts, fmt, single),
+        user: `Write the caption for a ${single ? 'single-image workout card (the whole workout on one screen, made to be saved)' : 'swipe-through carousel that breaks one workout down block by block'}. The image${single ? '' : 's'} are rendered in code from the FACTS, so you write only the hook, caption and hashtags. Premise: someone at the gym with exactly ${facts.minutes} minutes (${facts.minutes} is the only duration you may mention). Use exactly this angle and do not drift: ${plan.angle || 'a workout that is already decided for you.'}\nFACTS (the only workout you may describe):\n${JSON.stringify({ name: facts.name, minutes: facts.minutes, format: facts.format, equipment: facts.equipment })}\nThe hook (max 60 chars) is a specific, relatable line that makes people ${single ? 'save' : 'swipe'}; it may name the workout or the time. Caption: open with a recognisable moment, 3-5 short lines, use the exact line "Raphyzone removes the mental load." once, do not list the exercises (they are in the image${single ? '' : 's'}), no other claims about the app.\n${perf}\nJSON shape: ${SHAPES.workout}`,
+      };
+    }
+    throw new Error(`No workout fits a ${kind} post`);
+  }
   if (kind === 'carousel_humour') {
     return {
       workoutIds: [],
@@ -201,7 +269,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
   if (kind === 'carousel_smarter') {
     return {
       workoutIds: [],
-      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, a notes app full of half-remembered, crossed-out weights; do not write any specific weights, reps or exercises into those notes). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. The only numbers allowed are the +2.5 kg / +5 kg bumps and the 2-session rule from the FACTS; describe everything else without numbers. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
+      user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, a notes app full of half-remembered, crossed-out weights; do not write any specific weights, reps or exercises into those notes). ${plan.angle ? `Build it on exactly this angle and do not drift: ${plan.angle} ` : ''}Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. The only numbers allowed are the +2.5 kg / +5 kg bumps and the 2-session rule from the FACTS; describe everything else without numbers. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
   // single_split: a real week built from catalog workouts of different focus
@@ -227,6 +295,12 @@ async function main() {
 
   const { data: existing } = await supabase.from('social_posts').select('*').eq('week_start', weekStart);
   const bySlot = new Map((existing || []).map((p) => [p.slot, p]));
+  const PLAN = planWeek(weekStart);
+  // a post being redone keeps its existing format and variant; only new slots follow the rotation
+  for (const p of PLAN) {
+    const cur = bySlot.get(p.slot);
+    if (cur && cur.kind !== p.kind && !process.env.FORCE) { p.kind = cur.kind; p.variant = cur.script?.scenario === 'jet_lag' ? 'jet_lag' : cur.script?.scenario === 'hotel_room' ? 'hotel_room' : undefined; }
+  }
   const todo = PLAN.filter((p) => {
     const cur = bySlot.get(p.slot);
     if (!cur) return true;
@@ -267,7 +341,7 @@ async function main() {
       hook: out.hook.slice(0, 120),
       caption,
       hashtags,
-      slides: isReel ? [] : out.slides,
+      slides: isReel ? [] : (built.slides || out.slides),
       script: isReel ? { ...built.script, scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat', angle_id: angle?.id } : angle ? { ...(built.script ?? {}), angle_id: angle.id } : built.script ?? null,
       source_workout_ids: built.workoutIds,
       asset_urls: [],

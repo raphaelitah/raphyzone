@@ -13,6 +13,8 @@ const KIND_LABEL = {
   carousel_humour: 'Carousel · Decision fatigue',
   carousel_smarter: 'Carousel · Train smarter',
   single_split: 'Image · Split to save',
+  single_workout: 'Image · Workout card',
+  carousel_workout: 'Carousel · Workout breakdown',
 };
 
 const STATUS_STYLE = {
