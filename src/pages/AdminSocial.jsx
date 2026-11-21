@@ -6,12 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, X, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { storyStatus, recapStatus, STORY_STATE_STYLE } from '@/lib/socialStoryStatus';
 
 const KIND_LABEL = {
   reel_workout: 'Reel · Workout decided',
   reel_travel: 'Reel · Travel training',
   carousel_humour: 'Carousel · Decision fatigue',
-  carousel_smarter: 'Carousel · Train smarter',
+  carousel_smarter: 'Carousel · Feature spotlight',
   single_split: 'Image · Split to save',
 };
 
@@ -22,6 +23,28 @@ const STATUS_STYLE = {
   redo: 'bg-sky-100 text-sky-800',
   published: 'bg-violet-100 text-violet-800',
 };
+
+function StoryRow({ post }) {
+  const story = storyStatus(post);
+  const recap = recapStatus(post);
+  if (!story && !recap) return null;
+  return (
+    <div className="space-y-1.5" data-testid={`social-story-${post.slot}`}>
+      <div className="flex items-start gap-3">
+        {post.story_asset_url && <img src={post.story_asset_url} alt="Story preview" loading="lazy" className="h-24 rounded-md border border-border" />}
+        <div className="space-y-1.5 min-w-0">
+          {[story, recap].filter(Boolean).map((st) => (
+            <div key={st.label}>
+              <span className={cn('text-xs px-2 py-0.5 rounded-full', STORY_STATE_STYLE[st.state])}>{st.label}</span>
+              {st.at && <span className="text-xs text-muted-foreground ml-2">{new Date(st.at).toLocaleString()}</span>}
+              {st.detail && <p className="text-xs text-rose-600 mt-1 break-words">{st.detail}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const isVideo = (url) => /\.(mp4|mov)$/i.test(url);
 
@@ -76,6 +99,8 @@ function PostCard({ post, onChange }) {
           {post.render_status === 'failed' ? `Render failed: ${post.render_error}` : 'Not rendered yet'}
         </p>
       )}
+
+      <StoryRow post={post} />
 
       {slides.length > 0 && (
         <ol className="text-sm space-y-1 list-decimal pl-5 text-muted-foreground">

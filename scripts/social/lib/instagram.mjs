@@ -69,3 +69,11 @@ export async function publishPost(p, token) {
   await waitReady(creation, token);
   return (await post('/me/media_publish', token, { creation_id: creation })).id;
 }
+
+// Publishes a 9:16 image as an Instagram Story; returns the story media id. Stories take no caption.
+export async function publishStory(imageUrl, token) {
+  if (!imageUrl) throw new Error('Post has no story image.');
+  const creation = (await post('/me/media', token, { media_type: 'STORIES', image_url: imageUrl })).id;
+  await waitReady(creation, token);
+  return (await post('/me/media_publish', token, { creation_id: creation })).id;
+}
