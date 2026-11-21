@@ -14,6 +14,7 @@ import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
 import { pickFeature, featureFacts } from './lib/features.mjs';
+import { pickStyle, tooSimilar } from './lib/variety.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
 // slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
@@ -100,6 +101,8 @@ function wrongDurations(text, minutes) {
 function validatePost(kind, out, ctx = {}) {
   const isReel = kind.startsWith('reel');
   if (!out.hook || !out.caption) throw new Error('missing hook/caption');
+  const clash = tooSimilar(out.hook, ctx.otherHooks || []);
+  if (clash) throw new Error(`hook too close to an existing one ("${clash}"); use a different image and different opening words`);
   const spoken = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
   if (/\b(I|I'm|I've|I'll|I'd|me|my|mine)\b/.test(spoken.replace(/[’]/g, "'"))) throw new Error('first person used; write to "you"');
   const everyText = [out.hook, out.caption, ...(out.scenes || []).map((x) => x.on_screen_text), ...(out.slides || []).flatMap((x) => [x.title, x.body]), out.app_scene?.headline].join(' ');
@@ -234,6 +237,10 @@ async function main() {
   const recentAngles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id), ...(recent || []).map((r) => r.script?.angle_id)].filter(Boolean);
   const recentFeatures = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.feature_id), ...(recent || []).map((r) => r.script?.feature_id)].filter(Boolean);
   const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
+  const recentStyles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.style_id), ...(recent || []).map((r) => r.script?.style_id)].filter(Boolean);
+  const takenStyles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.style_id).filter(Boolean));
+  // hooks to stay clear of: the last ~8 weeks plus this week's other posts (grown as the loop writes)
+  const otherHooks = [...(recent || []).map((r) => r.hook), ...(existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.hook)].filter(Boolean);
   const takenAngles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id).filter(Boolean));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
 
@@ -244,14 +251,17 @@ async function main() {
     const cur = bySlot.get(plan.slot);
     const angle = pickAngle(plan, recentAngles, takenAngles);
     if (angle) takenAngles.add(angle.id);
+    const style = pickStyle(recentStyles, takenStyles);
+    takenStyles.add(style.id);
     const feature = plan.kind === 'carousel_smarter' ? pickFeature(recentFeatures) : null;
     const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, feature });
     built.workoutIds.forEach((id) => used.add(id));
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
-    built.user += hookNote;
+    built.user += hookNote + `\nTELL IT IN THIS STYLE (how it is told, not what it claims; it must still follow the story rules and FACTS): ${style.text}`;
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
-    const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes }), log: logCall });
+    const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes, otherHooks }), log: logCall });
     const { caption, hashtags } = finalize(out);
+    otherHooks.push(out.hook);
     const isReel = plan.kind.startsWith('reel');
     const row = {
       week_start: weekStart,
@@ -262,7 +272,7 @@ async function main() {
       caption,
       hashtags,
       slides: isReel ? [] : out.slides,
-      script: isReel ? { ...built.script, scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat', angle_id: angle?.id } : angle ? { ...(built.script ?? {}), angle_id: angle.id } : built.script ?? null,
+      script: { ...(built.script ?? {}), ...(isReel ? { scenes: out.scenes, app_scene: { ...out.app_scene, workout_id: built.workoutIds[0] }, music_mood: out.music_mood || 'upbeat' } : {}), angle_id: angle?.id, style_id: style.id },
       source_workout_ids: built.workoutIds,
       asset_urls: [],
       render_status: 'pending',
