@@ -112,9 +112,12 @@ export function activityMatchesWorkout(activity: string | null | undefined, work
 
 export function buildWorkoutCatalog(workouts: any[], equipmentByWorkoutId?: Map<string, string[]>) {
   const header = 'id|name|modality|movement_focus|duration_min|equipment|exercises';
+  // The athlete's own saved workouts are labelled so the model can tell them from catalog
+  // rows. Rows are '|'-delimited and a saved name is free text, so '|' can't appear in one.
+  const rowName = (w: any) => `${String(w.name ?? '').replace(/\|/g, '/')}${w.status === 'private' ? ' [my workout]' : ''}`;
   const rows = (workouts || []).map((w) => [
     w.id,
-    w.name,
+    rowName(w),
     w.modality || '',
     w.movement_focus || '',
     w.est_duration_min || w.duration_minutes || '',

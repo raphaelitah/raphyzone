@@ -11,12 +11,35 @@ export async function isPremium(supabase: any, userId: string): Promise<boolean>
   return !!data;
 }
 
-// Approved catalog rows this user may be given by plan generation/swaps:
-// everything for premium (or trialing) users, only is_free workouts otherwise.
-export async function loadApprovedCatalog(supabase: any, userId: string) {
-  let query = supabase.from('workouts').select('*').eq('status', 'approved');
-  if (!(await isPremium(supabase, userId))) query = query.eq('is_free', true);
-  return query;
+// How many of the athlete's own saved workouts are offered to the planner (most recently
+// changed first). Generous: a week needs at most 7 picks.
+const MAX_OWN_CUSTOM_WORKOUTS = 30;
+
+// Workouts the AI may assign this athlete, for plan generation and swap suggestions:
+//   * approved catalog rows: everything for premium (or trialing) users, only is_free
+//     workouts otherwise;
+//   * the athlete's own saved custom workouts (status 'private', owned by them), for any
+//     tier since they own them. They never reach anyone else: the filter is by owner.
+// The athlete's own come first, so the per-modality cap applied later
+// (planContext.ts filterCatalogForSelection) can't crowd them out of the candidates.
+// Returns the same { data, error } shape a query would; a failure loading the athlete's
+// own workouts is not fatal (the planner just falls back to the catalog alone).
+export async function loadPlannerCatalog(supabase: any, userId: string) {
+  let catalogQuery = supabase.from('workouts').select('*').eq('status', 'approved');
+  if (!(await isPremium(supabase, userId))) catalogQuery = catalogQuery.eq('is_free', true);
+  const [catalog, own] = await Promise.all([
+    catalogQuery,
+    supabase
+      .from('workouts')
+      .select('*')
+      .eq('owner_id', userId)
+      .eq('status', 'private')
+      .order('updated_date', { ascending: false })
+      .limit(MAX_OWN_CUSTOM_WORKOUTS),
+  ]);
+  if (catalog.error) return catalog;
+  const mine = own.error ? [] : (own.data || []);
+  return { data: [...mine, ...(catalog.data || [])], error: null };
 }
 
 export type AiQuota = { usageId: string };
