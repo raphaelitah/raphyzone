@@ -40,6 +40,7 @@ vi.mock('@/lib/formatLabel', () => ({ recomputeAndSaveFormatLabel: vi.fn(async (
 const {
   mapBlockExercises, mapBlocks, orderBlocks, applyOverridesToClone, isPremiumRequiredError, isCustomWorkout,
   saveWorkoutCopy, isNameTakenError, isInvalidNameError, saveAsCustomWorkout, recomputeAndSaveDuration, deleteCustomWorkout,
+  markSessionSavedAs, fetchSessionSavedAs,
 } = await import('./customizeWorkout');
 
 const block = (block_id, order_index) => ({ block_id, order_index });
@@ -287,5 +288,32 @@ describe('save as a named copy', () => {
     await deleteCustomWorkout({ id: 'u-copy', workout_id: 'WC' });
     const order = calls.filter((c) => c.op === 'delete').map((c) => c.table);
     expect(order).toEqual(['prescribed_sets', 'block_exercises', 'workout_blocks', 'workouts']);
+  });
+});
+
+describe('remembering which custom workout a session was saved as', () => {
+  beforeEach(() => {
+    calls.length = 0;
+    Object.keys(tables).forEach((k) => delete tables[k]);
+    tables.workout_sessions = [{ id: 's1', progress: { index: 3, added: [{ key: 'a' }] } }, { id: 's2', progress: { index: 1 } }];
+    tables.workouts = [{ id: 'w1', name: 'Pull plus chest' }];
+  });
+
+  it('adds the saved-as reference to the session progress without losing the rest of it', async () => {
+    await markSessionSavedAs('s1', { id: 'w1', name: 'Pull plus chest' });
+    const update = calls.find((c) => c.table === 'workout_sessions' && c.op === 'update');
+    expect(update.payload.progress).toEqual({ index: 3, added: [{ key: 'a' }], savedAs: { id: 'w1', name: 'Pull plus chest' } });
+    expect(update.filters).toEqual([['eq', 'id', 's1']]);
+  });
+
+  it('returns the saved workout with its current name', async () => {
+    tables.workout_sessions[0].progress.savedAs = { id: 'w1', name: 'old name' };
+    expect(await fetchSessionSavedAs('s1')).toEqual({ id: 'w1', name: 'Pull plus chest' });
+  });
+
+  it('returns null when never saved, or when the saved workout was deleted (so it can be saved again)', async () => {
+    expect(await fetchSessionSavedAs('s2')).toBeNull();
+    tables.workout_sessions[1].progress.savedAs = { id: 'gone', name: 'x' };
+    expect(await fetchSessionSavedAs('s2')).toBeNull();
   });
 });

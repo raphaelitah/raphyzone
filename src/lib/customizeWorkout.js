@@ -276,3 +276,25 @@ export async function saveAsCustomWorkout({ source, name, swaps, edits, added, s
   }
   return copy;
 }
+
+/**
+ * Remembers on a session which custom workout it was saved as, so the session can show
+ * "Saved as ..." instead of offering to save the same changes again.
+ */
+export async function markSessionSavedAs(sessionId, workout) {
+  const { data } = await supabase.from('workout_sessions').select('progress').eq('id', sessionId).maybeSingle();
+  const progress = { ...(data?.progress || {}), savedAs: { id: workout.id, name: workout.name } };
+  await supabase.from('workout_sessions').update({ progress }).eq('id', sessionId);
+}
+
+/**
+ * The custom workout a session was saved as, with its current name, or null if it was
+ * never saved or the saved workout has since been deleted (then it can be saved again).
+ */
+export async function fetchSessionSavedAs(sessionId) {
+  const { data: row } = await supabase.from('workout_sessions').select('progress').eq('id', sessionId).maybeSingle();
+  const id = row?.progress?.savedAs?.id;
+  if (!id) return null;
+  const { data: workout } = await supabase.from('workouts').select('id, name').eq('id', id).maybeSingle();
+  return workout ? { id: workout.id, name: workout.name } : null;
+}

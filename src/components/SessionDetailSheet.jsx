@@ -15,7 +15,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import SaveCustomWorkoutForm from '@/components/SaveCustomWorkoutForm';
 import UpgradeSheet from '@/components/UpgradeSheet';
-import { saveAsCustomWorkout, fetchOwnCustomNames } from '@/lib/customizeWorkout';
+import { saveAsCustomWorkout, fetchOwnCustomNames, markSessionSavedAs, fetchSessionSavedAs } from '@/lib/customizeWorkout';
 import { sessionOverridesFromProgress } from '@/lib/sessionOverrides';
 import { groupSessionsByBlock, wasWorkedOn } from '@/lib/sessionGrouping';
 
@@ -47,7 +47,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const { isPremium } = useEntitlement();
   const [sourceWorkout, setSourceWorkout] = useState(null);
   const [savingCustom, setSavingCustom] = useState(false); // the name form is open
-  const [savedCustomName, setSavedCustomName] = useState('');
+  const [savedCustom, setSavedCustom] = useState(null); // { id, name } this session was already saved as
   const [ownCustomNames, setOwnCustomNames] = useState([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -65,7 +65,7 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
   const [blockExercisesByBlock, setBlockExercisesByBlock] = useState({});
 
   useEffect(() => {
-    if (!open) { setEditing(false); setDrafts({}); setSavingCustom(false); setSavedCustomName(''); }
+    if (!open) { setEditing(false); setDrafts({}); setSavingCustom(false); setSavedCustom(null); }
   }, [open]);
 
   useEffect(() => {
@@ -168,6 +168,15 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
     })();
     return () => { active = false; };
   }, [open, session]);
+
+  // Was this session already saved as a custom workout? Asked of the database each time the
+  // sheet opens, because the list that opened it may hold an older copy of the session.
+  useEffect(() => {
+    if (!open || !session?.id) return undefined;
+    let active = true;
+    fetchSessionSavedAs(session.id).then((saved) => { if (active) setSavedCustom(saved); }).catch(() => {});
+    return () => { active = false; };
+  }, [open, session?.id]);
 
   const startEdit = () => {
     const d = {};
@@ -287,7 +296,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
       added: overrides.added.map((a) => ({ key: a.key, exercise: a.exercise, sets: a.sets, reps: a.reps })),
       sequence: overrides.sequence,
     });
-    setSavedCustomName(copy.name);
+    try { await markSessionSavedAs(session.id, copy); } catch { /* the workout is saved; only the reminder is lost */ }
+    setSavedCustom({ id: copy.id, name: copy.name });
     setSavingCustom(false);
   };
 
@@ -331,8 +341,8 @@ export default function SessionDetailSheet({ session, open, onOpenChange, editab
 
           {canSaveCustom && (
             <Card className="rounded-2xl border-brand/30 bg-brand/5 p-4">
-              {savedCustomName ? (
-                <p className="text-sm">Saved as <span className="font-semibold">&ldquo;{savedCustomName}&rdquo;</span> in My workouts. You can add it to your plan from there.</p>
+              {savedCustom ? (
+                <p className="text-sm">Saved as <span className="font-semibold">&ldquo;{savedCustom.name}&rdquo;</span> in My workouts. You can add it to your plan from there.</p>
               ) : savingCustom ? (
                 <SaveCustomWorkoutForm
                   sourceName={sourceWorkout.name}
