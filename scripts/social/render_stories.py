@@ -6,6 +6,8 @@ mentions plans or pricing.
 
   --local DIR   render to DIR and skip upload/DB writes     --sample   built-in samples
   --week YYYY-MM-DD  only that week                         --force    re-render existing
+  --recap       render the Sunday recap story ("In case you missed it") for the post marked
+                recap_chosen_at, and store social_posts.recap_asset_url
 """
 import argparse
 import hashlib
@@ -52,11 +54,71 @@ def story_image(post):
     return img
 
 
+RECAP_CUE = {"reel": "Watch the reel", "carousel": "Swipe the carousel", "single": "Save the split"}
+
+
+def recap_image(post):
+    """Sunday recap: a neutral "In case you missed it" card (it never claims the post was the best)."""
+    img = Image.new("RGB", (SW, SH), ri.INK)
+    d = ImageDraw.Draw(img)
+    d.ellipse([-420, SH - 860, 520, SH + 80], fill=ri.INDIGO_DARK)
+    ri.logo(d, ri.MARGIN, TOP, 72, bg=ri.INDIGO, fg=ri.WHITE)
+    d.text((ri.MARGIN + 92, TOP + 14), "@raphyzone", font=ri.font(36, 700), fill=ri.WHITE)
+    d.text((ri.MARGIN, TOP + 200), "IN CASE YOU MISSED IT", font=ri.font(40, 800), fill=ri.ACCENT)
+
+    fnt, lines, size = ri.fit(d, post["hook"], SW - 2 * ri.MARGIN, 640, 120, 68, 800, 1.06)
+    y = ri.draw_lines(d, lines, fnt, size, ri.MARGIN, TOP + 290, ri.WHITE, 1.06)
+    d.rounded_rectangle([ri.MARGIN, y + 20, ri.MARGIN + 140, y + 30], radius=5, fill=ri.ACCENT)
+
+    kind = post["kind"]
+    label = RECAP_CUE["reel" if kind.startswith("reel") else "carousel" if kind.startswith("carousel") else "single"] + "  ·  on the feed"
+    lf = ri.font(44, 800)
+    pw = d.textlength(label, font=lf) + 80
+    top = BOTTOM - 170
+    d.rounded_rectangle([ri.MARGIN, top, ri.MARGIN + pw, top + 110], radius=55, fill=ri.INDIGO)
+    d.text((ri.MARGIN + 40, top + 28), label, font=lf, fill=ri.WHITE)
+    return img
+
+
 SAMPLES = [
     {"kind": "reel_workout", "hook": "Four minutes of staring at the dumbbells"},
     {"kind": "carousel_smarter", "hook": "Did you actually get stronger?"},
     {"kind": "single_split", "hook": "Save this 3-day split"},
 ]
+
+
+def render_recap(base, hdr, local, force):
+    q = {"select": "id,week_start,slot,kind,hook,recap_asset_url", "status": "eq.published", "recap_chosen_at": "not.is.null", "recap_story_media_id": "is.null"}
+    if not force:
+        q["recap_asset_url"] = "is.null"
+    r = requests.get(f"{base}/rest/v1/social_posts", headers=hdr, params=q, timeout=30)
+    r.raise_for_status()
+    failed = 0
+    for post in r.json():
+        tag = f"{post['week_start']}/slot{post['slot']}"
+        try:
+            img = recap_image(post)
+            name = f"{post['week_start']}/{post['slot']}-{post['kind']}/recap-{hashlib.sha1(post['hook'].encode()).hexdigest()[:8]}.png"
+            if local:
+                path = Path(local) / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                img.save(path)
+                continue
+            buf = io.BytesIO()
+            img.save(buf, "PNG", optimize=True)
+            u = requests.post(f"{base}/storage/v1/object/social-assets/{name}", data=buf.getvalue(), timeout=60,
+                              headers={**hdr, "content-type": "image/png", "x-upsert": "true", "cache-control": "max-age=3600"})
+            u.raise_for_status()
+            url = f"{base}/storage/v1/object/public/social-assets/{name}"
+            p = requests.patch(f"{base}/rest/v1/social_posts", params={"id": f"eq.{post['id']}"},
+                               json={"recap_asset_url": url, "updated_date": "now()"},
+                               headers={**hdr, "content-type": "application/json"}, timeout=30)
+            p.raise_for_status()
+            print(f"Recap image {tag}")
+        except Exception as err:
+            failed += 1
+            print(f"FAILED recap {tag}: {err}", file=sys.stderr)
+    return 1 if failed else 0
 
 
 def main():
@@ -65,6 +127,7 @@ def main():
     ap.add_argument("--week")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--sample", action="store_true")
+    ap.add_argument("--recap", action="store_true")
     a = ap.parse_args()
 
     if a.sample:
@@ -72,6 +135,7 @@ def main():
         out.mkdir(parents=True, exist_ok=True)
         for p in SAMPLES:
             story_image(p).save(out / f"story-{p['kind']}.png")
+            recap_image(p).save(out / f"recap-{p['kind']}.png")
         print(f"Wrote story samples to {out}")
         return
 
@@ -81,6 +145,9 @@ def main():
     if not base or not key:
         sys.exit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
     hdr = {"apikey": key, "authorization": f"Bearer {key}"}
+
+    if a.recap:
+        sys.exit(render_recap(base, hdr, a.local, a.force))
 
     q = {"select": "id,week_start,slot,kind,hook,story_asset_url", "status": "in.(draft,approved)", "order": "week_start,slot"}
     if a.week:

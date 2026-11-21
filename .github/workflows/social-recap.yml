@@ -1,0 +1,48 @@
+name: Instagram Sunday recap story
+
+# Sundays 10:00 UTC (before the 16:00 publisher): collect post metrics, pick the week's post,
+# render an "In case you missed it" story for it and post it. One recap per week.
+# Set the repo variable INSTAGRAM_STORIES to 'off' to switch stories (and this recap) off.
+# Needs repo secrets SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INSTAGRAM_ACCESS_TOKEN.
+on:
+  schedule:
+    - cron: '0 10 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: 'Dry run (only log which post would be picked)'
+        type: boolean
+        default: false
+
+concurrency: social-recap
+
+permissions:
+  contents: read
+
+jobs:
+  recap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+      INSTAGRAM_STORIES: ${{ vars.INSTAGRAM_STORIES }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/social/requirements.txt
+      - run: npm ci
+      - run: pip install -r scripts/social/requirements.txt
+      - run: node scripts/social/recap-story.mjs pick ${{ inputs.dry && '--dry' || '' }}
+      - if: ${{ !inputs.dry }}
+        run: python scripts/social/render_stories.py --recap
+      - if: ${{ !inputs.dry }}
+        run: node scripts/social/recap-story.mjs publish

@@ -27,3 +27,5 @@ Start with `README.md` for local setup and environment variables.
 ## Instagram stories
 
 Each published post gets a same-day Story teaser: `scripts/social/render_stories.py` renders a 9:16 image from the post's hook (stored in `social_posts.story_asset_url`), and `publish-due.mjs` posts it right after the post goes live. Set the repo variable `INSTAGRAM_STORIES` to `off` to disable it. A story failure never fails the publish run; it is recorded in `story_error`. Requires the `20261121120000_social_stories.sql` migration.
+
+Sunday recap story: `.github/workflows/social-recap.yml` (Sundays 10:00 UTC) runs `collect-metrics.mjs` (Instagram insights into `social_weekly_metrics`), picks the week's post (best saves+shares per reach, else the first reel), renders an "In case you missed it" card with `render_stories.py --recap`, and posts it via `recap-story.mjs`. It never claims the post was "the best". Requires the `20261121130000_social_recap_story.sql` migration. `INSTAGRAM_STORIES=off` disables it.
