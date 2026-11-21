@@ -177,3 +177,13 @@ export function isTrulyEquipmentFree(w) {
 export function isGentle(w) {
   return /mobility/i.test(w.modality || '') || (w.difficulty === 'beginner' && !/emom|for_time|amrap|tabata/i.test(w.workout_format || ''));
 }
+
+// Exercise catalog for "same pattern, different gear" posts. Returns [] if the columns are
+// not available so only that post type fails, not the whole run.
+export async function loadExercises(supabase) {
+  try {
+    return await fetchAll(supabase, 'exercises', 'exercise_code,name,equipment,movement_pattern', (q) => q.order('id'));
+  } catch {
+    return [];
+  }
+}

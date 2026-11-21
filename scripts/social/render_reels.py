@@ -70,13 +70,13 @@ def caption_overlay(text, anchor="lower"):
     return img
 
 
-def workout_card(facts):
+def workout_card(facts, kicker="TODAY'S WORKOUT"):
     img = Image.new("RGB", (W, H), ri.INK)
     d = ImageDraw.Draw(img)
     d.ellipse([W - 600, -300, W + 300, 600], fill=ri.INDIGO_DARK)
     ri.logo(d, 88, 110, 72)
     d.text((184, 126), "@raphyzone", font=ri.font(36, 700), fill=ri.WHITE)
-    d.text((88, 300), "TODAY'S WORKOUT", font=ri.font(38, 800), fill=ri.ACCENT)
+    d.text((88, 300), kicker.upper(), font=ri.font(38, 800), fill=ri.ACCENT)
     tf, tl, ts = ri.fit(d, facts["name"], W - 176, 300, 120, 64, 800, 1.05)
     y = ri.draw_lines(d, tl, tf, ts, 88, 360, ri.WHITE, 1.05) + 10
     meta = " · ".join(x for x in [f"{int(facts['minutes'])} min" if facts.get("minutes") else None, (str(facts.get("format") or "").upper() if len(str(facts.get("format") or "")) <= 5 else str(facts.get("format") or "").title()) or None, ", ".join(facts.get("equipment") or []).title() or None] if x)
@@ -179,6 +179,122 @@ def warmup_card(facts):
         ri.draw_lines(d, sl[:2], sf, ss, 212, y + 98, ri.MUTED_ON_INK, 1.1)
         y += 210
     return img
+
+
+# ---------- cards for code-built reels (scene["card"]) ----------
+def _chrome(kicker=None):
+    img = Image.new("RGB", (W, H), ri.INK)
+    d = ImageDraw.Draw(img)
+    d.ellipse([W - 600, -300, W + 300, 600], fill=ri.INDIGO_DARK)
+    ri.logo(d, 88, 110, 72)
+    d.text((184, 126), "@raphyzone", font=ri.font(36, 700), fill=ri.WHITE)
+    if kicker:
+        d.text((88, 300), str(kicker).upper(), font=ri.font(38, 800), fill=ri.ACCENT)
+    return img, d
+
+
+def _rows(d, items, y, bottom, numbered=True, max_row=150):
+    row_h = min(max_row, int((bottom - y) / max(len(items), 1)))
+    for i, it in enumerate(items):
+        top = y + i * row_h
+        d.rounded_rectangle([88, top, W - 88, top + row_h - 16], radius=28, fill=(30, 30, 52))
+        cy = top + (row_h - 16) / 2
+        if numbered:
+            d.ellipse([112, cy - 28, 168, cy + 28], fill=ri.INDIGO)
+            nf = ri.font(32, 800)
+            n = str(i + 1)
+            d.text((140 - d.textlength(n, font=nf) / 2, cy - 21), n, font=nf, fill=ri.WHITE)
+        ef, el, es = ri.fit(d, it, W - 176 - (130 if numbered else 60), row_h - 32, 46, 26, 700, 1.05)
+        ri.draw_lines(d, el[:2], ef, es, 196 if numbered else 118, cy - min(len(el), 2) * es * 1.05 / 2, ri.WHITE, 1.05)
+    return y + row_h * len(items)
+
+
+def text_card(kicker, title, sub=None):
+    img, d = _chrome(kicker)
+    tf, tl, ts = ri.fit(d, title, W - 176, 760, 150, 70, 800, 1.06)
+    y = ri.draw_lines(d, tl, tf, ts, 88, 480, ri.WHITE, 1.06)
+    d.rounded_rectangle([88, y + 24, 238, y + 36], radius=6, fill=ri.ACCENT)
+    if sub:
+        sf, sl, ss = ri.fit(d, sub, W - 176, 360, 54, 34, 500, 1.25)
+        ri.draw_lines(d, sl, sf, ss, 88, y + 80, ri.MUTED_ON_INK, 1.25)
+    return img
+
+
+def list_card(kicker, title, items, sub=None):
+    img, d = _chrome(kicker)
+    tf, tl, ts = ri.fit(d, title, W - 176, 300, 112, 60, 800, 1.05)
+    y = ri.draw_lines(d, tl, tf, ts, 88, 370, ri.WHITE, 1.05) + 6
+    if sub:
+        d.text((90, y), sub, font=ri.font(40, 600), fill=ri.MUTED_ON_INK)
+        y += 70
+    _rows(d, items[:6], y + 30, H - 220)
+    return img
+
+
+def choice_card(kicker, title, options):
+    img, d = _chrome(kicker)
+    tf, tl, ts = ri.fit(d, title, W - 176, 300, 112, 60, 800, 1.05)
+    y = ri.draw_lines(d, tl, tf, ts, 88, 370, ri.WHITE, 1.05) + 40
+    _rows(d, options[:4], y, H - 200, max_row=210)
+    return img
+
+
+def myth_card(myth, truth=None):
+    img, d = _chrome()
+    d.rounded_rectangle([88, 330, 88 + 190, 330 + 70], radius=35, fill=(200, 60, 60))
+    d.text((88 + 34, 342), "MYTH", font=ri.font(42, 800), fill=ri.WHITE)
+    mf, ml, ms = ri.fit(d, myth, W - 176, 420, 92, 54, 800, 1.1)
+    y = ri.draw_lines(d, ml, mf, ms, 88, 440, ri.WHITE, 1.1) + 60
+    if truth:
+        d.rounded_rectangle([88, y, 88 + 220, y + 70], radius=35, fill=ri.ACCENT)
+        d.text((88 + 34, y + 12), "TRUTH", font=ri.font(42, 800), fill=ri.INK)
+        tf, tl, ts = ri.fit(d, truth, W - 176, H - y - 360, 56, 34, 500, 1.3)
+        ri.draw_lines(d, tl, tf, ts, 88, y + 110, ri.MUTED_ON_INK, 1.3)
+    return img
+
+
+def card_frame(card):
+    t = card["type"]
+    if t == "text":
+        return text_card(card.get("kicker"), card["title"], card.get("sub"))
+    if t == "list":
+        return list_card(card.get("kicker"), card["title"], card["items"], card.get("sub"))
+    if t == "choice":
+        return choice_card(card.get("kicker"), card["title"], card["options"])
+    if t == "myth":
+        return myth_card(card["myth"], card.get("truth"))
+    if t == "workout":
+        return workout_card(card["facts"], card.get("kicker") or "TODAY'S WORKOUT")
+    if t == "format":
+        return format_card(card["facts"])
+    raise ValueError(f"unknown card type {t}")
+
+
+def timer_frame(spec, phase, name, left, total, idx, count, elapsed, whole):
+    img, d = _chrome("Rep timer")
+    work = phase == "work"
+    col = ri.ACCENT if work else (120, 200, 255)
+    d.text((88, 400), f"MOVE {idx} OF {count}" if work else "REST", font=ri.font(44, 800), fill=ri.MUTED_ON_INK)
+    nf, nl, ns = ri.fit(d, name if work else f"Next: {name}", W - 176, 300, 100, 50, 800, 1.05)
+    ri.draw_lines(d, nl, nf, ns, 88, 470, ri.WHITE, 1.05)
+    big = ri.font(430, 800)
+    t = str(left)
+    d.text(((W - d.textlength(t, font=big)) / 2, 800), t, font=big, fill=col)
+    d.text((W / 2 - d.textlength("SECONDS", font=ri.font(40, 700)) / 2, 1330), "SECONDS", font=ri.font(40, 700), fill=ri.MUTED_ON_INK)
+    d.rounded_rectangle([88, 1620, W - 88, 1650], radius=15, fill=(30, 30, 52))
+    d.rounded_rectangle([88, 1620, 88 + max(30, (W - 176) * elapsed / whole), 1650], radius=15, fill=col)
+    return img
+
+
+def timer_frames(spec):
+    """One frame per second: work/rest intervals over the listed moves."""
+    names, work, rest = spec["moves"], int(spec.get("work", 20)), int(spec.get("rest", 10))
+    plan = []
+    for i, n in enumerate(names):
+        plan += [("work", n, s, work, i + 1) for s in range(work, 0, -1)]
+        if i < len(names) - 1:
+            plan += [("rest", names[i + 1], s, rest, i + 1) for s in range(rest, 0, -1)]
+    return [timer_frame(spec, ph, n, left, tot, idx, len(names), k, len(plan)) for k, (ph, n, left, tot, idx) in enumerate(plan)]
 
 
 # What sits behind a story scene's caption. The writer may set scene["visual"]; older drafts without it are inferred.
@@ -299,6 +415,32 @@ def build_scene(out, d, bg, overlay=None, bg_is_video=False, fade=True, bg_lavfi
     run(cmd + ["-filter_complex", vf + ";" + af, "-map", "[v]", "-map", "[a]", "-t", f"{d:.3f}"] + ENC + [out])
 
 
+def build_timer(out, frames_dir, n):
+    """1 fps countdown frames -> a 30 fps scene with silent audio."""
+    vf = f"[0:v]fps={FPS},scale={W}:{H},setsar=1,format=yuv420p[v]"
+    run([ffmpeg_exe(), "-y", "-framerate", "1", "-i", str(Path(frames_dir) / "t%04d.png"), "-filter_complex", vf + ";" + silent_audio_chain(n),
+         "-map", "[v]", "-map", "[a]", "-t", f"{n:.3f}"] + ENC + [out])
+
+
+def build_tour(out, d, bg, video):
+    """A screen recording of the app inside a phone frame, held for d seconds."""
+    pw = 700
+    vf = (f"[1:v]scale={pw}:-2:flags=lanczos,fps={FPS},setsar=1,tpad=stop_mode=clone:stop_duration=30[p];"
+          f"[0:v]fps={FPS},setsar=1[b];[b][p]overlay={(W - pw) // 2}:300:shortest=0,fade=t=in:st=0:d=0.2,format=yuv420p[v]")
+    run([ffmpeg_exe(), "-y", "-loop", "1", "-framerate", str(FPS), "-i", str(bg), "-i", str(video), "-filter_complex", vf + ";" + silent_audio_chain(d),
+         "-map", "[v]", "-map", "[a]", "-t", f"{d:.3f}"] + ENC + [out])
+
+
+def tour_bg(headline, video_w=700, video_h=1515):
+    img = gradient_bg()
+    d = ImageDraw.Draw(img)
+    hf, hl, hs = ri.fit(d, headline, W - 160, 200, 74, 48, 800, 1.08)
+    ri.draw_lines(d, hl, hf, hs, 80, 70, ri.WHITE, 1.08)
+    x = (W - video_w) // 2
+    d.rounded_rectangle([x - 14, 286, x + video_w + 14, 300 + video_h + 14], radius=64, fill=(20, 18, 70))
+    return img
+
+
 def concat(parts, out, tmp):
     lst = Path(tmp) / "concat.txt"
     lst.write_text("".join(f"file '{p}'\n" for p in parts))
@@ -314,7 +456,7 @@ def mix_music(video, music, start, total, out):
 
 
 # ---------- reel assembly ----------
-def render_reel(post, work, app_shot_fn):
+def render_reel(post, work, app_shot_fn, tour_fn=None):
     """Returns (mp4_path, cover_png_path, music_title)."""
     work = Path(work)
     script = post["script"]
@@ -324,8 +466,47 @@ def render_reel(post, work, app_shot_fn):
     parts = []
 
     # 1. story scenes from the LLM script: each caption sits over a background that shows what it is talking about
+    manual = bool(script.get("manual"))  # code-built reels: every scene is explicit, no auto workout card / app scene
     for i, sc in enumerate(script["scenes"]):
         d = max(float(sc.get("seconds", 4)), MIN_TEXT_SECONDS)
+        if sc.get("timer"):
+            frames = work / f"timer{i}"
+            frames.mkdir()
+            imgs = timer_frames(sc["timer"])
+            for k, im in enumerate(imgs, 1):
+                im.save(frames / f"t{k:04d}.png")
+            out = work / f"scene{i}.mp4"
+            build_timer(out, frames, len(imgs))
+            parts.append(out)
+            continue
+        if sc.get("tour"):
+            video = tour_fn(sc["tour"]["workout"]) if tour_fn else None
+            if video:
+                bg = work / f"tour{i}.png"
+                tour_bg(sc["tour"].get("headline") or "This is what decided looks like.").save(bg)
+                out = work / f"scene{i}.mp4"
+                build_tour(out, d, bg, video)
+                parts.append(out)
+            else:
+                shot = app_shot_fn(sc["tour"]["workout"])
+                if shot:
+                    frame = work / f"tour{i}.png"
+                    app_scene_frame(shot, sc["tour"].get("headline") or "Pick it. Press start.").save(frame)
+                    out = work / f"scene{i}.mp4"
+                    build_scene(out, d, frame)
+                    parts.append(out)
+            continue
+        if sc.get("card"):
+            bg = work / f"card{i}.png"
+            card_frame(sc["card"]).save(bg)
+            ov = None
+            if sc.get("on_screen_text"):
+                ov = work / f"ov{i}.png"
+                caption_overlay(sc["on_screen_text"], "lower").save(ov)
+            out = work / f"scene{i}.mp4"
+            build_scene(out, d, bg, overlay=ov)
+            parts.append(out)
+            continue
         visual = scene_visual(sc, i, facts)
         clip = find_clip(sc.get("footage_query") or "gym workout", d, f"{seed}{i}", used_clips) if visual == "plain" else None
         bg = clip
@@ -343,7 +524,7 @@ def render_reel(post, work, app_shot_fn):
         parts.append(out)
 
     # 2. workout card, straight from catalog data
-    if facts:
+    if facts and not manual:
         card = work / "card.png"
         workout_card(facts).save(card)
         out = work / "scene_card.mp4"
@@ -351,7 +532,7 @@ def render_reel(post, work, app_shot_fn):
         parts.append(out)
 
     # 3. app screen (live capture)
-    shot = app_shot_fn(facts["name"]) if facts else None
+    shot = app_shot_fn(facts["name"]) if facts and not manual else None
     if shot:
         frame = work / "app.png"
         app_scene_frame(shot, script["app_scene"].get("headline") or "Pick it. Press start.").save(frame)
@@ -396,6 +577,20 @@ def app_capture(work, base_url):
     return fn
 
 
+def tour_capture(work, base_url):
+    """Screen recording of the workout in the app (record_app_video.mjs) -> mp4/webm path, or None."""
+    def fn(workout_name):
+        out = Path(work) / "tour"
+        try:
+            subprocess.run(["node", str(ROOT / "record_app_video.mjs"), workout_name, str(out)] + ([base_url] if base_url else []),
+                           check=True, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=240, cwd=ROOT.parent.parent)
+            return out / "tour.webm"
+        except Exception as err:  # falls back to a still of the app
+            print(f"  app recording failed ({err}); falling back to a still", file=sys.stderr)
+            return None
+    return fn
+
+
 SAMPLE = {
     "id": "sample", "hook": "Gym. 30 minutes. No plan.",
     "script": {
@@ -427,7 +622,7 @@ def main():
     if a.sample:
         Path(a.sample).mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:
-            final, cover, music = render_reel(SAMPLE, tmp, app_capture(tmp, base_app))
+            final, cover, music = render_reel(SAMPLE, tmp, app_capture(tmp, base_app), tour_capture(tmp, base_app))
             (Path(a.sample) / "sample-reel.mp4").write_bytes(Path(final).read_bytes())
             (Path(a.sample) / "sample-cover.png").write_bytes(Path(cover).read_bytes())
         print(f"Sample reel written to {a.sample} (music: {music})")
@@ -438,7 +633,7 @@ def main():
     if not base or not key:
         sys.exit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
     hdr = {"apikey": key, "authorization": f"Bearer {key}"}
-    q = {"select": "*", "kind": "in.(reel_workout,reel_travel)", "status": "in.(draft,approved)", "order": "week_start,slot"}
+    q = {"select": "*", "kind": "in.(reel_workout,reel_travel,reel_humour,reel_levels,reel_pick,reel_format,reel_myth,reel_timer,reel_excuse,reel_week,reel_app)", "status": "in.(draft,approved)", "order": "week_start,slot"}
     if not a.force:
         q["render_status"] = "in.(pending,failed)"
     if a.week:
@@ -450,7 +645,7 @@ def main():
         tag = f"{post['week_start']}/slot{post['slot']}"
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                final, cover, music = render_reel(post, tmp, app_capture(tmp, base_app))
+                final, cover, music = render_reel(post, tmp, app_capture(tmp, base_app), tour_capture(tmp, base_app))
                 prefix = f"{post['week_start']}/{post['slot']}-{post['kind']}"
                 if a.local:
                     Path(a.local, prefix).mkdir(parents=True, exist_ok=True)

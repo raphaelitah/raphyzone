@@ -25,6 +25,8 @@ FONT = str(ROOT / "assets" / "fonts" / "Inter.ttf")
 W, H = 1080, 1350
 MARGIN = 88
 MAX_SLIDES = 10  # Instagram carousel limit
+ROWS_PER_SLIDE = 7
+EXTRA_KINDS = {"single_equipment", "carousel_quiz", "carousel_format", "carousel_myth", "carousel_exercise"}
 
 INDIGO = (80, 72, 229)       # #5048e5, the app's brand colour
 INDIGO_DARK = (52, 45, 168)
@@ -34,6 +36,26 @@ WHITE = (255, 255, 255)
 MUTED_ON_PAPER = (98, 96, 128)
 MUTED_ON_INK = (176, 174, 214)
 ACCENT = (255, 209, 102)     # warm highlight
+
+
+# Brand colour rotates per post so the grid does not look identical week after week.
+THEMES = [
+    ((80, 72, 229), (52, 45, 168)),    # indigo (the app's brand colour)
+    ((13, 118, 122), (8, 80, 88)),     # teal
+    ((196, 66, 38), (140, 40, 22)),    # ember
+    ((126, 52, 160), (86, 30, 118)),   # plum
+]
+
+
+def set_theme(i):
+    global INDIGO, INDIGO_DARK
+    INDIGO, INDIGO_DARK = THEMES[i % len(THEMES)]
+
+
+def theme_for(post):
+    from datetime import date
+    y, m, d = (int(x) for x in str(post["week_start"]).split("-"))
+    return (date(y, m, d).toordinal() // 7 + int(post.get("slot", 0))) % len(THEMES)
 
 
 def font(size, weight=700):
@@ -172,7 +194,207 @@ def slide_split(title, body):
     return img
 
 
+def meta_line(w):
+    bits = [f"{round(float(w['minutes']))} min"] if w.get("minutes") else []
+    if w.get("format"):
+        bits.append(str(w["format"]).replace("_", " ").upper())
+    eq = [e for e in (w.get("equipment") or []) if e != "bodyweight"]
+    bits.append(", ".join(eq).title() if eq else "No equipment")
+    return "  ·  ".join(bits)
+
+
+def block_title(b):
+    t = str(b.get("label") or b.get("type") or "Work").replace("_", " ").strip().title()
+    if b.get("rounds"):
+        t += f"  ·  {b['rounds']} rounds"
+    return t
+
+
+def slide_workout_card(w, kicker=None, n=None, total=None):
+    """The whole workout on one screen, made to be saved."""
+    img, d = new_slide(PAPER)
+    header(d, dark=False, n=n, total=total)
+    top = 180
+    if kicker:
+        kf = font(30, 800)
+        kw = d.textlength(kicker, font=kf) + 48
+        d.rounded_rectangle([MARGIN, 170, MARGIN + kw, 224], radius=27, fill=ACCENT)
+        d.text((MARGIN + 24, 178), kicker, font=kf, fill=INK)
+        top = 244
+    tf, tl, ts = fit(d, w["name"], W - 2 * MARGIN, 240, 88, 52, 800, 1.06)
+    y = draw_lines(d, tl, tf, ts, MARGIN, top, INK, 1.06) + 6
+    d.text((MARGIN, y), meta_line(w), font=font(34, 700), fill=INDIGO)
+    y += 70
+    rows = []
+    for b in w["blocks"]:
+        rows.append(("h", block_title(b)))
+        rows += [("i", it) for it in b["items"]]
+    avail = H - y - 130
+    row_h = min(84, avail / max(len(rows), 1))
+    fs = int(min(40, row_h * 0.5))
+    for kind, text in rows:
+        if kind == "h":
+            d.rounded_rectangle([MARGIN, y + 4, W - MARGIN, y + row_h - 4], radius=18, fill=INDIGO)
+            d.text((MARGIN + 26, y + (row_h - fs) / 2 - 3), text.upper(), font=font(max(fs - 6, 22), 800), fill=ACCENT)
+        else:
+            f = font(fs, 600)
+            while d.textlength(text, font=f) > W - 2 * MARGIN - 70 and fs > 22:
+                fs -= 2
+                f = font(fs, 600)
+            d.ellipse([MARGIN + 8, y + row_h / 2 - 7, MARGIN + 22, y + row_h / 2 + 7], fill=INDIGO)
+            d.text((MARGIN + 46, y + (row_h - fs) / 2 - 3), text, font=f, fill=INK)
+        y += row_h
+    d.text((MARGIN, H - 100), "Save this  ·  @raphyzone", font=font(34, 700), fill=INDIGO)
+    return img
+
+
+def slide_workout_cover(w, hook):
+    img, d = new_slide(INDIGO)
+    d.ellipse([W - 520, H - 560, W + 280, H + 240], fill=INDIGO_DARK)
+    header(d, dark=True)
+    d.text((MARGIN, 300), meta_line(w).upper(), font=font(34, 800), fill=ACCENT)
+    fnt, lines, size = fit(d, w["name"], W - 2 * MARGIN, 560, 120, 64, 800, 1.06)
+    y = draw_lines(d, lines, fnt, size, MARGIN, 370, WHITE, 1.06)
+    sf, sl, ss = fit(d, hook, W - 2 * MARGIN, 160, 44, 30, 500)
+    draw_lines(d, sl, sf, ss, MARGIN, y + 30, MUTED_ON_INK)
+    d.text((MARGIN, H - 150), "Swipe  →", font=font(44, 700), fill=WHITE)
+    return img
+
+
+def slide_workout_block(title, items, n, total, dark):
+    bg, fg = (INK, WHITE) if dark else (PAPER, INK)
+    img, d = new_slide(bg)
+    header(d, dark, n, total)
+    tf, tl, ts = fit(d, title, W - 2 * MARGIN, 200, 80, 48, 800, 1.06)
+    y = draw_lines(d, tl, tf, ts, MARGIN, 200, ACCENT if dark else INDIGO, 1.06) + 30
+    row_h = min(150, (H - y - 150) / max(len(items), 1))
+    fs = int(min(52, row_h * 0.45))
+    y += max(0, (H - y - 150 - row_h * len(items)) / 3)
+    for i, text in enumerate(items):
+        top = y + i * row_h
+        d.rounded_rectangle([MARGIN, top, W - MARGIN, top + row_h - 14], radius=24, fill=(38, 38, 58) if dark else WHITE)
+        f = font(fs, 700)
+        while d.textlength(text, font=f) > W - 2 * MARGIN - 130 and fs > 24:
+            fs -= 2
+            f = font(fs, 700)
+        d.text((MARGIN + 28, top + (row_h - 14 - fs) / 2 - 3), f"{i + 1}", font=font(fs, 800), fill=ACCENT if dark else INDIGO)
+        d.text((MARGIN + 90, top + (row_h - 14 - fs) / 2 - 3), text, font=f, fill=fg)
+    return img
+
+
+def slide_workout_text(title, body, n, total, dark):
+    return slide_content(title, body, n, total, dark)
+
+
+def slide_quiz_option(label, w, n, total, dark):
+    bg, fg, sub = (INK, WHITE, MUTED_ON_INK) if dark else (PAPER, INK, MUTED_ON_PAPER)
+    img, d = new_slide(bg)
+    header(d, dark, n, total)
+    d.text((MARGIN, 230), "IF YOU ARE...", font=font(32, 800), fill=ACCENT if dark else INDIGO)
+    lf, ll, ls = fit(d, label, W - 2 * MARGIN, 260, 108, 60, 800, 1.06)
+    y = draw_lines(d, ll, lf, ls, MARGIN, 290, fg, 1.06) + 40
+    d.rounded_rectangle([MARGIN, y, W - MARGIN, y + 8], radius=4, fill=ACCENT if dark else INDIGO)
+    y += 50
+    nf, nl, ns = fit(d, w["name"], W - 2 * MARGIN, 200, 64, 40, 800, 1.08)
+    y = draw_lines(d, nl, nf, ns, MARGIN, y, fg, 1.08) + 10
+    d.text((MARGIN, y), meta_line(w), font=font(32, 700), fill=ACCENT if dark else INDIGO)
+    y += 70
+    items = [it for b in w["blocks"] for it in b["items"]][:4]
+    for it in items:
+        d.ellipse([MARGIN + 4, y + 16, MARGIN + 18, y + 30], fill=ACCENT if dark else INDIGO)
+        f = font(36, 600)
+        d.text((MARGIN + 40, y), it, font=f, fill=sub if dark else INK)
+        y += 62
+    return img
+
+
+def slide_myth(myth, truth, n, total, dark):
+    bg, fg = (INK, WHITE) if dark else (PAPER, INK)
+    img, d = new_slide(bg)
+    header(d, dark, n, total)
+    d.rounded_rectangle([MARGIN, 220, MARGIN + 150, 276], radius=28, fill=(200, 60, 60))
+    d.text((MARGIN + 28, 228), "MYTH", font=font(34, 800), fill=WHITE)
+    mf, ml, ms = fit(d, myth, W - 2 * MARGIN, 330, 72, 44, 800, 1.1)
+    y = draw_lines(d, ml, mf, ms, MARGIN, 310, fg, 1.1) + 50
+    d.rounded_rectangle([MARGIN, y, MARGIN + 170, y + 56], radius=28, fill=ACCENT)
+    d.text((MARGIN + 28, y + 8), "TRUTH", font=font(34, 800), fill=INK)
+    tf, tl, ts = fit(d, truth, W - 2 * MARGIN, H - y - 260, 50, 32, 500, 1.3)
+    draw_lines(d, tl, tf, ts, MARGIN, y + 90, MUTED_ON_INK if dark else MUTED_ON_PAPER, 1.3)
+    return img
+
+
+def render_extra(post):
+    sc = post.get("script") or {}
+    kind = post["kind"]
+    if kind == "single_equipment":
+        return [slide_workout_card(sc["workout"], kicker=sc.get("kicker"))]
+    if kind == "carousel_quiz":
+        opts = sc["quiz"]["options"]
+        total = len(opts) + 2
+        out = [slide_cover(post["hook"], "Swipe to find yours")]
+        out += [slide_quiz_option(o["label"], o["workout"], i + 2, total, dark=(i % 2 == 1)) for i, o in enumerate(opts)]
+        return out + [slide_cta()]
+    if kind == "carousel_format":
+        key = sc["format_key"]
+        total = 4
+        return [
+            slide_cover(f"What is {key.title() if key == 'FOR TIME' else key}?", "Explained in one swipe"),
+            slide_content(key, sc["definition"], 2, total, dark=False),
+            slide_workout_card(sc["workout"], kicker=f"TRY A {key} WORKOUT", n=3, total=total),
+            slide_cta(),
+        ]
+    if kind == "carousel_myth":
+        myths = sc["myths"]
+        total = len(myths) + 2
+        out = [slide_cover(post["hook"], "Swipe to find out")]
+        out += [slide_myth(m["myth"], m["truth"], i + 2, total, dark=(i % 2 == 1)) for i, m in enumerate(myths)]
+        return out + [slide_cta()]
+    # carousel_exercise
+    ladder = sc["ladder"]
+    total = len(ladder) + 2
+    out = [slide_cover(post["hook"], f"{sc['pattern']}, whatever gear you have")]
+    out += [slide_workout_block(str(l["equipment"]).title(), l["exercises"], i + 2, total, dark=(i % 2 == 0)) for i, l in enumerate(ladder)]
+    return out + [slide_cta()]
+
+
+def render_workout_carousel(post):
+    w = (post.get("script") or {}).get("workout")
+    if not w:
+        raise ValueError("workout post has no script.workout")
+    parts = [("cover", None)]
+    for b in w["blocks"]:
+        items = b["items"]
+        chunks = [items[i:i + ROWS_PER_SLIDE] for i in range(0, len(items), ROWS_PER_SLIDE)] or [[]]
+        for ci, c in enumerate(chunks):
+            parts.append(("block", (block_title(b) + (f" ({ci + 1}/{len(chunks)})" if len(chunks) > 1 else ""), c)))
+    fmt = next((s for s in (post.get("slides") or [])[1:] if s.get("title") == w.get("format")), None)
+    if fmt:
+        parts.append(("format", fmt))
+    parts = parts[:MAX_SLIDES - 1]
+    total = len(parts) + 1
+    out = []
+    for i, (k, v) in enumerate(parts):
+        if k == "cover":
+            out.append(slide_workout_cover(w, post["hook"]))
+        elif k == "block":
+            out.append(slide_workout_block(v[0], v[1], i + 1, total, dark=(i % 2 == 0)))
+        else:
+            out.append(slide_workout_text(str(v["title"]).replace("_", " ").upper(), v.get("body", ""), i + 1, total, dark=(i % 2 == 0)))
+    out.append(slide_cta())
+    return out
+
+
 def render_post(post):
+    set_theme(theme_for(post))
+    if post["kind"] in EXTRA_KINDS:
+        return render_extra(post)
+    if post["kind"] == "single_workout":
+        w = (post.get("script") or {}).get("workout")
+        if not w:
+            raise ValueError("workout post has no script.workout")
+        return [slide_workout_card(w)]
+    if post["kind"] == "carousel_workout":
+        return render_workout_carousel(post)
     slides = post.get("slides") or []
     if post["kind"] == "single_split":
         s = slides[0]
@@ -188,14 +410,28 @@ def render_post(post):
     return out[:MAX_SLIDES]
 
 
+_W = {"name": "Dumbbell Ladder", "minutes": 30, "format": "AMRAP", "equipment": ["dumbbell", "bench / box"], "blocks": [
+    {"label": "warm-up", "rounds": 2, "items": ["Arm circles × 10", "Bodyweight squat × 10", "Cat-cow × 8"]},
+    {"label": "main set", "rounds": 4, "items": ["Dumbbell goblet squat × 12", "Dumbbell bench press × 10", "Bent-over row × 10", "Reverse lunge × 8", "Plank hold × 40s"]}]}
+
+_W2 = {"name": "Short Burner", "minutes": 15, "format": "EMOM", "equipment": ["bodyweight"], "blocks": [{"label": "main", "rounds": 3, "items": ["Push-up × 10", "Air squat × 15", "Plank hold × 30s", "Burpee × 5"]}]}
+
 SAMPLES = [
-    {"kind": "carousel_humour", "slot": 2, "hook": "Decision fatigue is the real workout", "slides": [
+    {"kind": "single_equipment", "slot": 3, "week_start": "2026-11-23", "hook": "Only dumbbells? Done.", "script": {"workout": _W, "kicker": "DUMBBELLS ONLY"}, "slides": []},
+    {"kind": "carousel_quiz", "slot": 4, "week_start": "2026-11-23", "hook": "Which workout are you today?", "script": {"quiz": {"options": [{"label": "Short on time", "workout": _W2}, {"label": "Full send", "workout": _W}, {"label": "Low energy", "workout": _W2}]}}, "slides": []},
+    {"kind": "carousel_format", "slot": 5, "week_start": "2026-11-23", "hook": "What is an AMRAP?", "script": {"format_key": "AMRAP", "definition": "As many rounds as possible: do the listed moves in order, round after round, until the clock runs out.", "workout": _W}, "slides": []},
+    {"kind": "carousel_myth", "slot": 6, "week_start": "2026-11-23", "hook": "4 training myths", "script": {"myths": [{"myth": "Going lighter means you failed.", "truth": "After two or more hard or failed sessions, the app proposes going down."}, {"myth": "Every lift should go up by the same amount.", "truth": "+2.5 kg for upper-body lifts and +5 kg for lower-body lifts."}]}, "slides": []},
+    {"kind": "carousel_exercise", "slot": 7, "week_start": "2026-11-23", "hook": "Same squat, any gear", "script": {"pattern": "Squat", "ladder": [{"equipment": "bodyweight", "exercises": ["Air squat", "Jump squat"]}, {"equipment": "dumbbell", "exercises": ["Goblet squat", "Dumbbell front squat"]}, {"equipment": "barbell", "exercises": ["Back squat", "Front squat"]}]}, "slides": []},
+    {"kind": "single_workout", "slot": 1, "week_start": "2026-11-23", "hook": "30 minutes, already decided", "script": {"workout": _W}, "slides": []},
+    {"kind": "carousel_workout", "slot": 2, "week_start": "2026-11-23", "hook": "30 minutes, already decided", "script": {"workout": _W},
+     "slides": [{"title": "Dumbbell Ladder"}, {"title": "AMRAP", "body": "As many rounds as possible: do the listed moves in order, round after round, until the clock runs out."}]},
+    {"kind": "carousel_humour", "slot": 2, "week_start": "2026-11-23", "hook": "Decision fatigue is the real workout", "slides": [
         {"title": "Decision fatigue is the real workout", "body": "A field guide for people who never start training"},
         {"title": "The 20-minute scroll", "body": "You opened the app to train. It's been 20 minutes. You've chosen nothing."},
         {"title": "The hotel gym staring contest", "body": "Four dumbbells, one bench, zero ideas."},
         {"title": "Chest day or legs?", "body": "Whichever you pick, you will wonder if it was the right one."},
         {"title": "Same plan, rearranged again", "body": "That's not programming. That's procrastination with a spreadsheet."}]},
-    {"kind": "single_split", "slot": 6, "hook": "Save this 3-day split", "slides": [
+    {"kind": "single_split", "slot": 6, "week_start": "2026-11-23", "hook": "Save this 3-day split", "slides": [
         {"title": "Save this 3-day split", "body": "Mon — Push (Chest + Triceps)\nTue — Rest or walk\nWed — Pull (Back + Biceps)\nThu — Mobility flow\nFri — Super Legs\nSat — Rest\nSun — Rest"}]},
 ]
 
@@ -233,7 +469,7 @@ def main():
         sys.exit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
     hdr = {"apikey": key, "authorization": f"Bearer {key}"}
 
-    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split)", "status": "in.(draft,approved)", "order": "week_start,slot"}
+    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split,single_workout,carousel_workout,single_equipment,carousel_quiz,carousel_format,carousel_myth,carousel_exercise)", "status": "in.(draft,approved)", "order": "week_start,slot"}
     if not a.force:
         q["render_status"] = "in.(pending,failed)"
     if a.week:

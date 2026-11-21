@@ -10,9 +10,25 @@ import { cn } from '@/lib/utils';
 const KIND_LABEL = {
   reel_workout: 'Reel · Workout decided',
   reel_travel: 'Reel · Travel training',
+  reel_humour: 'Reel · Gym humour',
+  reel_levels: 'Reel · One movement, three levels',
+  reel_pick: 'Reel · Pick a number',
+  reel_format: 'Reel · Format in 15 seconds',
+  reel_myth: 'Reel · Myth vs truth',
+  reel_timer: 'Reel · Rep timer',
+  reel_excuse: 'Reel · Excuse buster',
+  reel_week: 'Reel · Your week, decided',
+  reel_app: 'Reel · App screen recording',
   carousel_humour: 'Carousel · Decision fatigue',
   carousel_smarter: 'Carousel · Train smarter',
   single_split: 'Image · Split to save',
+  single_workout: 'Image · Workout card',
+  carousel_workout: 'Carousel · Workout breakdown',
+  single_equipment: 'Image · Gear-limited workout',
+  carousel_quiz: 'Carousel · Which workout are you?',
+  carousel_format: 'Carousel · Format explainer',
+  carousel_myth: 'Carousel · Myth vs truth',
+  carousel_exercise: 'Carousel · One pattern, any gear',
 };
 
 const STATUS_STYLE = {
@@ -121,6 +137,72 @@ function PostCard({ post, onChange }) {
   );
 }
 
+// Lifetime metrics by post format, from the newest snapshot of each post (see scripts/social/pull-metrics.mjs).
+function PerformanceByFormat() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('social_weekly_metrics')
+        .select('post_id, week_start, reach, likes, comments, saves, shares, profile_visits, raw, social_posts(kind)')
+        .order('week_start', { ascending: false })
+        .limit(500);
+      const latest = new Map();
+      for (const r of data || []) if (r.social_posts && !latest.has(r.post_id)) latest.set(r.post_id, r);
+      const by = {};
+      for (const r of latest.values()) {
+        const a = (by[r.social_posts.kind] ||= { kind: r.social_posts.kind, n: 0, reach: 0, saves: 0, shares: 0, comments: 0, visits: 0, follows: 0 });
+        a.n += 1;
+        a.reach += r.reach || 0;
+        a.saves += r.saves || 0;
+        a.shares += r.shares || 0;
+        a.comments += r.comments || 0;
+        a.visits += r.profile_visits || 0;
+        a.follows += r.raw?.follows || 0;
+      }
+      setRows(Object.values(by).sort((a, b) => b.follows - a.follows || b.reach - a.reach));
+    })();
+  }, []);
+  if (rows === null) return null;
+  return (
+    <Card className="p-4 mb-4" data-testid="performance-by-format">
+      <h2 className="text-sm font-semibold mb-2">Performance by format</h2>
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No metrics yet. The Thursday metrics job fills this in.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted-foreground">
+                <th className="py-1 pr-2 font-medium">Format</th>
+                <th className="pr-2 font-medium">Posts</th>
+                <th className="pr-2 font-medium">Avg reach</th>
+                <th className="pr-2 font-medium">Follows</th>
+                <th className="pr-2 font-medium">Visits</th>
+                <th className="pr-2 font-medium">Saves</th>
+                <th className="font-medium">Shares</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.kind} className="border-t border-border">
+                  <td className="py-1 pr-2">{KIND_LABEL[r.kind] || r.kind}</td>
+                  <td className="pr-2">{r.n}</td>
+                  <td className="pr-2">{Math.round(r.reach / r.n)}</td>
+                  <td className="pr-2">{r.follows}</td>
+                  <td className="pr-2">{r.visits}</td>
+                  <td className="pr-2">{r.saves}</td>
+                  <td>{r.shares}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function AdminSocial() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -176,6 +258,7 @@ export default function AdminSocial() {
   return (
     <div className="px-5 pt-10 pb-24">
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Instagram queue</h1>
+      <PerformanceByFormat />
       {weeks.length === 0 ? (
         <p className="text-sm text-muted-foreground">No posts yet. The Friday writer creates next week's drafts.</p>
       ) : (

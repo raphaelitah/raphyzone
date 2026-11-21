@@ -37,10 +37,38 @@ const HUMOUR = [
   { id: 'wish_someone_said', text: 'WISHING SOMEONE JUST SAID "DO THIS". Not a lecture, not a menu, just a sentence.' },
 ];
 
+// Humour pool, second half: more situations so the weekly humour carousel stays fresh.
+HUMOUR.push(
+  { id: 'warmup_scroll', text: 'THE WARM-UP THAT BECOMES A SCROLL. "Just a quick look at what to do" and ten minutes later you are still on the mat, phone in hand, no closer.' },
+  { id: 'new_year_plan', text: 'THE PLAN IN THE NOTES APP. A beautiful plan written in January, never opened since, with exercises you can no longer picture.' },
+  { id: 'gym_playlist', text: 'THE PLAYLIST GETS MORE ATTENTION THAN THE WORKOUT. Twenty minutes choosing the music, zero seconds choosing the exercises.' },
+  { id: 'friend_plan', text: 'YOUR FRIEND\'S PLAN. You copied their routine and it turned out to be built around gear your gym does not have and a body that is not yours.' },
+  { id: 'treadmill_default', text: 'THE TREADMILL DEFAULT. When you cannot decide, you walk on the treadmill. Not a plan, just the place nobody asks questions.' },
+);
+
+// "Train smarter" carousel angles (progression and tracking).
+const SMARTER = [
+  { id: 'cant_say_stronger', text: 'CANNOT SAY IF YOU GOT STRONGER. Months of training and no honest answer to "are you stronger than in spring?".' },
+  { id: 'notes_app_weights', text: 'THE NOTES APP FULL OF HALF-REMEMBERED WEIGHTS. Crossed-out numbers you cannot trust, a guess every time you load the bar.' },
+  { id: 'same_weight_forever', text: 'THE SAME WEIGHT FOR MONTHS. It felt easy a while ago and nobody told you it was time to go heavier.' },
+  { id: 'too_much_too_soon', text: 'JUMPING TOO FAST. You added weight because it felt like time, the set fell apart, and now you are not sure what is right.' },
+];
+
+// Workout card / breakdown posts: the framing around a real workout, not the workout itself.
+const WORKOUT_POST = [
+  { id: 'screenshot_graveyard', text: 'THE SCREENSHOT GRAVEYARD. You save workouts you never open again. This one is written down properly, so it actually gets done.' },
+  { id: 'walk_in_with_plan', text: 'WALKING IN WITH A PLAN. The difference between a session that happens and one that drifts is whether you knew what you were doing when you walked in.' },
+  { id: 'decided_for_you', text: 'ALREADY DECIDED. Somebody picked the exercises, the order and the time. All you have to do is start at the top.' },
+  { id: 'just_follow_it', text: 'JUST FOLLOW IT. No tweaking, no swapping, no second-guessing the order. Top to bottom, then done.' },
+  { id: 'try_this_one', text: 'TRY THIS ONE. You have run out of ideas for the evening session. Here is one that is complete and fits a normal gym.' },
+];
+
 function poolFor(plan) {
   if (plan.kind === 'reel_workout') return GYM;
   if (plan.kind === 'reel_travel') return plan.variant === 'jet_lag' ? TRAVEL_JET : TRAVEL_ROOM;
-  if (plan.kind === 'carousel_humour') return HUMOUR;
+  if (plan.kind === 'carousel_humour' || plan.kind === 'reel_humour') return HUMOUR;
+  if (plan.kind === 'carousel_smarter') return SMARTER;
+  if (plan.kind === 'single_workout' || plan.kind === 'single_equipment' || plan.kind === 'carousel_workout') return WORKOUT_POST;
   return null;
 }
 
