@@ -13,12 +13,13 @@
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
-import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
+import { buildExtraPost, EXTRA_KINDS } from './lib/content-posts.mjs';
+import { loadExercises, loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
 // Each week has 2 workout reels, 2 travel reels and 3 image posts. Which image formats run, and
 // which weekday each post lands on, rotate from week to week (seeded by the week, so reruns and
 // redos of the same week are stable). Slot = position in the week (1 = Monday).
-const IMAGE_KINDS = ['carousel_humour', 'single_workout', 'carousel_smarter', 'carousel_workout', 'single_split'];
+const IMAGE_KINDS = ['carousel_humour', 'single_workout', 'carousel_myth', 'carousel_workout', 'carousel_quiz', 'carousel_smarter', 'single_equipment', 'carousel_format', 'single_split', 'carousel_exercise'];
 const REELS = [
   { kind: 'reel_workout' },
   { kind: 'reel_workout' },
@@ -39,8 +40,8 @@ function rng32(seed) {
 
 const weekNumber = (weekStart) => Math.floor(Date.parse(`${weekStart}T00:00:00Z`) / (7 * 86400000));
 
-// 3 of the 5 image formats, advancing 3 per week so every format returns every ~2 weeks and each
-// week contains at least one workout-detail format.
+// 3 of the 10 image formats, advancing 3 per week so every format returns about every 3 weeks
+// and no format repeats within a week.
 export function planWeek(weekStart) {
   const n = weekNumber(weekStart);
   const rand = rng32(n * 2654435761);
@@ -151,6 +152,8 @@ function wrongDurations(text, minutes) {
 }
 
 const WORKOUT_KINDS = new Set(['single_workout', 'carousel_workout']);
+// Image posts whose slides are built in code: the model supplies only hook, caption and hashtags.
+const isCodeSlides = (kind) => WORKOUT_KINDS.has(kind) || EXTRA_KINDS.has(kind);
 
 function validatePost(kind, out, ctx = {}) {
   const isReel = kind.startsWith('reel');
@@ -181,7 +184,8 @@ function validatePost(kind, out, ctx = {}) {
     if (/raphyzone/i.test(texts[0])) throw new Error('opening scene must not name the brand');
     if (kind === 'reel_travel' && !/business trip|work trip/i.test(texts.slice(0, 2).join(' '))) throw new Error('travel reel must say "business trip" in the first two scenes');
   } else {
-    if (WORKOUT_KINDS.has(kind)) {
+    if (isCodeSlides(kind)) {
+      if (!WORKOUT_KINDS.has(kind) && !ctx.minutes && /\d+\s*(?:-|\s)?(?:min|minutes?)\b/i.test([out.hook, out.caption].join(' '))) throw new Error('do not mention a number of minutes');
       if (/raphyzone removes the mental load/i.test(out.caption) === false) throw new Error('caption must use the pitch line "Raphyzone removes the mental load."');
       if (ctx.minutes) { const bad = wrongDurations([out.hook, out.caption].join(' . '), ctx.minutes); if (bad.length) throw new Error(`mentions ${bad.join(', ')} minutes but the workout is ${ctx.minutes}`); }
       return out;
@@ -203,7 +207,7 @@ function finalize(out) {
   return { caption: `${body}\n\n${CTA}`, hashtags: [...new Set(tags)] };
 }
 
-async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }) {
+async function buildPrompt({ plan, catalog, exercises, recentKeys, recentIds, used, perf, progression }) {
   const { kind, variant } = plan;
   if (kind === 'reel_workout') {
     const scenarios = [...GYM_SCENARIOS].sort(() => Math.random() - 0.5);
@@ -242,6 +246,7 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       user: `Write a story reel about training on the road. ${brief}\nScene 1 must state the situation outright so the viewer reads it as themselves ("You're on a business trip. You wake up in a hotel room, and you have no idea which workout to do."), then land the feeling; the three story scenes together must make clear who they are, where they are and what they are stuck on; never open with the feeling alone. Use exactly this angle for the story and do not drift into another one: ${plan.angle} Then deepen it, then the turn: the relief, using the exact pitch line. The workout below is already chosen: write the story to fit it, and ${facts.minutes} minutes is the only duration you may mention anywhere. Then show the workout and invite them to try it free.\nFACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nScene order (6-7 scenes), each line leading into the next:\n1) beat "feel", visual "plain": the recognisable moment. No brand, no logo.\n2) beat "deepen", visual "plain".\n3) beat "turn", visual "plain": the relief, with the exact line "Raphyzone removes the mental load."\n4) beat "show", visual "workout": the workout name, time and equipment (the card is shown behind the text).\n5) beat "show", visual "plain": what it feels like to just do it, in a human voice.\nThe app screen follows automatically (your app_scene.headline is its caption), then the free-trial end card. The caption retells the story in 3-5 short lines.\n${perf}\nJSON shape: ${SHAPES.reel}`,
     };
   }
+  if (EXTRA_KINDS.has(kind)) return buildExtraPost({ kind, catalog, exercises, recentIds, used, perf, recentKeys, plan });
   if (kind === 'single_workout' || kind === 'carousel_workout') {
     const single = kind === 'single_workout';
     const scenarios = [...GYM_SCENARIOS].sort(() => Math.random() - 0.5);
@@ -309,11 +314,16 @@ async function main() {
   });
   if (!todo.length) { console.log(`Week ${weekStart}: nothing to write.`); return; }
 
-  const [catalog, perf, progression] = await Promise.all([loadCatalog(supabase), performanceContext(supabase), progressionFacts(supabase)]);
+  const [catalog, perf, progression, exercises] = await Promise.all([loadCatalog(supabase), performanceContext(supabase), progressionFacts(supabase), loadExercises(supabase)]);
   const { data: recent } = await supabase.from('social_posts').select('source_workout_ids, hook, script, week_start, slot').gte('week_start', addDays(weekStart, -56)).neq('week_start', weekStart).order('week_start', { ascending: false }).order('slot', { ascending: false });
   const recentIds = new Set((recent || []).flatMap((r) => r.source_workout_ids));
   // most recent first; the angle of a post being redone counts as the freshest so it is not picked again
   const recentAngles = [...(existing || []).filter((p) => todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id), ...(recent || []).map((r) => r.script?.angle_id)].filter(Boolean);
+  const recentKeys = {
+    formats: (recent || []).map((r) => r.script?.format_key).filter(Boolean),
+    myths: (recent || []).slice(0, 12).flatMap((r) => r.script?.myth_ids || []),
+    patterns: (recent || []).map((r) => r.script?.pattern).filter(Boolean),
+  };
   const recentHooks = (recent || []).map((r) => r.hook).filter(Boolean).slice(0, 14);
   const takenAngles = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).map((p) => p.script?.angle_id).filter(Boolean));
   const used = new Set((existing || []).filter((p) => !todo.some((t) => t.slot === p.slot)).flatMap((p) => p.source_workout_ids));
@@ -325,7 +335,7 @@ async function main() {
     const cur = bySlot.get(plan.slot);
     const angle = pickAngle(plan, recentAngles, takenAngles);
     if (angle) takenAngles.add(angle.id);
-    const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, recentIds, used, perf, progression });
+    const built = await buildPrompt({ plan: { ...plan, angle: angle?.text }, catalog, exercises, recentKeys, recentIds, used, perf, progression });
     built.workoutIds.forEach((id) => used.add(id));
     const hookNote = recentHooks.length ? `\nRecent hooks, for contrast only (do not reuse their images, structure or opening words):\n${recentHooks.map((h) => `- ${h}`).join('\n')}\nThe opening must be fresh and specific to the angle above.` : '';
     built.user += hookNote;

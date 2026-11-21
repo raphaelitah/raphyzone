@@ -15,6 +15,11 @@ const KIND_LABEL = {
   single_split: 'Image · Split to save',
   single_workout: 'Image · Workout card',
   carousel_workout: 'Carousel · Workout breakdown',
+  single_equipment: 'Image · Gear-limited workout',
+  carousel_quiz: 'Carousel · Which workout are you?',
+  carousel_format: 'Carousel · Format explainer',
+  carousel_myth: 'Carousel · Myth vs truth',
+  carousel_exercise: 'Carousel · One pattern, any gear',
 };
 
 const STATUS_STYLE = {

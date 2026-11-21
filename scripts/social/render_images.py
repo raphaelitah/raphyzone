@@ -26,6 +26,7 @@ W, H = 1080, 1350
 MARGIN = 88
 MAX_SLIDES = 10  # Instagram carousel limit
 ROWS_PER_SLIDE = 7
+EXTRA_KINDS = {"single_equipment", "carousel_quiz", "carousel_format", "carousel_myth", "carousel_exercise"}
 
 INDIGO = (80, 72, 229)       # #5048e5, the app's brand colour
 INDIGO_DARK = (52, 45, 168)
@@ -209,12 +210,19 @@ def block_title(b):
     return t
 
 
-def slide_workout_card(w):
+def slide_workout_card(w, kicker=None, n=None, total=None):
     """The whole workout on one screen, made to be saved."""
     img, d = new_slide(PAPER)
-    header(d, dark=False)
+    header(d, dark=False, n=n, total=total)
+    top = 180
+    if kicker:
+        kf = font(30, 800)
+        kw = d.textlength(kicker, font=kf) + 48
+        d.rounded_rectangle([MARGIN, 170, MARGIN + kw, 224], radius=27, fill=ACCENT)
+        d.text((MARGIN + 24, 178), kicker, font=kf, fill=INK)
+        top = 244
     tf, tl, ts = fit(d, w["name"], W - 2 * MARGIN, 240, 88, 52, 800, 1.06)
-    y = draw_lines(d, tl, tf, ts, MARGIN, 180, INK, 1.06) + 6
+    y = draw_lines(d, tl, tf, ts, MARGIN, top, INK, 1.06) + 6
     d.text((MARGIN, y), meta_line(w), font=font(34, 700), fill=INDIGO)
     y += 70
     rows = []
@@ -278,6 +286,77 @@ def slide_workout_text(title, body, n, total, dark):
     return slide_content(title, body, n, total, dark)
 
 
+def slide_quiz_option(label, w, n, total, dark):
+    bg, fg, sub = (INK, WHITE, MUTED_ON_INK) if dark else (PAPER, INK, MUTED_ON_PAPER)
+    img, d = new_slide(bg)
+    header(d, dark, n, total)
+    d.text((MARGIN, 230), "IF YOU ARE...", font=font(32, 800), fill=ACCENT if dark else INDIGO)
+    lf, ll, ls = fit(d, label, W - 2 * MARGIN, 260, 108, 60, 800, 1.06)
+    y = draw_lines(d, ll, lf, ls, MARGIN, 290, fg, 1.06) + 40
+    d.rounded_rectangle([MARGIN, y, W - MARGIN, y + 8], radius=4, fill=ACCENT if dark else INDIGO)
+    y += 50
+    nf, nl, ns = fit(d, w["name"], W - 2 * MARGIN, 200, 64, 40, 800, 1.08)
+    y = draw_lines(d, nl, nf, ns, MARGIN, y, fg, 1.08) + 10
+    d.text((MARGIN, y), meta_line(w), font=font(32, 700), fill=ACCENT if dark else INDIGO)
+    y += 70
+    items = [it for b in w["blocks"] for it in b["items"]][:4]
+    for it in items:
+        d.ellipse([MARGIN + 4, y + 16, MARGIN + 18, y + 30], fill=ACCENT if dark else INDIGO)
+        f = font(36, 600)
+        d.text((MARGIN + 40, y), it, font=f, fill=sub if dark else INK)
+        y += 62
+    return img
+
+
+def slide_myth(myth, truth, n, total, dark):
+    bg, fg = (INK, WHITE) if dark else (PAPER, INK)
+    img, d = new_slide(bg)
+    header(d, dark, n, total)
+    d.rounded_rectangle([MARGIN, 220, MARGIN + 150, 276], radius=28, fill=(200, 60, 60))
+    d.text((MARGIN + 28, 228), "MYTH", font=font(34, 800), fill=WHITE)
+    mf, ml, ms = fit(d, myth, W - 2 * MARGIN, 330, 72, 44, 800, 1.1)
+    y = draw_lines(d, ml, mf, ms, MARGIN, 310, fg, 1.1) + 50
+    d.rounded_rectangle([MARGIN, y, MARGIN + 170, y + 56], radius=28, fill=ACCENT)
+    d.text((MARGIN + 28, y + 8), "TRUTH", font=font(34, 800), fill=INK)
+    tf, tl, ts = fit(d, truth, W - 2 * MARGIN, H - y - 260, 50, 32, 500, 1.3)
+    draw_lines(d, tl, tf, ts, MARGIN, y + 90, MUTED_ON_INK if dark else MUTED_ON_PAPER, 1.3)
+    return img
+
+
+def render_extra(post):
+    sc = post.get("script") or {}
+    kind = post["kind"]
+    if kind == "single_equipment":
+        return [slide_workout_card(sc["workout"], kicker=sc.get("kicker"))]
+    if kind == "carousel_quiz":
+        opts = sc["quiz"]["options"]
+        total = len(opts) + 2
+        out = [slide_cover(post["hook"], "Swipe to find yours")]
+        out += [slide_quiz_option(o["label"], o["workout"], i + 2, total, dark=(i % 2 == 1)) for i, o in enumerate(opts)]
+        return out + [slide_cta()]
+    if kind == "carousel_format":
+        key = sc["format_key"]
+        total = 4
+        return [
+            slide_cover(f"What is {key.title() if key == 'FOR TIME' else key}?", "Explained in one swipe"),
+            slide_content(key, sc["definition"], 2, total, dark=False),
+            slide_workout_card(sc["workout"], kicker=f"TRY A {key} WORKOUT", n=3, total=total),
+            slide_cta(),
+        ]
+    if kind == "carousel_myth":
+        myths = sc["myths"]
+        total = len(myths) + 2
+        out = [slide_cover(post["hook"], "Swipe to find out")]
+        out += [slide_myth(m["myth"], m["truth"], i + 2, total, dark=(i % 2 == 1)) for i, m in enumerate(myths)]
+        return out + [slide_cta()]
+    # carousel_exercise
+    ladder = sc["ladder"]
+    total = len(ladder) + 2
+    out = [slide_cover(post["hook"], f"{sc['pattern']}, whatever gear you have")]
+    out += [slide_workout_block(str(l["equipment"]).title(), l["exercises"], i + 2, total, dark=(i % 2 == 0)) for i, l in enumerate(ladder)]
+    return out + [slide_cta()]
+
+
 def render_workout_carousel(post):
     w = (post.get("script") or {}).get("workout")
     if not w:
@@ -307,6 +386,8 @@ def render_workout_carousel(post):
 
 def render_post(post):
     set_theme(theme_for(post))
+    if post["kind"] in EXTRA_KINDS:
+        return render_extra(post)
     if post["kind"] == "single_workout":
         w = (post.get("script") or {}).get("workout")
         if not w:
@@ -333,7 +414,14 @@ _W = {"name": "Dumbbell Ladder", "minutes": 30, "format": "AMRAP", "equipment": 
     {"label": "warm-up", "rounds": 2, "items": ["Arm circles × 10", "Bodyweight squat × 10", "Cat-cow × 8"]},
     {"label": "main set", "rounds": 4, "items": ["Dumbbell goblet squat × 12", "Dumbbell bench press × 10", "Bent-over row × 10", "Reverse lunge × 8", "Plank hold × 40s"]}]}
 
+_W2 = {"name": "Short Burner", "minutes": 15, "format": "EMOM", "equipment": ["bodyweight"], "blocks": [{"label": "main", "rounds": 3, "items": ["Push-up × 10", "Air squat × 15", "Plank hold × 30s", "Burpee × 5"]}]}
+
 SAMPLES = [
+    {"kind": "single_equipment", "slot": 3, "week_start": "2026-11-23", "hook": "Only dumbbells? Done.", "script": {"workout": _W, "kicker": "DUMBBELLS ONLY"}, "slides": []},
+    {"kind": "carousel_quiz", "slot": 4, "week_start": "2026-11-23", "hook": "Which workout are you today?", "script": {"quiz": {"options": [{"label": "Short on time", "workout": _W2}, {"label": "Full send", "workout": _W}, {"label": "Low energy", "workout": _W2}]}}, "slides": []},
+    {"kind": "carousel_format", "slot": 5, "week_start": "2026-11-23", "hook": "What is an AMRAP?", "script": {"format_key": "AMRAP", "definition": "As many rounds as possible: do the listed moves in order, round after round, until the clock runs out.", "workout": _W}, "slides": []},
+    {"kind": "carousel_myth", "slot": 6, "week_start": "2026-11-23", "hook": "4 training myths", "script": {"myths": [{"myth": "Going lighter means you failed.", "truth": "After two or more hard or failed sessions, the app proposes going down."}, {"myth": "Every lift should go up by the same amount.", "truth": "+2.5 kg for upper-body lifts and +5 kg for lower-body lifts."}]}, "slides": []},
+    {"kind": "carousel_exercise", "slot": 7, "week_start": "2026-11-23", "hook": "Same squat, any gear", "script": {"pattern": "Squat", "ladder": [{"equipment": "bodyweight", "exercises": ["Air squat", "Jump squat"]}, {"equipment": "dumbbell", "exercises": ["Goblet squat", "Dumbbell front squat"]}, {"equipment": "barbell", "exercises": ["Back squat", "Front squat"]}]}, "slides": []},
     {"kind": "single_workout", "slot": 1, "week_start": "2026-11-23", "hook": "30 minutes, already decided", "script": {"workout": _W}, "slides": []},
     {"kind": "carousel_workout", "slot": 2, "week_start": "2026-11-23", "hook": "30 minutes, already decided", "script": {"workout": _W},
      "slides": [{"title": "Dumbbell Ladder"}, {"title": "AMRAP", "body": "As many rounds as possible: do the listed moves in order, round after round, until the clock runs out."}]},
@@ -381,7 +469,7 @@ def main():
         sys.exit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
     hdr = {"apikey": key, "authorization": f"Bearer {key}"}
 
-    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split,single_workout,carousel_workout)", "status": "in.(draft,approved)", "order": "week_start,slot"}
+    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split,single_workout,carousel_workout,single_equipment,carousel_quiz,carousel_format,carousel_myth,carousel_exercise)", "status": "in.(draft,approved)", "order": "week_start,slot"}
     if not a.force:
         q["render_status"] = "in.(pending,failed)"
     if a.week:
