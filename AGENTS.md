@@ -18,3 +18,8 @@ Start with `README.md` for local setup and environment variables.
 - Use `npm run dev` for local development.
 - Run the relevant checks from `package.json` (`lint`, `typecheck`, `test:e2e`) before finishing code changes.
 - Deploys happen automatically via Cloudflare Pages on push to the connected GitHub branch.
+
+## Feature registry (Instagram content)
+
+- `scripts/social/lib/features.mjs` lists every user-facing feature, with its tier (free / free_limited / premium), what free gets, what Premium adds, and a relatable moment. The weekly Instagram writer sources feature-spotlight posts from it and may only claim what it says.
+- Whenever you build, change, remove or re-tier a user-facing feature (including changes to `src/lib/entitlements.js`, `src/components/UpgradeSheet.jsx` or the `free_ai_actions_per_month` setting), add or update its entry in `features.mjs` in the same change. Mention the registry update in the PR description.
