@@ -117,8 +117,11 @@ async function fetchAll(table, select, filters = (q) => q) {
 }
 
 async function main() {
-  const [workouts, blocks, blockExercises, exercises, profiles, plans] = await Promise.all([
+  const [workouts, userCopies, blocks, blockExercises, exercises, profiles, plans] = await Promise.all([
     fetchAll('workouts', 'id, workout_id, name, status, est_duration_min, duration_minutes, created_date', (q) => q.eq('status', 'approved')),
+    // Athlete-owned copies ("Customize" / "Save a copy" → private, owner_id set).
+    // The athlete chose that layout themselves, so coaching-style checks skip them.
+    fetchAll('workouts', 'workout_id', (q) => q.not('owner_id', 'is', null)),
     fetchAll('workout_blocks', 'block_id, workout_id, order_index, block_label, block_type, workout_format, rounds, rest_between_rounds_sec, work_seconds, rest_seconds, time_cap_sec'),
     fetchAll('block_exercises', 'block_exercise_id, block_id, step_type, exercise_id, exercise_title_raw, order_in_block, prescription_type, prescription_value'),
     fetchAll('exercises', 'id, exercise_code, name, movement_pattern, equipment_tags, dumbbell_substitutable, dumbbell_equivalent_code'),
@@ -127,6 +130,7 @@ async function main() {
   ]);
 
   const exerciseByCode = new Map(exercises.filter((e) => e.exercise_code).map((e) => [e.exercise_code, e]));
+  const userOwnedWorkoutIds = new Set(userCopies.map((w) => w.workout_id));
   const blocksByWorkout = new Map();
   for (const b of blocks) {
     if (!blocksByWorkout.has(b.workout_id)) blocksByWorkout.set(b.workout_id, []);
@@ -233,6 +237,7 @@ async function main() {
   // "Barbell Strict Press" (or plain "Strict Press") are recognized as the same core
   // movement.
   for (const [workoutId, wBlocks] of blocksByWorkout) {
+    if (userOwnedWorkoutIds.has(workoutId)) continue; // athlete-reviewed copy
     const sorted = [...wBlocks].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
     const sequence = sorted.flatMap((b) => exercisesByBlock.get(b.block_id) || []);
     for (let i = 1; i < sequence.length; i++) {
@@ -277,10 +282,10 @@ async function main() {
     'W-PULLHEAVY-1794398400000', // Pull Heavy
     'W-PULLHEAVYNM-1794402000000', // Pull Heavy (No Machine)
     'W-PUSH-CHEST-TRI-LONG-1794830400000', // Push (Chest + Triceps) - Long
-    'WK-c0fe6da73eaa44fe', // Pull (Back + Biceps) + Chest
   ]);
   for (const [workoutId, wBlocks] of blocksByWorkout) {
     if (ACKNOWLEDGED_STRUCTURE_FALSE_POSITIVES.has(workoutId)) continue;
+    if (userOwnedWorkoutIds.has(workoutId)) continue; // athlete-reviewed copy, not catalog
     const sorted = [...wBlocks].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
     let run = [];
     const flushRun = () => {
