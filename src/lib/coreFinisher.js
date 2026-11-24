@@ -34,6 +34,10 @@ export const FINISHER_POOL = [
   { id: 'leg-raises', name: 'Leg raises', group: 'lower', cue: 'Lower your straight legs slowly and stop before your back arches.' },
   { id: 'flutter-kicks', name: 'Flutter kicks', group: 'lower', cue: 'Small, fast kicks with your legs low and your lower back pressed down.' },
   { id: 'bicycle-kicks', name: 'Bicycle kicks', group: 'rotation', cue: 'Bring opposite elbow to knee while the other leg extends.' },
+  { id: 'dead-bug', name: 'Dead bug', group: 'anti_extension', cue: 'On your back, arms and knees up. Lower the opposite arm and leg while your lower back stays pressed down.' },
+  { id: 'plank-shoulder-taps', name: 'Plank shoulder taps', group: 'anti_rotation', plankish: true, cue: 'From a high plank, tap each shoulder in turn while keeping your hips still.' },
+  { id: 'mountain-climbers', name: 'Mountain climbers', group: 'conditioning', plankish: true, cue: 'From a high plank, drive your knees to your chest in a fast, steady rhythm.' },
+  { id: 'superman-hold', name: 'Superman hold', group: 'posterior', cue: 'Face down, lift arms, chest and legs off the floor and squeeze your back and glutes.' },
   { id: 'twisting-plank', name: 'Side-to-side twisting plank', group: 'rotation', plankish: true, cue: 'From a plank, rotate your hips side to side without letting your shoulders collapse.' },
   {
     id: 'side-plank',
