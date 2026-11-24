@@ -277,6 +277,7 @@ async function main() {
     'W-PULLHEAVY-1794398400000', // Pull Heavy
     'W-PULLHEAVYNM-1794402000000', // Pull Heavy (No Machine)
     'W-PUSH-CHEST-TRI-LONG-1794830400000', // Push (Chest + Triceps) - Long
+    'WK-c0fe6da73eaa44fe', // Pull (Back + Biceps) + Chest
   ]);
   for (const [workoutId, wBlocks] of blocksByWorkout) {
     if (ACKNOWLEDGED_STRUCTURE_FALSE_POSITIVES.has(workoutId)) continue;
