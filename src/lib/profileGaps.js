@@ -85,6 +85,21 @@ export const PROFILE_GAPS = [
     buildPatch: (value) => ({ program_difficulty: value }),
   },
   {
+    // One-off "new feature" prompt: core_finisher_enabled stays null until the
+    // athlete answers here or flips the switch in their profile.
+    key: 'core_finisher',
+    locations: ['home'],
+    type: 'choice',
+    question: () => 'New: add a 10-minute core finisher after your workouts?',
+    hint: () => 'Bodyweight abs, 40s on / 20s off, ending with a 1-minute plank. Never part of your logged session, and you can skip it any time. Change the length in your profile.',
+    options: [
+      { label: 'Yes, offer it', value: true },
+      { label: 'No thanks', value: false },
+    ],
+    isMissing: (p) => p?.core_finisher_enabled == null,
+    buildPatch: (value) => ({ core_finisher_enabled: value === true }),
+  },
+  {
     key: 'desired_activity',
     locations: ['workout-search'],
     type: 'yesno',
@@ -97,7 +112,8 @@ export const PROFILE_GAPS = [
 ];
 
 // Gaps usable outside their triggering location (no ctx required).
-const COMPLETENESS_GAPS = PROFILE_GAPS.filter((g) => g.key !== 'desired_activity');
+// core_finisher is a feature announcement, not a profile gap, so it never lowers completeness.
+const COMPLETENESS_GAPS = PROFILE_GAPS.filter((g) => g.key !== 'desired_activity' && g.key !== 'core_finisher');
 
 // Optional profile fields with no nudge prompt of their own but still worth counting toward completeness.
 // resistance_priority/conditioning_priority/duration_min/duration_max/warmup_duration_minutes no longer carry

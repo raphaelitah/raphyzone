@@ -19,6 +19,10 @@ function buildSequence(config) {
       if (restSec > 0) seq.push({ round, exerciseIndex, phase: 'rest', durationSec: restSec });
     }
   }
+  // Optional closing hold (e.g. the core finisher's plank), run as one extra
+  // work phase on an extra "exercise" slot after the last round.
+  const finalHoldSec = Math.max(0, config.finalHoldSec || 0);
+  if (finalHoldSec > 0) seq.push({ round: rounds, exerciseIndex: exerciseCount, phase: 'work', durationSec: finalHoldSec });
   return seq.length ? seq : [{ round: 1, exerciseIndex: 0, phase: 'work', durationSec: 0 }];
 }
 
@@ -32,7 +36,7 @@ const LEAD_IN_SEC = 10;
 // workout session stopwatch in WorkoutExecution.jsx).
 export default function useIntervalTimer(config) {
   const sequence = useMemo(() => buildSequence(config), [
-    config.mode, config.durationSec, config.rounds, config.exerciseCount, config.workSec, config.restSec,
+    config.mode, config.durationSec, config.rounds, config.exerciseCount, config.workSec, config.restSec, config.finalHoldSec,
   ]);
 
   const [status, setStatus] = useState('idle'); // idle | leadin | running | pausedLeadin | paused | done

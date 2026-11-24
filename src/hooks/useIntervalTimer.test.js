@@ -182,6 +182,43 @@ describe('interval mode sequence building', () => {
   });
 });
 
+describe('final hold', () => {
+  const config = { mode: 'interval', rounds: 1, exerciseCount: 2, workSec: 10, restSec: 5, finalHoldSec: 30 };
+
+  it('runs one extra work phase, on an extra exercise slot, after the last rest', () => {
+    const { result } = renderHook(() => useIntervalTimer(config));
+    startAndSkipLeadIn(result);
+
+    act(() => vi.advanceTimersByTime(15000)); // ex 0 work + rest
+    act(() => vi.advanceTimersByTime(10000)); // ex 1 work
+    expect(result.current.phase).toBe('rest');
+    expect(result.current.exerciseIndex).toBe(1);
+    expect(result.current.nextExerciseIndex).toBe(2);
+
+    act(() => vi.advanceTimersByTime(5000)); // ex 1 rest
+    expect(result.current.status).toBe('running');
+    expect(result.current.phase).toBe('work');
+    expect(result.current.exerciseIndex).toBe(2);
+    expect(result.current.phaseDurationSec).toBe(30);
+  });
+
+  it('finishes only after the hold ends', () => {
+    const { result } = renderHook(() => useIntervalTimer(config));
+    startAndSkipLeadIn(result);
+    act(() => vi.advanceTimersByTime(30000 + 29000));
+    expect(result.current.status).toBe('running');
+    act(() => vi.advanceTimersByTime(1000));
+    expect(result.current.status).toBe('done');
+  });
+
+  it('is unchanged when no hold is configured', () => {
+    const { result } = renderHook(() => useIntervalTimer({ ...config, finalHoldSec: 0 }));
+    startAndSkipLeadIn(result);
+    act(() => vi.advanceTimersByTime(30000));
+    expect(result.current.status).toBe('done');
+  });
+});
+
 describe('pause / resume / skip', () => {
   it('preserves remaining time across a pause/resume once running', () => {
     const { result } = renderHook(() =>

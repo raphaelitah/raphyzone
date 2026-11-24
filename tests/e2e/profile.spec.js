@@ -76,4 +76,48 @@ test.describe('Profile', () => {
     // Restore.
     await api.from('athlete_profiles').update({ body_focus: originalBodyFocus }).eq('id', before.id);
   });
+  test('core finisher: the one-off prompt on Home saves the choice, and the profile editor adjusts the length', async ({ page }) => {
+    const api = makeApiClient();
+    const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
+    const { data: before } = await api.from('athlete_profiles')
+      .select('id, core_finisher_enabled, core_finisher_rounds, calibrated, secondary_goal, training_history')
+      .eq('user_id', signInData.user.id).single();
+    try {
+      // Unreviewed (null) is what existing users have; make the earlier Home prompts not win.
+      await api.from('athlete_profiles').update({
+        core_finisher_enabled: null, calibrated: true,
+        secondary_goal: before.secondary_goal && before.secondary_goal !== 'none' ? before.secondary_goal : 'endurance',
+        training_history: before.training_history || 'intermediate',
+      }).eq('id', before.id);
+
+      await login(page);
+      await page.evaluate((uid) => localStorage.removeItem(`profileGapsDismissed:${uid}`), signInData.user.id);
+      await page.goto('/');
+      await expect(page.getByText(/new: add a 10-minute core finisher/i)).toBeVisible({ timeout: 15000 });
+      await page.getByRole('button', { name: /^yes, offer it$/i }).click();
+      await expect.poll(async () => {
+        const { data } = await api.from('athlete_profiles').select('core_finisher_enabled').eq('id', before.id).single();
+        return data.core_finisher_enabled;
+      }, { timeout: 10000 }).toBe(true);
+
+      // Length is adjustable from the profile editor and autosaves.
+      await page.goto('/profile');
+      await page.getByRole('button', { name: /edit/i }).first().click();
+      const card = page.getByTestId('core-finisher-settings');
+      await card.scrollIntoViewIfNeeded();
+      await card.getByRole('button', { name: /^7 min$/ }).click();
+      await expect.poll(async () => {
+        const { data } = await api.from('athlete_profiles').select('core_finisher_rounds').eq('id', before.id).single();
+        return data.core_finisher_rounds;
+      }, { timeout: 10000 }).toBe(6);
+    } finally {
+      await api.from('athlete_profiles').update({
+        core_finisher_enabled: before.core_finisher_enabled,
+        core_finisher_rounds: before.core_finisher_rounds,
+        calibrated: before.calibrated,
+        secondary_goal: before.secondary_goal,
+        training_history: before.training_history,
+      }).eq('id', before.id);
+    }
+  });
 });

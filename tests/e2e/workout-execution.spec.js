@@ -333,6 +333,106 @@ test.describe('Running a workout (regression)', () => {
     }
   });
 
+  // The core finisher is offered after the session is saved, never as part of it.
+  async function finishSupersetWorkout(page, seeded) {
+    await login(page);
+    await page.goto(`/workout/${seeded.workoutUuid}`);
+    await dismissWarmupIfPresent(page);
+    await dismissCalibrationPromptIfPresent(page);
+    const doneButton = page.getByRole('button', { name: /^done$/i });
+    await clickThroughCalibration(page, page.getByRole('button', { name: /^start set$/i }));
+    await expect(doneButton).toBeVisible({ timeout: 15000 });
+    await clickThroughCalibration(page, doneButton);
+    await clickThroughCalibration(page, page.getByRole('button', { name: /^start set$/i }));
+    await expect(doneButton).toBeVisible({ timeout: 10000 });
+    await clickThroughCalibration(page, doneButton);
+    await clickThroughCalibration(page, page.getByRole('button', { name: /save.*continue/i }));
+    await expect(page.getByText(/workout completed/i)).toBeVisible({ timeout: 10000 });
+  }
+
+  async function setFinisherProfile(patch) {
+    const api = makeApiClient();
+    const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
+    const { data: before } = await api.from('athlete_profiles')
+      .select('id, core_finisher_enabled, core_finisher_rounds, core_finisher_last_picks')
+      .eq('user_id', signInData.user.id).single();
+    await api.from('athlete_profiles').update(patch).eq('id', before.id);
+    return { api, before, restore: () => api.from('athlete_profiles').update({
+      core_finisher_enabled: before.core_finisher_enabled,
+      core_finisher_rounds: before.core_finisher_rounds,
+      core_finisher_last_picks: before.core_finisher_last_picks,
+    }).eq('id', before.id) };
+  }
+
+  test('core finisher: offered after the session is saved, starts a timer, and records its picks for rotation', async ({ page }) => {
+    test.setTimeout(90000);
+    const profile = await setFinisherProfile({ core_finisher_enabled: true, core_finisher_rounds: 9, core_finisher_last_picks: [] });
+    const seeded = await seedSupersetWorkout();
+    try {
+      await finishSupersetWorkout(page, seeded);
+
+      // The session is already saved as completed while the offer is showing.
+      const offer = page.getByTestId('core-finisher-offer');
+      await expect(offer).toBeVisible();
+      await expect(offer.getByText(/core finisher · 10 min/i)).toBeVisible();
+      await expect(offer.getByText(/1-minute plank/i)).toBeVisible();
+      const { data: signInData } = await profile.api.auth.getUser();
+      const { data: sessions } = await profile.api.from('workout_sessions').select('status')
+        .eq('workout_id', seeded.workoutUuid).eq('user_id', signInData.user.id);
+      expect(sessions?.[0]?.status).toBe('completed');
+      // The offer holds the redirect instead of bouncing to Progress.
+      await page.waitForTimeout(2500);
+      await expect(page).not.toHaveURL(/\/progress/);
+
+      await offer.getByRole('button', { name: /start finisher/i }).click();
+      const runner = page.getByTestId('core-finisher-runner');
+      await expect(runner).toBeVisible();
+      await expect(runner.getByText(/get ready/i)).toBeVisible();
+      await runner.getByRole('button', { name: /^pause$/i }).click();
+      await expect(runner.getByRole('button', { name: /^resume$/i })).toBeVisible();
+
+      // The picks were saved so the next finisher rotates away from them.
+      await expect.poll(async () => {
+        const { data } = await profile.api.from('athlete_profiles').select('core_finisher_last_picks').eq('id', profile.before.id).single();
+        return data.core_finisher_last_picks?.[0]?.length;
+      }, { timeout: 10000 }).toBeGreaterThan(0);
+
+      await runner.getByRole('button', { name: /end finisher/i }).click();
+      await page.waitForURL(/\/progress/, { timeout: 10000 });
+    } finally {
+      await cleanupSupersetWorkout(seeded);
+      await profile.restore();
+    }
+  });
+
+  test('core finisher: skipping goes straight to Progress without recording picks', async ({ page }) => {
+    const profile = await setFinisherProfile({ core_finisher_enabled: true, core_finisher_last_picks: [] });
+    const seeded = await seedSupersetWorkout();
+    try {
+      await finishSupersetWorkout(page, seeded);
+      await page.getByTestId('core-finisher-offer').getByRole('button', { name: /^skip$/i }).click();
+      await page.waitForURL(/\/progress/, { timeout: 10000 });
+      const { data } = await profile.api.from('athlete_profiles').select('core_finisher_last_picks').eq('id', profile.before.id).single();
+      expect(data.core_finisher_last_picks).toEqual([]);
+    } finally {
+      await cleanupSupersetWorkout(seeded);
+      await profile.restore();
+    }
+  });
+
+  test('core finisher: not offered when turned off', async ({ page }) => {
+    const profile = await setFinisherProfile({ core_finisher_enabled: false });
+    const seeded = await seedSupersetWorkout();
+    try {
+      await finishSupersetWorkout(page, seeded);
+      await expect(page.getByTestId('core-finisher-offer')).toHaveCount(0);
+      await page.waitForURL(/\/progress/, { timeout: 10000 });
+    } finally {
+      await cleanupSupersetWorkout(seeded);
+      await profile.restore();
+    }
+  });
+
   test('restarting mid-workout replaces the session instead of leaving a duplicate or crashing', async ({ page }) => {
     // See the previous test for why we navigate straight to a known
     // multi-exercise workout instead of clicking "the first card".

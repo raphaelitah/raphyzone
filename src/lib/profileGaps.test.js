@@ -40,6 +40,25 @@ describe('PROFILE_GAPS.isMissing', () => {
   });
 });
 
+describe('core_finisher gap (one-off feature prompt)', () => {
+  it('is missing until the athlete has chosen, and false counts as chosen', () => {
+    expect(gap('core_finisher').isMissing({})).toBe(true);
+    expect(gap('core_finisher').isMissing({ core_finisher_enabled: null })).toBe(true);
+    expect(gap('core_finisher').isMissing({ core_finisher_enabled: true })).toBe(false);
+    expect(gap('core_finisher').isMissing({ core_finisher_enabled: false })).toBe(false);
+  });
+
+  it('saves the choice as a boolean', () => {
+    expect(gap('core_finisher').buildPatch(true)).toEqual({ core_finisher_enabled: true });
+    expect(gap('core_finisher').buildPatch(false)).toEqual({ core_finisher_enabled: false });
+  });
+
+  it('does not change profile completeness', () => {
+    expect(getProfileCompleteness({}).total).toBe(getProfileCompleteness({ core_finisher_enabled: true }).total);
+    expect(getProfileCompleteness({}).done).toBe(getProfileCompleteness({ core_finisher_enabled: null }).done);
+  });
+});
+
 describe('PROFILE_GAPS.buildPatch', () => {
   it('session_duration sets a fixed duration window from a single value', () => {
     expect(gap('session_duration').buildPatch(45)).toEqual({ duration_mode: 'fixed', duration_min: 45, duration_max: 45 });

@@ -18,6 +18,7 @@ import { getProfileCompleteness } from '@/lib/profileGaps';
 import ProfileEquipmentTab from '@/components/ProfileEquipmentTab';
 import ProfileDesiredActivities from '@/components/ProfileDesiredActivities';
 import ProfileWarmup, { CARDIO_OPTIONS } from '@/components/ProfileWarmup';
+import ProfileCoreFinisher from '@/components/ProfileCoreFinisher';
 
 export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) {
   const [form, setForm] = useState(null);
@@ -71,6 +72,8 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         warmup_cardio_options: f.warmup_cardio_options,
         warmup_first_movement_sets: f.warmup_first_movement_sets,
         warmup_notes: f.warmup_notes,
+        core_finisher_enabled: f.core_finisher_enabled,
+        core_finisher_rounds: f.core_finisher_rounds,
         dislikes: f.dislikes,
         dislikes_reviewed: f.dislikes_reviewed,
       }).eq('id', profile.id);
@@ -133,6 +136,8 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
         warmup_cardio_options: profile.warmup_cardio_options?.length ? profile.warmup_cardio_options : [...CARDIO_OPTIONS],
         warmup_first_movement_sets: profile.warmup_first_movement_sets ?? 2,
         warmup_notes: profile.warmup_notes || '',
+        core_finisher_enabled: profile.core_finisher_enabled ?? null,
+        core_finisher_rounds: profile.core_finisher_rounds ?? 9,
         dislikes: profile.dislikes || [],
         dislikes_reviewed: !!profile.dislikes_reviewed,
         calibrated: !!profile.calibrated,
@@ -361,6 +366,8 @@ export default function ProfileEditor({ profile, open, onOpenChange, onSaved }) 
             </div>
 
             <ProfileWarmup form={form} setForm={setForm} />
+
+            <ProfileCoreFinisher form={form} setForm={setForm} />
 
             <div>
               <label className="text-xs font-medium text-muted-foreground">Workout dislikes</label>

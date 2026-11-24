@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -29,6 +29,8 @@ import { cn } from '@/lib/utils';
 import { playCountdownBeep, playGoBeep } from '@/lib/timerSounds';
 import { handleAiQuotaError } from '@/lib/entitlements';
 import UpgradeSheet from '@/components/UpgradeSheet';
+import CoreFinisherRunner from '@/components/CoreFinisherRunner';
+import { buildCoreFinisher, nextFinisherHistory } from '@/lib/coreFinisher';
 import ExercisePickerSheet from '@/components/ExercisePickerSheet';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { saveAsCustomWorkout, fetchOwnCustomNames } from '@/lib/customizeWorkout';
@@ -1398,12 +1400,39 @@ export default function WorkoutExecution() {
   // screen waits for their answer instead of moving on by itself.
   const reordered = isReordered(baseSequenceRef.current, sequenceOf(exercises));
   const offerKeep = isPremium && hasSessionOverrides({ swaps, edits, added, reordered });
+
+  // Optional core finisher, offered once the session is saved. It is not part of
+  // the logged session (which is already completed above), and the redirect
+  // waits while it is on offer or running. The plan is built once when the
+  // completion screen appears so the offer and the run show the same exercises.
+  const finisherEnabled = profile?.core_finisher_enabled === true;
+  const [finisherState, setFinisherState] = useState('idle'); // idle | running | skipped
+  const finisherPlan = useMemo(() => (
+    finisherEnabled && completion === 'done'
+      ? buildCoreFinisher({ rounds: profile?.core_finisher_rounds, history: profile?.core_finisher_last_picks })
+      : null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [finisherEnabled, completion === 'done']);
+  const finisherBlocking = !!finisherPlan && finisherState !== 'skipped';
+  const keepResolved = !(offerKeep && keepState === 'idle');
+
+  const startFinisher = () => {
+    setFinisherState('running');
+    if (profile?.id && finisherPlan) {
+      supabase.from('athlete_profiles')
+        .update({ core_finisher_last_picks: nextFinisherHistory(profile.core_finisher_last_picks, finisherPlan.entryIds) })
+        .eq('id', profile.id)
+        .then(() => reloadProfile());
+    }
+  };
+
   useEffect(() => {
     if (completion !== 'done') return;
-    if (offerKeep && keepState === 'idle') return;
+    if (!keepResolved) return;
+    if (finisherBlocking) return;
     const id = setTimeout(() => navigate('/progress'), keepState === 'saved' ? 2200 : 1400);
     return () => clearTimeout(id);
-  }, [completion, offerKeep, keepState]);
+  }, [completion, keepResolved, keepState, finisherBlocking]);
 
   // Names the save form must avoid, loaded as soon as there is something worth saving.
   useEffect(() => {
@@ -1505,6 +1534,9 @@ export default function WorkoutExecution() {
   // Takes over the screen the instant the last block/exercise is done —
   // saving, then success or a retryable error — instead of ever falling back
   // to an exercise panel while completeWorkout() is still in flight.
+  if (completion === 'done' && finisherState === 'running' && finisherPlan) {
+    return <CoreFinisherRunner finisher={finisherPlan} onDone={() => navigate('/progress')} />;
+  }
   if (completion) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -1530,6 +1562,17 @@ export default function WorkoutExecution() {
                   onCancel={() => setKeepState('dismissed')}
                   onPremiumRequired={() => { setCustomizeUpgradeOpen(true); setKeepState('dismissed'); }}
                 />
+              </div>
+            ) : finisherBlocking ? (
+              <div className="w-full max-w-sm space-y-3" data-testid="core-finisher-offer">
+                <p className="font-medium">Core finisher · {finisherPlan.minutes} min</p>
+                <p className="text-sm text-muted-foreground">
+                  {finisherPlan.lap.map((e) => e.name).join(', ')}, repeated {finisherPlan.laps} time{finisherPlan.laps === 1 ? '' : 's'} at 40s on / 20s off, then a 1-minute plank. Bodyweight only, and not part of your logged session.
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={startFinisher} className="flex-1 h-12 rounded-xl bg-brand text-brand-foreground hover:bg-brand/90">Start finisher</Button>
+                  <Button variant="outline" onClick={() => setFinisherState('skipped')} className="flex-1 h-12 rounded-xl">Skip</Button>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
