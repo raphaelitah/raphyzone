@@ -42,6 +42,6 @@ export function workoutSlide(facts) {
   const [block] = facts.blocks;
   const gear = facts.equipment.every((t) => t === 'bodyweight') ? 'No equipment' : titleCase(facts.equipment.filter((t) => t !== 'bodyweight').join(', '));
   const format = facts.format ? titleCase(String(facts.format).replace(/_/g, ' ')).replace(/Amrap/i, 'AMRAP').replace(/Emom/i, 'EMOM') : null;
-  const meta = [`${Math.round(facts.minutes)} min`, format, block.rounds > 1 ? `${block.rounds} rounds` : null, gear].filter(Boolean).join(' · ');
+  const meta = [`${Math.round(facts.minutes)} min`, format, block.rounds > 1 && format !== 'AMRAP' ? `${block.rounds} rounds` : null, gear].filter(Boolean).join(' · ');
   return { title: facts.name, body: [meta, ...block.items].join('\n') };
 }
