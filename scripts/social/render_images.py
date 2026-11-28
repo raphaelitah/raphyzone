@@ -314,7 +314,8 @@ def main():
     for post in posts.json():
         tag = f"{post['week_start']}/slot{post['slot']}"
         try:
-            photo, meta = find_photo(post["kind"], tag, used, (W, H))
+            equipment = ((post.get("script") or {}).get("workout") or {}).get("equipment") or ()
+            photo, meta = find_photo(post["kind"], tag, used, (W, H), equipment)
             images = render_post(post, photo, meta and meta["photographer"])
             if meta and not a.local:
                 track_download(meta)

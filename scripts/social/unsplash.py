@@ -25,6 +25,21 @@ QUERIES = {
     "single_workout": ["gym workout", "dumbbell training", "bodyweight exercise", "gym floor"],
 }
 
+# Catalog equipment -> (search query, word the photo's description must contain),
+# most recognisable piece of kit first.
+GEAR = {
+    "kettlebell": ("kettlebell workout", r"kettle ?bell"),
+    "barbell": ("barbell lifting", r"barbell|weightlift|deadlift"),
+    "dumbbell": ("dumbbell workout", r"dumb ?bell"),
+    "pull-up bar": ("pull up bar exercise", r"pull[- ]?up|chin[- ]?up"),
+    "medicine ball": ("medicine ball workout", r"medicine ball|wall ball"),
+    "jump rope": ("jump rope", r"jump(ing)? ?rope|skipping"),
+    "rower": ("rowing machine", r"rowing machine|rower"),
+    "skierg": ("ski erg", r"ski ?erg"),
+    "bike": ("exercise bike gym", r"bike|cycl"),
+    "sled": ("sled push gym", r"sled"),
+}
+
 _CREDIT_LINE = re.compile(r"\n*^Photo by .+ on Unsplash$", re.M)
 
 
@@ -36,18 +51,34 @@ def _digest(text):
     return hashlib.sha1(text.encode()).hexdigest()
 
 
-def find_photo(kind, seed, used, size):
-    """Return (image, meta) for this post, or (None, None) when there is no key, result or connection."""
+def _search(key, query, used, must_show=None):
+    r = requests.get(f"{API}/search/photos", headers=_auth(key), timeout=30,
+                     params={"query": query, "orientation": "portrait", "content_filter": "high", "per_page": 30})
+    r.raise_for_status()
+    photos = [p for p in r.json().get("results", []) if p["id"] not in used]
+    if must_show:  # search results are loose: keep those whose description names the kit
+        photos = [p for p in photos if re.search(must_show, f"{p.get('alt_description') or ''} {p.get('description') or ''}", re.I)]
+    return photos
+
+
+def find_photo(kind, seed, used, size, equipment=()):
+    """Return (image, meta) for this post, or (None, None) when there is no key, result or connection.
+
+    With `equipment`, a photo showing one of those pieces of kit is preferred; the
+    kind's general queries are the fallback.
+    """
     key = os.environ.get("UNSPLASH_ACCESS_KEY")
     queries = QUERIES.get(kind)
     if not key or not queries:
         return None, None
     query = queries[int(_digest(seed), 16) % len(queries)]
     try:
-        r = requests.get(f"{API}/search/photos", headers=_auth(key), timeout=30,
-                         params={"query": query, "orientation": "portrait", "content_filter": "high", "per_page": 30})
-        r.raise_for_status()
-        photos = [p for p in r.json().get("results", []) if p["id"] not in used]
+        photos = []
+        for gear in [g for g in GEAR if g in equipment][:2]:  # two tries, to stay light on the rate limit
+            photos = _search(key, GEAR[gear][0], used, GEAR[gear][1])
+            if photos:
+                break
+        photos = photos or _search(key, query, used)
         if not photos:
             return None, None
         p = min(photos, key=lambda x: _digest(f"{seed}{x['id']}"))
