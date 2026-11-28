@@ -93,7 +93,11 @@ test.describe('Running a workout (regression)', () => {
     const api = makeApiClient();
     const { data: signInData } = await api.auth.signInWithPassword(ATHLETE);
     await api.from('workout_sessions').delete().eq('user_id', signInData.user.id).eq('status', 'in_progress');
-    await api.from('athlete_profiles').update({ strength_calibration: FULL_CALIBRATION }).eq('user_id', signInData.user.id);
+    // The core finisher offer holds the redirect to /progress, so it is off unless a
+    // test turns it on. Set explicitly: an interrupted run can leave it enabled.
+    await api.from('athlete_profiles')
+      .update({ strength_calibration: FULL_CALIBRATION, core_finisher_enabled: false })
+      .eq('user_id', signInData.user.id);
   });
 
   test('start a workout, skip through every exercise, and finish it', async ({ page }) => {
