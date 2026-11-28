@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Saturday renderer, part 1: carousels and the single split image (Pillow).
+"""Saturday renderer, part 1: carousels and the single split / workout image (Pillow).
 
 Reads draft posts with render_status='pending' from Supabase, draws branded
 1080x1350 (4:5) PNG slides, uploads them to the public `social-assets` bucket and
@@ -190,11 +190,34 @@ def slide_split(title, body, photo=None, credit=None):
     return img
 
 
+def slide_workout(title, body, photo=None, credit=None):
+    """One featured workout: a summary line, then one row per exercise."""
+    img, d = photo_slide(photo, credit, 0.55) if photo else new_slide(PAPER)
+    header(d, dark=bool(photo))
+    meta, *rows = [r.strip() for r in str(body).split("\n") if r.strip()]
+    tf, tl, ts = fit(d, title, W - 2 * MARGIN, 220, 92, 52, 800, 1.06)
+    y = draw_lines(d, tl, tf, ts, MARGIN, 180, WHITE if photo else INK, 1.06) + 18
+    mf, ml, ms = fit(d, meta, W - 2 * MARGIN, 96, 38, 28, 700)
+    y = draw_lines(d, ml, mf, ms, MARGIN, y, ACCENT if photo else INDIGO) + 28
+    rows = rows[:7]
+    row_h = min(116, (H - y - 150) // max(len(rows), 1))
+    for i, row in enumerate(rows):
+        top = y + i * row_h
+        d.rounded_rectangle([MARGIN, top, W - MARGIN, top + row_h - 14], radius=26, fill=WHITE)
+        rf, rl, rs = fit(d, row, W - 2 * MARGIN - 64, row_h - 24, 42, 24, 700, 1.1)
+        draw_lines(d, rl[:2], rf, rs, MARGIN + 32, top + (row_h - 14 - min(len(rl), 2) * rs * 1.1) / 2, INK, 1.1)
+    d.text((MARGIN, H - 120), "Save this  ·  @raphyzone", font=font(36, 700), fill=WHITE if photo else INDIGO)
+    return img
+
+
 def render_post(post, photo=None, credit=None):
     slides = post.get("slides") or []
     if post["kind"] == "single_split":
         s = slides[0]
         return [slide_split(s.get("title", post["hook"]), s.get("body", ""), photo, credit)]
+    if post["kind"] == "single_workout":
+        s = slides[0]
+        return [slide_workout(s.get("title", post["hook"]), s.get("body", ""), photo, credit)]
     out = [slide_cover(slides[0].get("title") or post["hook"], slides[0].get("body") or None, photo, credit)]
     body = slides[1:]
     cta_needed = len(body) + 1 < MAX_SLIDES
@@ -207,6 +230,8 @@ def render_post(post, photo=None, credit=None):
 
 
 SAMPLES = [
+    {"kind": "single_workout", "slot": 6, "hook": "Save this full-body session", "slides": [
+        {"title": "Sample Full Body", "body": "30 min · 4 rounds · Dumbbell, Bench / Box\nDumbbell Goblet Squat × 12\nDumbbell Bench Press × 10\nSingle Arm Dumbbell Row × 10\nDumbbell Romanian Deadlift × 12\nPlank × 40s"}]},
     {"kind": "carousel_humour", "slot": 2, "hook": "Decision fatigue is the real workout", "slides": [
         {"title": "Decision fatigue is the real workout", "body": "A field guide for people who never start training"},
         {"title": "The 20-minute scroll", "body": "You opened the app to train. It's been 20 minutes. You've chosen nothing."},
@@ -252,7 +277,7 @@ def main():
         sys.exit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
     hdr = {"apikey": key, "authorization": f"Bearer {key}"}
 
-    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split)", "status": "in.(draft,approved)", "order": "week_start,slot"}
+    q = {"select": "*", "kind": "in.(carousel_humour,carousel_smarter,single_split,single_workout)", "status": "in.(draft,approved)", "order": "week_start,slot"}
     if not a.force:
         q["render_status"] = "in.(pending,failed)"
     if a.week:

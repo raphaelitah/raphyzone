@@ -22,6 +22,7 @@ QUERIES = {
     "carousel_humour": ["gym bag", "empty gym", "person phone gym", "locker room"],
     "carousel_smarter": ["barbell weights", "weight plates", "training notebook gym", "deadlift"],
     "single_split": ["dumbbell rack", "gym equipment", "kettlebells", "barbell dark"],
+    "single_workout": ["gym workout", "dumbbell training", "bodyweight exercise", "gym floor"],
 }
 
 _CREDIT_LINE = re.compile(r"\n*^Photo by .+ on Unsplash$", re.M)

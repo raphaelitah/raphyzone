@@ -13,6 +13,7 @@ const KIND_LABEL = {
   carousel_humour: 'Carousel · Decision fatigue',
   carousel_smarter: 'Carousel · Train smarter',
   single_split: 'Image · Split to save',
+  single_workout: 'Image · Workout to save',
 };
 
 const STATUS_STYLE = {

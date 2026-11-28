@@ -13,16 +13,17 @@
 import { getServiceClient, mondayOf, addDays, CTA } from './lib/env.mjs';
 import { generateJson } from './lib/llm.mjs';
 import { pickAngle } from './lib/angles.mjs';
+import { saturdayPlan, pickVaried, featurable, workoutSlide } from './lib/rotation.mjs';
 import { loadCatalog, matchWorkouts, pickWorkout, summarizeWorkout, isTrulyEquipmentFree, isGentle, GYM_SCENARIOS } from './lib/workouts.mjs';
 
 // slot -> weekday offset from Monday. Reels carry the reach, so they open and mid-week.
+// Slot 6 depends on the week: see saturdayPlan.
 const PLAN = [
   { slot: 1, day: 0, kind: 'reel_workout' },
   { slot: 2, day: 1, kind: 'carousel_humour' },
   { slot: 3, day: 2, kind: 'reel_travel', variant: 'hotel_room' },
   { slot: 4, day: 3, kind: 'carousel_smarter' },
   { slot: 5, day: 4, kind: 'reel_workout' },
-  { slot: 6, day: 5, kind: 'single_split' },
   { slot: 7, day: 6, kind: 'reel_travel', variant: 'jet_lag' },
 ];
 
@@ -135,6 +136,9 @@ function validatePost(kind, out, ctx = {}) {
     if (texts.some((t) => /stop deciding|start training/i.test(t))) throw new Error('slogan reused in scene text');
     if (/raphyzone/i.test(texts[0])) throw new Error('opening scene must not name the brand');
     if (kind === 'reel_travel' && !/business trip|work trip/i.test(texts.slice(0, 2).join(' '))) throw new Error('travel reel must say "business trip" in the first two scenes');
+  } else if (kind === 'single_workout') {
+    const bad = wrongDurations(`${out.hook} . ${out.caption}`, ctx.minutes);
+    if (bad.length) throw new Error(`post mentions ${bad.join(', ')} minutes but the workout is ${ctx.minutes}`);
   } else {
     if (!Array.isArray(out.slides) || !out.slides.length) throw new Error('missing slides');
     if (out.slides.length > 10) throw new Error('more than 10 slides');
@@ -204,11 +208,24 @@ async function buildPrompt({ plan, catalog, recentIds, used, perf, progression }
       user: `Write a "train smarter" carousel about progression and tracking. Start with a moment the viewer recognises (training for months and being unable to say if they got stronger, a notes app full of half-remembered, crossed-out weights; do not write any specific weights, reps or exercises into those notes). Teach one idea (progressive overload via logging how sets felt), then show how Raphyzone does it so you do not have to remember anything, and end by inviting them to try it for free. Slides read as one short story, not a lecture. The only numbers allowed are the +2.5 kg / +5 kg bumps and the 2-session rule from the FACTS; describe everything else without numbers. FACTS you may use:\n${progression}\n${perf}\nJSON shape: ${SHAPES.carousel}`,
     };
   }
+  if (kind === 'single_workout') {
+    const pool = catalog.filter((w) => featurable(w) && !used.has(w.workout_id));
+    const themed = pool.filter(plan.theme.match);
+    const w = pickVaried(themed.length ? themed : pool, recentIds);
+    if (!w) throw new Error('No workout can be featured');
+    const facts = summarizeWorkout(w);
+    const theme = themed.length ? plan.theme.label : 'one ready-made session';
+    return {
+      workoutIds: [w.workout_id],
+      script: { theme: themed.length ? plan.theme.id : null, workout: facts },
+      user: `Write a single save-for-later image post featuring one real Raphyzone workout: ${theme}. The image already lists the workout, so you only write the hook, caption and hashtags. FACTS (the only workout you may describe):\n${JSON.stringify(facts)}\nCaption: open with a recognisable feeling that this workout answers, name the workout and say why someone would save it, then the exact line "Raphyzone removes the mental load." and that you can try it for free. ${Math.round(facts.minutes)} minutes is the only duration you may mention.\n${perf}\nJSON shape: { ${COMMON_SHAPE} }`,
+    };
+  }
   // single_split: a real week built from catalog workouts of different focus
   const focusOrder = ['push', 'pull', 'legs'];
   const chosen = [];
   for (const f of focusOrder) {
-    const w = pickWorkout(catalog.filter((x) => (x.movement_focus === f || String(x.split || '').toLowerCase() === f) && x.minutes && !used.has(x.workout_id) && x.blocks.length), recentIds);
+    const w = pickVaried(catalog.filter((x) => (x.movement_focus === f || String(x.split || '').toLowerCase() === f) && x.minutes && !used.has(x.workout_id) && x.blocks.length), recentIds);
     if (w) { chosen.push({ focus: f, name: w.name, minutes: w.minutes, id: w.workout_id }); used.add(w.workout_id); }
   }
   if (chosen.length < 3) throw new Error('Not enough push/pull/legs workouts for a split');
@@ -227,7 +244,7 @@ async function main() {
 
   const { data: existing } = await supabase.from('social_posts').select('*').eq('week_start', weekStart);
   const bySlot = new Map((existing || []).map((p) => [p.slot, p]));
-  const todo = PLAN.filter((p) => {
+  const todo = [...PLAN, saturdayPlan(weekStart)].sort((a, b) => a.slot - b.slot).filter((p) => {
     const cur = bySlot.get(p.slot);
     if (!cur) return true;
     if (cur.status === 'published') return false;
@@ -257,6 +274,7 @@ async function main() {
     built.user += hookNote;
     const note = cur?.redo_note ? `\nThe reviewer rejected the previous version${cur.hook ? ` ("${cur.hook}")` : ''}. Their note: ${cur.redo_note}. Write a clearly different take.` : '';
     const out = await generateJson({ system: `${VOICE}\n\n${BRAND}\n\n${STORY}`, user: built.user + note, validate: (o) => validatePost(plan.kind, o, { minutes: built.script?.workout?.minutes }), log: logCall });
+    if (plan.kind === 'single_workout') out.slides = [workoutSlide(built.script.workout)];
     const { caption, hashtags } = finalize(out);
     const isReel = plan.kind.startsWith('reel');
     const row = {
