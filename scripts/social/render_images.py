@@ -191,21 +191,43 @@ def slide_split(title, body, photo=None, credit=None):
 
 
 def slide_workout(title, body, photo=None, credit=None):
-    """One featured workout: a summary line, then one row per exercise."""
+    """One featured workout: a summary line, then one card per exercise (up to 10).
+
+    Fewer cards get taller, with larger text and wider gaps; the whole block is then
+    centred between the header and the footer, so short lists neither hug the top
+    nor stretch to fill the page.
+    """
     img, d = photo_slide(photo, credit, 0.55) if photo else new_slide(PAPER)
     header(d, dark=bool(photo))
     meta, *rows = [r.strip() for r in str(body).split("\n") if r.strip()]
-    tf, tl, ts = fit(d, title, W - 2 * MARGIN, 220, 92, 52, 800, 1.06)
-    y = draw_lines(d, tl, tf, ts, MARGIN, 180, WHITE if photo else INK, 1.06) + 18
-    mf, ml, ms = fit(d, meta, W - 2 * MARGIN, 96, 38, 28, 700)
-    y = draw_lines(d, ml, mf, ms, MARGIN, y, ACCENT if photo else INDIGO) + 28
-    rows = rows[:7]
-    row_h = min(116, (H - y - 150) // max(len(rows), 1))
+    rows = rows[:10]
+    n = max(len(rows), 1)
+    area_top, area_bottom = 190, H - 160
+    tf, tl, ts = fit(d, title, W - 2 * MARGIN, 220, 104 if n <= 5 else 88, 52, 800, 1.06)
+    mf, ml, ms = fit(d, meta, W - 2 * MARGIN, 96, 40 if n <= 7 else 34, 28, 700)
+    head_gap = max(28, 76 - 6 * n)  # between the summary line and the first card
+    head_h = len(tl) * ts * 1.06 + 18 + len(ml) * ms * 1.12 + head_gap
+    gap = max(10, min(28, 40 - 4 * n))
+    card_h = int(min(150, (area_bottom - area_top - head_h - gap * (n - 1)) // n))
+    block_h = head_h + n * card_h + (n - 1) * gap
+    top = area_top + (area_bottom - area_top - block_h) * 0.45  # a touch above true centre
+    y = draw_lines(d, tl, tf, ts, MARGIN, top, WHITE if photo else INK, 1.06) + 18
+    y = draw_lines(d, ml, mf, ms, MARGIN, y, ACCENT if photo else INDIGO) + head_gap
+    text_w = W - 2 * MARGIN - 72
+    # one text size for every card: the largest at which all rows stay on one line
+    size = max(30, min(50, int(card_h * 0.42)))
+    while size > 30 and any(d.textlength(r, font=font(size, 700)) > text_w for r in rows):
+        size -= 2
     for i, row in enumerate(rows):
-        top = y + i * row_h
-        d.rounded_rectangle([MARGIN, top, W - MARGIN, top + row_h - 14], radius=26, fill=WHITE)
-        rf, rl, rs = fit(d, row, W - 2 * MARGIN - 64, row_h - 24, 42, 24, 700, 1.1)
-        draw_lines(d, rl[:2], rf, rs, MARGIN + 32, top + (row_h - 14 - min(len(rl), 2) * rs * 1.1) / 2, INK, 1.1)
+        card_top = y + i * (card_h + gap)
+        d.rounded_rectangle([MARGIN, card_top, W - MARGIN, card_top + card_h], radius=min(30, card_h * 0.3), fill=WHITE)
+        rf, rl, rs = font(size, 700), wrap(d, row, font(size, 700), text_w), size
+        if len(rl) > 1:
+            rf, rl, rs = fit(d, row, text_w, card_h - 12, size, 22, 700, 1.1)
+        shown = rl[:2]
+        # centre on the visible letters, not the font's line box
+        text_top = card_top + (card_h - (len(shown) - 1) * rs * 1.1 - rs * 1.2) / 2
+        draw_lines(d, shown, rf, rs, MARGIN + 36, text_top, INK, 1.1)
     d.text((MARGIN, H - 120), "Save this  ·  @raphyzone", font=font(36, 700), fill=WHITE if photo else INDIGO)
     return img
 

@@ -3,7 +3,7 @@
 import { isTrulyEquipmentFree } from './workouts.mjs';
 
 const SPLIT_ANCHOR = '2026-11-30'; // a Monday that has a split; every 4th week from it has one too
-const MAX_ROWS = 7; // what fits legibly on the image
+const MAX_ROWS = 10; // what fits legibly on the image
 
 export const THEMES = [
   { id: 'full_body', label: 'a full-body session', match: (w) => /full/i.test(`${w.split || ''} ${w.movement_focus || ''} ${w.body_region || ''}`) },
