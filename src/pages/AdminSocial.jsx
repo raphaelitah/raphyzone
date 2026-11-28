@@ -77,6 +77,19 @@ function PostCard({ post, onChange }) {
         </p>
       )}
 
+      {post.script?.photo && (
+        <p className="text-xs text-muted-foreground" data-testid="photo-credit">
+          Photo by{' '}
+          <a href={post.script.photo.photographer_url} target="_blank" rel="noreferrer" className="underline">
+            {post.script.photo.photographer}
+          </a>{' '}
+          on{' '}
+          <a href={post.script.photo.photo_url} target="_blank" rel="noreferrer" className="underline">
+            Unsplash
+          </a>
+        </p>
+      )}
+
       {slides.length > 0 && (
         <ol className="text-sm space-y-1 list-decimal pl-5 text-muted-foreground">
           {slides.map((s, i) => (

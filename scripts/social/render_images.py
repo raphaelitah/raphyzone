@@ -4,11 +4,14 @@
 Reads draft posts with render_status='pending' from Supabase, draws branded
 1080x1350 (4:5) PNG slides, uploads them to the public `social-assets` bucket and
 stores the URLs in social_posts.asset_urls. Reels are handled by render_reels.py.
+Carousel covers and the split image sit on an Unsplash photo (see unsplash.py),
+recorded in social_posts.script.photo and credited on the image and in the caption.
 
   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY   (or VITE_SUPABASE_URL in .env.local)
   --local DIR     render to DIR and skip upload/DB writes (design iteration)
   --week YYYY-MM-DD   only that week      --force   re-render even if rendered
   --sample        render built-in sample posts (no Supabase needed)
+  UNSPLASH_ACCESS_KEY    optional; plain brand backgrounds without it
 """
 import argparse
 import json
@@ -19,6 +22,8 @@ from pathlib import Path
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
+
+from unsplash import credit_caption, find_photo, track_download
 
 ROOT = Path(__file__).resolve().parent
 FONT = str(ROOT / "assets" / "fonts" / "Inter.ttf")
@@ -98,9 +103,22 @@ def new_slide(bg):
     return img, ImageDraw.Draw(img)
 
 
-def slide_cover(title, subtitle=None):
-    img, d = new_slide(INDIGO)
-    d.ellipse([W - 520, H - 560, W + 280, H + 240], fill=INDIGO_DARK)  # soft corner shape
+def photo_slide(photo, credit, tint):
+    """The photo under a dark wash (so white text stays readable), credited bottom right."""
+    img = Image.blend(photo, Image.new("RGB", photo.size, INK), tint)
+    d = ImageDraw.Draw(img)
+    text = f"Photo: {credit} / Unsplash"
+    cf = font(24, 600)
+    d.text((W - MARGIN - d.textlength(text, font=cf), H - 52), text, font=cf, fill=WHITE)
+    return img, d
+
+
+def slide_cover(title, subtitle=None, photo=None, credit=None):
+    if photo:
+        img, d = photo_slide(photo, credit, 0.62)
+    else:
+        img, d = new_slide(INDIGO)
+        d.ellipse([W - 520, H - 560, W + 280, H + 240], fill=INDIGO_DARK)  # soft corner shape
     header(d, dark=True)
     fnt, lines, size = fit(d, title, W - 2 * MARGIN, 640, 124, 72, 800, 1.06)
     y = 330
@@ -108,7 +126,7 @@ def slide_cover(title, subtitle=None):
     d.rounded_rectangle([MARGIN, y + 20, MARGIN + 140, y + 30], radius=5, fill=ACCENT)
     if subtitle:
         sf, sl, ss = fit(d, subtitle, W - 2 * MARGIN, 160, 44, 32, 500)
-        draw_lines(d, sl, sf, ss, MARGIN, y + 64, MUTED_ON_INK)
+        draw_lines(d, sl, sf, ss, MARGIN, y + 64, WHITE if photo else MUTED_ON_INK)
     d.text((MARGIN, H - 150), "Swipe  →", font=font(44, 700), fill=WHITE)
     return img
 
@@ -150,12 +168,12 @@ def slide_cta():
     return img
 
 
-def slide_split(title, body):
+def slide_split(title, body, photo=None, credit=None):
     """Save-for-later weekly split: one row per line of 'Day — focus'."""
-    img, d = new_slide(PAPER)
-    header(d, dark=False)
+    img, d = photo_slide(photo, credit, 0.55) if photo else new_slide(PAPER)
+    header(d, dark=bool(photo))
     tf, tl, ts = fit(d, title, W - 2 * MARGIN, 300, 92, 56, 800, 1.06)
-    y = draw_lines(d, tl, tf, ts, MARGIN, 190, INK, 1.06) + 36
+    y = draw_lines(d, tl, tf, ts, MARGIN, 190, WHITE if photo else INK, 1.06) + 36
     rows = [r.strip() for r in str(body).split("\n") if r.strip()][:7]
     row_h = min(130, (H - y - 200) // max(len(rows), 1))
     for i, row in enumerate(rows):
@@ -168,16 +186,16 @@ def slide_split(title, body):
         d.text((MARGIN + 32, top + (row_h - 14 - 34) / 2 - 4), day.upper()[:6], font=pf, fill=MUTED_ON_PAPER if rest else ACCENT)
         ff, fl, fs = fit(d, focus, W - 2 * MARGIN - 230, row_h - 30, 46, 28, 700, 1.1)
         draw_lines(d, fl[:2], ff, fs, MARGIN + 190, top + (row_h - 14 - min(len(fl), 2) * fs * 1.1) / 2, INK if rest else WHITE, 1.1)
-    d.text((MARGIN, H - 120), "Save this  ·  @raphyzone", font=font(36, 700), fill=INDIGO)
+    d.text((MARGIN, H - 120), "Save this  ·  @raphyzone", font=font(36, 700), fill=WHITE if photo else INDIGO)
     return img
 
 
-def render_post(post):
+def render_post(post, photo=None, credit=None):
     slides = post.get("slides") or []
     if post["kind"] == "single_split":
         s = slides[0]
-        return [slide_split(s.get("title", post["hook"]), s.get("body", ""))]
-    out = [slide_cover(slides[0].get("title") or post["hook"], slides[0].get("body") or None)]
+        return [slide_split(s.get("title", post["hook"]), s.get("body", ""), photo, credit)]
+    out = [slide_cover(slides[0].get("title") or post["hook"], slides[0].get("body") or None, photo, credit)]
     body = slides[1:]
     cta_needed = len(body) + 1 < MAX_SLIDES
     total = 1 + len(body) + (1 if cta_needed else 0)
@@ -217,16 +235,17 @@ def main():
     ap.add_argument("--sample", action="store_true")
     a = ap.parse_args()
 
+    load_env()
     if a.sample:
         out = Path(a.local or "social-out")
         out.mkdir(parents=True, exist_ok=True)
         for p in SAMPLES:
-            for i, img in enumerate(render_post(p), 1):
+            photo, meta = find_photo(p["kind"], f"sample/{p['slot']}", set(), (W, H))
+            for i, img in enumerate(render_post(p, photo, meta and meta["photographer"]), 1):
                 img.save(out / f"sample-{p['kind']}-{i}.png")
         print(f"Wrote samples to {out}")
         return
 
-    load_env()
     base = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not base or not key:
@@ -240,11 +259,18 @@ def main():
         q["week_start"] = f"eq.{a.week}"
     posts = requests.get(f"{base}/rest/v1/social_posts", headers=hdr, params=q, timeout=30)
     posts.raise_for_status()
+    rows = requests.get(f"{base}/rest/v1/social_posts", headers=hdr, timeout=30,
+                        params={"select": "id:script->photo->>id", "script->photo": "not.is.null", "order": "week_start.desc", "limit": 200})
+    rows.raise_for_status()
+    used = {r["id"] for r in rows.json()}  # recent photos, so the feed does not repeat itself
     failed = 0
     for post in posts.json():
         tag = f"{post['week_start']}/slot{post['slot']}"
         try:
-            images = render_post(post)
+            photo, meta = find_photo(post["kind"], tag, used, (W, H))
+            images = render_post(post, photo, meta and meta["photographer"])
+            if meta and not a.local:
+                track_download(meta)
             urls = []
             for i, img in enumerate(images, 1):
                 name = f"{post['week_start']}/{post['slot']}-{post['kind']}/slide-{i:02d}.png"
@@ -261,7 +287,13 @@ def main():
                 r.raise_for_status()
                 urls.append(f"{base}/storage/v1/object/public/social-assets/{name}")
             if not a.local:
-                patch = {"asset_urls": urls, "render_status": "rendered", "render_error": None, "updated_date": "now()"}
+                script = {k: v for k, v in (post.get("script") or {}).items() if k != "photo"}
+                if meta:
+                    script["photo"] = meta
+                patch = {"asset_urls": urls, "render_status": "rendered", "render_error": None, "updated_date": "now()",
+                         "script": script, "caption": credit_caption(post.get("caption"), meta)}
+                if meta and post["status"] == "approved":
+                    patch["status"] = "draft"  # new artwork needs a person to approve it again
                 r = requests.patch(f"{base}/rest/v1/social_posts", params={"id": f"eq.{post['id']}"}, json=patch, headers={**hdr, "content-type": "application/json"}, timeout=30)
                 r.raise_for_status()
             print(f"Rendered {tag}: {len(images)} image(s)")
