@@ -120,13 +120,13 @@ def slide_cover(title, subtitle=None, photo=None, credit=None):
         img, d = new_slide(INDIGO)
         d.ellipse([W - 520, H - 560, W + 280, H + 240], fill=INDIGO_DARK)  # soft corner shape
     header(d, dark=True)
-    fnt, lines, size = fit(d, title, W - 2 * MARGIN, 640, 124, 72, 800, 1.06)
-    y = 330
+    fnt, lines, size = fit(d, title, W - 2 * MARGIN, 540 if subtitle else 640, 124, 72, 800, 1.06)
+    y = 300
     y = draw_lines(d, lines, fnt, size, MARGIN, y, WHITE, 1.06)
-    d.rounded_rectangle([MARGIN, y + 20, MARGIN + 140, y + 30], radius=5, fill=ACCENT)
+    d.rounded_rectangle([MARGIN, y + 60, MARGIN + 140, y + 70], radius=5, fill=ACCENT)
     if subtitle:
         sf, sl, ss = fit(d, subtitle, W - 2 * MARGIN, 160, 44, 32, 500)
-        draw_lines(d, sl, sf, ss, MARGIN, y + 64, WHITE if photo else MUTED_ON_INK)
+        draw_lines(d, sl, sf, ss, MARGIN, y + 126, WHITE if photo else MUTED_ON_INK)
     d.text((MARGIN, H - 150), "Swipe  →", font=font(44, 700), fill=WHITE)
     return img
 
